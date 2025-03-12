@@ -77,23 +77,6 @@ public class AirspaceModel {
         registerConflictStrategy("emergency", new EmergencyConflictDetection());
     }
 
-    // --- CORE INTERFACES ---
-
-
-    // --- VISITOR IMPLEMENTATIONS ---
-
-
-    // --- DATA TYPES ---
-
-
-    // --- SPATIAL ELEMENTS ---
-
-
-    // --- TIME-VARYING FEATURES ---
-
-
-    // --- TRAJECTORY COMPONENTS ---
-
     /**
      * Register a conflict detection strategy
      */
