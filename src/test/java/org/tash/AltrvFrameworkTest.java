@@ -20,7 +20,10 @@ import org.tash.extensions.carf.lifecycle.ReservationLifecycleInput;
 import org.tash.extensions.carf.lifecycle.ReservationLifecycleResult;
 import org.tash.extensions.carf.lifecycle.ReservationLifecycleService;
 import org.tash.extensions.carf.lifecycle.ReservationLifecycleState;
+import org.tash.extensions.carf.refdata.CarfSchemaCategory;
 import org.tash.extensions.carf.refdata.CarfSchemaCatalog;
+import org.tash.extensions.carf.refdata.CarfSchemaTable;
+import org.tash.extensions.carf.refdata.CarfSchemaUse;
 import org.tash.extensions.carf.refdata.InMemoryCarfReferenceDataProvider;
 import org.tash.extensions.messaging.MessageControlCharacters;
 import org.tash.extensions.messaging.UsnsIngestResult;
@@ -239,6 +242,17 @@ class AltrvFrameworkTest {
         assertTrue(catalog.coreTrainingBackupTables().size() >= 52);
         assertEquals("AltrvRoutePoint", catalog.domainMappingFor("t_FixTime"));
         assertEquals("CarfReferenceDataProvider", catalog.domainMappingFor("t_Navaids"));
+        assertEquals(CarfSchemaCategory.ROUTE_GRAPH, catalog.categoryFor("t_Route"));
+        assertEquals(CarfSchemaUse.IMPLEMENTED, catalog.useFor("t_Reservation"));
+        assertTrue(catalog.tablesByCategory(CarfSchemaCategory.SPATIAL_AREA).stream()
+                .map(CarfSchemaTable::getTableName)
+                .anyMatch("t_AreaFix"::equals));
+        assertTrue(catalog.tablesByUse(CarfSchemaUse.ADAPTER_TARGET).stream()
+                .anyMatch(table -> table.getTableName().equals("t_IncomingQueue") && table.isQueueTable()));
+        assertTrue(catalog.table("t_ALTRVMessage")
+                .map(CarfSchemaTable::getChildTables)
+                .orElse(Collections.emptyList())
+                .contains("t_RouteGroup"));
     }
 
     @Test

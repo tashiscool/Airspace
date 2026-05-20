@@ -1,12 +1,8 @@
 package org.tash;
 
 import org.junit.jupiter.api.Test;
-import org.tash.extensions.evaluation.LegacyArtifactTextExtractor;
 import org.tash.extensions.notam.DomesticRunwayEquipmentParser;
 import org.tash.extensions.notam.DomesticRunwayEquipmentStatus;
-
-import java.nio.file.Paths;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,14 +10,8 @@ class DomesticRunwayEquipmentParserTest {
     private final DomesticRunwayEquipmentParser parser = new DomesticRunwayEquipmentParser();
 
     @Test
-    void parsesDistanceRemainingSignOutageRowsExtractedFromLegacySpreadsheet() throws Exception {
-        List<String> rows = new LegacyArtifactTextExtractor()
-                .notamLines(Paths.get(System.getProperty("user.home"), "Downloads", "REMAINING.xls"));
-        String row = rows.stream()
-                .filter(line -> line.contains("BOS RWY 15R 6000 FT DISTANCE REMAINING SIGN UNLGTD"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing BOS distance-remaining row"));
-
+    void parsesDistanceRemainingSignOutageRows() {
+        String row = "!BOS 01/001 BOS RWY 15R 6000 FT DISTANCE REMAINING SIGN UNLGTD 1101011200-1101011300";
         DomesticRunwayEquipmentStatus status = parser.parse(row);
 
         assertEquals("BOS", status.getAccountability());
@@ -33,14 +23,8 @@ class DomesticRunwayEquipmentParserTest {
     }
 
     @Test
-    void parsesSlashSeparatedDistancesAndMissingStatus() throws Exception {
-        List<String> rows = new LegacyArtifactTextExtractor()
-                .notamLines(Paths.get(System.getProperty("user.home"), "Downloads", "REMAINING.xls"));
-        String row = rows.stream()
-                .filter(line -> line.contains("GUC RWY 6 4000/8000 DISTANCE REMAINING SIGN UNLGTD"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing GUC slash-distance row"));
-
+    void parsesSlashSeparatedDistancesAndMissingStatus() {
+        String row = "!GUC 01/001 GUC RWY 6 4000/8000 DISTANCE REMAINING SIGN UNLGTD 1101011200-1101011300";
         DomesticRunwayEquipmentStatus status = parser.parse(row);
 
         assertEquals("6", status.getRunway());

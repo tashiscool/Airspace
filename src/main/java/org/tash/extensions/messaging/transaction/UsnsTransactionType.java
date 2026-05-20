@@ -14,6 +14,13 @@ public enum UsnsTransactionType {
     SERVICE_REQUEST,
     SERVICE_TABLE,
     FDC_ACK,
+    PIREP,
+    SIGMET,
+    AIRMET,
+    METAR,
+    TAF,
+    NEXRAD_ADVISORY,
+    WEATHER_ADVISORY,
     ADMIN,
     UNKNOWN
 }

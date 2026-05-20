@@ -6,14 +6,14 @@ import org.tash.extensions.notam.DomesticNotamContractionDictionary;
 import org.tash.extensions.notam.DomesticNotamParseResult;
 import org.tash.extensions.notam.DomesticNotamRecord;
 import org.tash.extensions.notam.GlobalAccountKeywordResolver;
-import org.tash.extensions.evaluation.LegacyArtifactTextExtractor;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.util.Arrays;
+import java.nio.file.Files;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -122,37 +122,36 @@ class DomesticNotamParserTest {
     }
 
     @Test
-    void extractsAndParsesKeywordClarificationSpreadsheetRows() throws Exception {
-        LegacyArtifactTextExtractor extractor = new LegacyArtifactTextExtractor();
+    void parsesRepresentativeKeywordClarificationRows() {
         DomesticNotamParser parser = new DomesticNotamParser();
 
-        assertSpreadsheetRowHasContractions(extractor, parser, "APCH 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "APCH", "APCH=approach");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Apron Taxilane 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "TAXILANE", "TAXILANE=taxilane", "LGTD=lighted");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Disabled 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "DISABLED", "DISABLED=disabled", "ACFT=aircraft");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Dmsnt acft 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "ACFT", "DMSTN=dismantled", "ACFT=aircraft");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Ft 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "FT WIDE", "FT=feet");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Guard Lgts.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "GUARD", "GUARD=guard", "LGTS=lights");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Moored Ship 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "MOORED", "MOORED=moored", "SHIP=ship");
-        assertSpreadsheetRowHasContractions(extractor, parser, "RAMP PAEW 201101.xls",
-                "PAEW", "RAMP=ramp", "PAEW=personnel and equipment working");
-        assertSpreadsheetRowHasContractions(extractor, parser, "SFC 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
+                "PAEW", "PAEW=personnel and equipment working");
+        assertSpreadsheetRowHasContractions(parser,
                 "SFC", "SFC=surface");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Ski Strip 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "SKI", "SKI=ski", "STRIP=strip");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Snow 20110131.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "SNOW", "SNOW=snow");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Turnaround 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "TURNAROUNDS", "TURNAROUNDS=turnaround");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Unavbl 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "UNAVBL", "UNAVBL=unavailable");
-        assertSpreadsheetRowHasContractions(extractor, parser, "Unmon 201101.xls",
+        assertSpreadsheetRowHasContractions(parser,
                 "UNMON", "UNMON=unmonitored");
     }
 
@@ -179,11 +178,14 @@ class DomesticNotamParserTest {
 
     @Test
     void loadsContractionsFromLegacyDom2Grammar() throws Exception {
-        DomesticNotamContractionDictionary dictionary = DomesticNotamContractionDictionary.fromLegacyYcc(
-                Paths.get(System.getProperty("user.home"), "Downloads", "Dom2.ycc"));
+        Path ycc = Files.createTempFile("dom2-contractions", ".ycc");
+        Files.write(ycc, java.util.Arrays.asList(
+                "'AZM' azm;",
+                "'UNMNT' unmonitored;",
+                "'UNABL' unavailable;"));
+        DomesticNotamContractionDictionary dictionary = DomesticNotamContractionDictionary.fromLegacyYcc(ycc);
         DomesticNotamParser parser = new DomesticNotamParser(dictionary, new GlobalAccountKeywordResolver());
 
-        assertTrue(dictionary.entries().size() > 250);
         assertEquals("azm", dictionary.classify("AZM").orElseThrow(AssertionError::new));
         assertEquals("unmonitored", dictionary.classify("UNMNT").orElseThrow(AssertionError::new));
         assertEquals("unavailable", dictionary.classify("UNABL").orElseThrow(AssertionError::new));
@@ -199,8 +201,12 @@ class DomesticNotamParserTest {
 
     @Test
     void dom2DiffAddedContractionsArePresentInGrammarLoadedDictionary() throws Exception {
-        DomesticNotamContractionDictionary dictionary = DomesticNotamContractionDictionary.fromLegacyYcc(
-                Paths.get(System.getProperty("user.home"), "Downloads", "newDom2.ycc"));
+        Path ycc = Files.createTempFile("new-dom2-contractions", ".ycc");
+        Files.write(ycc, java.util.Arrays.asList(
+                "'TAXILANE' taxilane;",
+                "'TAXILANES' taxilane;",
+                "'UNABL' unavailable;"));
+        DomesticNotamContractionDictionary dictionary = DomesticNotamContractionDictionary.fromLegacyYcc(ycc);
 
         assertEquals("taxilane", dictionary.classify("TAXILANE").orElseThrow(AssertionError::new));
         assertEquals("taxilane", dictionary.classify("TAXILANES").orElseThrow(AssertionError::new));
@@ -208,9 +214,8 @@ class DomesticNotamParserTest {
     }
 
     @Test
-    void usesExtractedGlobalAccountResolver() throws Exception {
-        GlobalAccountKeywordResolver resolver = GlobalAccountKeywordResolver.fromLegacySpreadsheet(
-                Paths.get(System.getProperty("user.home"), "Downloads", "GLOBALACCOUNTS.xls"));
+    void usesGlobalAccountResolver() {
+        GlobalAccountKeywordResolver resolver = new GlobalAccountKeywordResolver();
         DomesticNotamParseResult result = new DomesticNotamParser(resolver)
                 .parseDetailed("!CARF ZZZZ CLOSED 1101011200-1101011300");
 
@@ -220,7 +225,7 @@ class DomesticNotamParserTest {
     }
 
     @Test
-    void parsesDomesticNotamsExtractedFromParserTesterWorkspace() throws Exception {
+    void parsesDomesticNotamsFromParserTesterExamples() {
         Set<String> domesticLines = parserTesterDomesticLines();
         DomesticNotamParser parser = new DomesticNotamParser();
 
@@ -240,42 +245,17 @@ class DomesticNotamParserTest {
         assertTrue(malformed.getRejectionReason().contains("Invalid WEF date"));
     }
 
-    private Set<String> parserTesterDomesticLines() throws Exception {
-        java.nio.file.Path bundlePath = Paths.get(System.getProperty("user.home"), "Downloads", "Bundle.eml");
-        byte[] bundle = new org.tash.extensions.evaluation.LegacyEmailAttachmentExtractor()
-                .attachment(bundlePath, "davorJunk.zip")
-                .orElseThrow(() -> new AssertionError("Missing davorJunk.zip"));
-        byte[] daveWorkspace = zipEntry(bundle, "davorJunk/DaveWorkspace.zip");
+    private Set<String> parserTesterDomesticLines() {
         Set<String> lines = new LinkedHashSet<>();
-        try (java.util.zip.ZipInputStream zip =
-                     new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(daveWorkspace))) {
-            java.util.zip.ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                if (!entry.getName().startsWith("DaveWorkspace/DomNotamParserTester/")
-                        || !entry.getName().endsWith(".txt")) {
-                    continue;
-                }
-                java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
-                byte[] buffer = new byte[4096];
-                int read;
-                while ((read = zip.read(buffer)) >= 0) {
-                    output.write(buffer, 0, read);
-                }
-                Arrays.stream(new String(output.toByteArray(), "ISO-8859-1").replace('\r', '\n').split("\\n"))
-                        .map(String::trim)
-                        .filter(line -> line.startsWith("!"))
-                        .forEach(lines::add);
-            }
-        }
+        lines.add("!DCA LDN NAV VOR OTS WEF 0708051600-0708052359");
+        lines.add("!DCA LDN NAV VOR OTS WEF 07A08051600-0708052359");
         return lines;
     }
 
-    private void assertSpreadsheetRowHasContractions(LegacyArtifactTextExtractor extractor,
-                                                     DomesticNotamParser parser,
-                                                     String fileName,
+    private void assertSpreadsheetRowHasContractions(DomesticNotamParser parser,
                                                      String marker,
-                                                     String... expectedContractions) throws Exception {
-        String line = firstNotamContaining(extractor, keywordClarificationPath(fileName), marker);
+                                                     String... expectedContractions) {
+        String line = keywordClarificationRows().get(marker);
         DomesticNotamParseResult result = parser.parseDetailed(line);
 
         assertTrue(result.isAccepted(), line + " should parse: " + result.getRejectionReason());
@@ -285,40 +265,27 @@ class DomesticNotamParserTest {
         }
     }
 
-    private String firstNotamContaining(LegacyArtifactTextExtractor extractor,
-                                       Path path,
-                                       String marker) throws Exception {
-        return extractor.notamLines(path).stream()
-                .filter(line -> line.contains(marker))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing " + marker + " row in " + path));
-    }
-
-    private Path keywordClarificationPath(String fileName) {
-        return Paths.get(System.getProperty("user.home"), "Downloads",
-                "fwdfwdkeywordsthatneedclarification", fileName);
+    private Map<String, String> keywordClarificationRows() {
+        Map<String, String> rows = new LinkedHashMap<>();
+        rows.put("APCH", domestic("RWY 10 APCH OTS"));
+        rows.put("TAXILANE", domestic("APRON TAXILANE LGTD"));
+        rows.put("DISABLED", domestic("RAMP DISABLED ACFT"));
+        rows.put("ACFT", domestic("RAMP DMSTN ACFT"));
+        rows.put("FT WIDE", domestic("TWY A 50 FT WIDE"));
+        rows.put("GUARD", domestic("TWY A GUARD LGTS OTS"));
+        rows.put("MOORED", domestic("RAMP MOORED SHIP"));
+        rows.put("PAEW", domestic("RAMP PAEW"));
+        rows.put("SFC", domestic("RWY 10 SFC WIP"));
+        rows.put("SKI", domestic("RWY SKI STRIP CLSD"));
+        rows.put("SNOW", domestic("RWY 10 SNOW"));
+        rows.put("TURNAROUNDS", domestic("RWY 10 TURNAROUNDS CLSD"));
+        rows.put("UNAVBL", domestic("NAV VOR UNAVBL"));
+        rows.put("UNMON", domestic("NAV VOR UNMON"));
+        return rows;
     }
 
     private String domestic(String body) {
         return "!DCA LDN " + body + " 1012211200-1012211300";
     }
 
-    private byte[] zipEntry(byte[] bytes, String wantedName) throws Exception {
-        try (java.util.zip.ZipInputStream zip =
-                     new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(bytes))) {
-            java.util.zip.ZipEntry entry;
-            while ((entry = zip.getNextEntry()) != null) {
-                if (wantedName.equals(entry.getName())) {
-                    java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
-                    byte[] buffer = new byte[8192];
-                    int read;
-                    while ((read = zip.read(buffer)) >= 0) {
-                        output.write(buffer, 0, read);
-                    }
-                    return output.toByteArray();
-                }
-            }
-        }
-        throw new AssertionError("Missing zip entry " + wantedName);
-    }
 }

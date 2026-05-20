@@ -18,15 +18,25 @@ public class CarfSchemaRowMapper {
 
     public CarfSchemaRow map(String tableName, Map<String, String> row) {
         Map<String, String> normalized = normalize(row);
+        CarfSchemaTable table = catalog.table(tableName).orElse(null);
         return CarfSchemaRow.builder()
                 .tableName(tableName)
+                .knownTable(table != null)
+                .category(table == null ? CarfSchemaCategory.UNKNOWN : table.getCategory())
+                .use(table == null ? CarfSchemaUse.REFERENCE_ONLY : table.getUse())
                 .domainType(catalog.domainMappingFor(tableName))
-                .primaryId(primaryId(tableName, normalized))
+                .primaryId(primaryId(tableName, normalized, table))
                 .fields(Collections.unmodifiableMap(normalized))
                 .build();
     }
 
-    private String primaryId(String tableName, Map<String, String> row) {
+    private String primaryId(String tableName, Map<String, String> row, CarfSchemaTable table) {
+        if (table != null) {
+            String fromSchema = first(row, table.getPrimaryKeyColumns().toArray(new String[0]));
+            if (!fromSchema.isEmpty()) {
+                return fromSchema;
+            }
+        }
         String normalizedTable = tableName == null ? "" : tableName.trim();
         if ("t_Navaids".equals(normalizedTable) || "t_PreferedNavaids".equals(normalizedTable)) {
             return first(row, "NAVAID", "NAVAIDID", "ID", "FIXID");

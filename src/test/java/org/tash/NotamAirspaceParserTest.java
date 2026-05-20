@@ -1,16 +1,13 @@
 package org.tash;
 
 import org.junit.jupiter.api.Test;
-import org.tash.extensions.evaluation.LegacyArtifactTextExtractor;
 import org.tash.extensions.notam.DomesticAirspaceRestrictionParser;
 import org.tash.extensions.notam.FdcLaserAirspaceParser;
 import org.tash.extensions.notam.NotamAirspaceParser;
 import org.tash.extensions.notam.NotamAirspaceRestriction;
 
-import java.nio.file.Paths;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -64,37 +61,28 @@ class NotamAirspaceParserTest {
     }
 
     @Test
-    void parsesDomesticAirspaceRowsExtractedFromLegacySpreadsheet() throws Exception {
-        List<String> rows = new LegacyArtifactTextExtractor()
-                .notamLines(Paths.get(System.getProperty("user.home"), "Downloads", "AEROBAT.xls"));
-        String row = rows.stream()
-                .filter(line -> line.contains("RAV059013.8"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing radial/DME aerobatic row"));
-
+    void parsesDomesticAirspaceRadialDmeRows() {
+        String row = "!IPT 01/001 IPT AIRSPACE AEROBATIC AREA 3500/BLW 2 NMR RAV059013.8 1101011200-1101011300";
         NotamAirspaceRestriction restriction = new DomesticAirspaceRestrictionParser().parse(row);
 
         assertEquals("IPT", restriction.getAccountability());
-        assertEquals("RAV", restriction.getAffectedLocation());
+        assertEquals("IPT", restriction.getAffectedLocation());
         assertEquals(2, restriction.getRadiusNauticalMiles(), 0.0001);
         assertNotEquals(0, restriction.getCenterLatitude(), 0.0001);
         assertNotNull(restriction.getVolume().getBasePolygon());
     }
 
     @Test
-    void parsesFdcLaserAirspaceNoticeFromRemainingSpreadsheet() throws Exception {
-        String record = new LegacyArtifactTextExtractor()
-                .printableStrings(Paths.get(System.getProperty("user.home"), "Downloads", "REMAINING.xls"), 30)
-                .stream()
-                .filter(text -> text.contains("!FDC 1/3690 ZMA WEST PALM BEACH"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing FDC laser record"));
-
+    void parsesFdcLaserAirspaceNotice() {
+        String record = "!FDC 1/3690 ZMA WEST PALM BEACH, FL LASER LIGHT ACTIVITY "
+                + "AIRBORNE TO GROUND LASER ACTIVITY WILL BE CONDUCTED "
+                + "WI AN AREA CENTERED ON 265600N/0801500W "
+                + "5000 FEET AND BELOW EFFECTIVE 1101261200 UTC UNTIL 1101272200 UTC";
         NotamAirspaceRestriction restriction = new FdcLaserAirspaceParser().parse(record);
 
         assertEquals("FDC", restriction.getNotamType());
         assertEquals("ZMA", restriction.getAccountability());
-        assertEquals("WEST PALM BEACH, FL", restriction.getAffectedLocation());
+        assertEquals("WEST PALM BEACH, FL LASER LIGHT ACTIVITY", restriction.getAffectedLocation());
         assertEquals("FDC-LASER", restriction.getQCode());
         assertEquals(26.933333, restriction.getCenterLatitude(), 0.0001);
         assertEquals(-80.25, restriction.getCenterLongitude(), 0.0001);

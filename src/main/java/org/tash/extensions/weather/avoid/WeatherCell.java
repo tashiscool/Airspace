@@ -111,6 +111,12 @@ public abstract class WeatherCell implements HazardousWeather {
         if (!isValidAt(time)) {
             return false;
         }
+
+        double routeMinAltitude = Math.min(start.getAltitude(), end.getAltitude());
+        double routeMaxAltitude = Math.max(start.getAltitude(), end.getAltitude());
+        if (routeMaxAltitude < minAltitude || routeMinAltitude > maxAltitude) {
+            return false;
+        }
         
         // Check if either endpoint is inside the cell
         if (affectsPoint(start, time) || affectsPoint(end, time)) {
@@ -129,4 +135,3 @@ public abstract class WeatherCell implements HazardousWeather {
      */
     protected abstract boolean doesPathIntersectBoundary(GeoCoordinate start, GeoCoordinate end);
 }
-

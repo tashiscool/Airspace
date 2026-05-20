@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 
 public class UsnsTransactionSplitter {
     private static final Pattern MARKER = Pattern.compile(
-            "(?im)(^\\s*!FDC\\b|^\\s*![A-Z0-9]+\\b|\\bNOTAM[NRJC]\\b|\\bSNOWTAM\\b|\\bBIRDTAM\\b|\\bASHTAM\\b|\\bGENOT\\s+RWA\\b|[() ]SVC\\s+(?:RQ|TBL)\\b|^\\s*(?:R|RGR)\\s+FDC\\s+\\d+/\\d+\\b)");
+            "(?im)(^\\s*!FDC\\b|^\\s*![A-Z0-9]+\\b|\\bNOTAM[NRJC]\\b|\\bSNOWTAM\\b|\\bBIRDTAM\\b|\\bASHTAM\\b|\\bGENOT\\s+RWA\\b|\\b(?:PIREP|UA|UUA|CONVECTIVE\\s+SIGMET|SIGMET|AIRMET|METAR|SPECI|TAF|NEXRAD|CWAP|CWAF|CWA)\\b|[() ]SVC\\s+(?:RQ|TBL)\\b|^\\s*(?:R|RGR)\\s+FDC\\s+\\d+/\\d+\\b)");
 
     public UsnsTransactionParseResult split(UsnsMessageEnvelope envelope) {
         List<String> warnings = new ArrayList<>();
@@ -47,7 +47,11 @@ public class UsnsTransactionSplitter {
         List<Span> spans = new ArrayList<>();
         Matcher matcher = MARKER.matcher(body);
         while (matcher.find()) {
-            spans.add(new Span(matcher.start()));
+            int start = matcher.start();
+            if (!spans.isEmpty() && sameLine(body, spans.get(spans.size() - 1).start, start)) {
+                continue;
+            }
+            spans.add(new Span(start));
         }
         spans.sort(Comparator.comparingInt(span -> span.start));
         List<Span> unique = new ArrayList<>();
@@ -59,6 +63,14 @@ public class UsnsTransactionSplitter {
             }
         }
         return unique;
+    }
+
+    private boolean sameLine(String body, int previousStart, int currentStart) {
+        if (body == null || previousStart < 0 || currentStart <= previousStart) {
+            return false;
+        }
+        String between = body.substring(previousStart, currentStart);
+        return between.indexOf('\n') < 0 && between.indexOf('\r') < 0;
     }
 
     private UsnsTransaction transaction(UsnsTransactionType type, String raw, UsnsMessageEnvelope envelope, String warning) {
@@ -96,6 +108,30 @@ public class UsnsTransactionSplitter {
         }
         if (text.contains("GENOT RWA")) {
             return UsnsTransactionType.GENOT;
+        }
+        if (text.startsWith("PIREP") || text.startsWith("UA ") || text.startsWith("UUA ")
+                || text.contains(" PIREP ")) {
+            return UsnsTransactionType.PIREP;
+        }
+        if (text.contains("CONVECTIVE SIGMET") || text.contains("SIGMET")) {
+            return UsnsTransactionType.SIGMET;
+        }
+        if (text.contains("AIRMET")) {
+            return UsnsTransactionType.AIRMET;
+        }
+        if (text.startsWith("METAR ") || text.contains(" METAR ")
+                || text.startsWith("SPECI ") || text.contains(" SPECI ")) {
+            return UsnsTransactionType.METAR;
+        }
+        if (text.startsWith("TAF ") || text.contains(" TAF ")) {
+            return UsnsTransactionType.TAF;
+        }
+        if (text.contains("NEXRAD") || text.contains("CWAP") || text.contains("CWAF")) {
+            return UsnsTransactionType.NEXRAD_ADVISORY;
+        }
+        if (text.startsWith("CWA ") || text.contains(" CWA ")
+                || text.contains("WX ADVISORY") || text.contains("WEATHER ADVISORY")) {
+            return UsnsTransactionType.WEATHER_ADVISORY;
         }
         if (text.contains("ASHTAM")) {
             return UsnsTransactionType.ASHTAM;

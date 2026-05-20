@@ -10,6 +10,8 @@ import org.tash.extensions.carf.api.CarfAnalysisResult;
 import org.tash.extensions.notam.DomesticNotamParseResult;
 import org.tash.extensions.notam.NotamAirspaceRestriction;
 import org.tash.extensions.reservation.CarfRouteMessage;
+import org.tash.extensions.weather.pirep.PirepIngestResult;
+import org.tash.extensions.weather.product.WeatherProductParseResult;
 
 import java.util.List;
 
@@ -27,6 +29,8 @@ public class UsnsTransactionIngestResult {
     private FdcAcknowledgementCommand fdcAcknowledgement;
     private ServiceRequestCommand serviceRequest;
     private ServiceTableCommand serviceTable;
+    private WeatherProductParseResult weatherProductResult;
+    private PirepIngestResult pirepIngestResult;
     private List<String> warnings;
     private List<String> errors;
 }

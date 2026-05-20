@@ -9,6 +9,9 @@ import java.util.Map;
 @Builder
 public class CarfSchemaRow {
     private String tableName;
+    private boolean knownTable;
+    private CarfSchemaCategory category;
+    private CarfSchemaUse use;
     private String domainType;
     private String primaryId;
     private Map<String, String> fields;

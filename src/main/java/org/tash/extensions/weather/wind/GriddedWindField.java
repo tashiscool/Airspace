@@ -79,7 +79,9 @@ public class GriddedWindField extends AbstractWindField {
      * @return Grid index
      */
     private int getLatIndex(double latitude) {
-        return (int) Math.round((latitude - minLat) / gridResolution);
+        int index = (int) Math.floor((latitude - minLat) / gridResolution);
+        int maxIndex = Math.max(0, (int) Math.floor((maxLat - minLat) / gridResolution) - 1);
+        return Math.max(0, Math.min(index, maxIndex));
     }
 
     /**
@@ -89,7 +91,9 @@ public class GriddedWindField extends AbstractWindField {
      * @return Grid index
      */
     private int getLonIndex(double longitude) {
-        return (int) Math.round((longitude - minLon) / gridResolution);
+        int index = (int) Math.floor((longitude - minLon) / gridResolution);
+        int maxIndex = Math.max(0, (int) Math.floor((maxLon - minLon) / gridResolution) - 1);
+        return Math.max(0, Math.min(index, maxIndex));
     }
 
     /**
@@ -165,7 +169,7 @@ public class GriddedWindField extends AbstractWindField {
 
         // Calculate interpolation weights
         double latFrac = (lat - getLatFromIndex(latIndex)) / gridResolution;
-        double lonFrac = (lon - getLatFromIndex(lonIndex)) / gridResolution;
+        double lonFrac = (lon - getLonFromIndex(lonIndex)) / gridResolution;
 
         // Get the wind at the 4 surrounding grid points
         WindComponent w00 = getWindDataAt(latIndex, lonIndex, altIndex)

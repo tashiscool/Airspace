@@ -1,0 +1,17 @@
+package org.tash.extensions.weather.pirep;
+
+public enum PirepDiagnosticType {
+    STALE,
+    FUTURE,
+    MISSING_AIRCRAFT_TYPE,
+    MISSING_OBSERVATION_TIME,
+    MISSING_LOCATION,
+    MISSING_ALTITUDE,
+    MISSING_PHENOMENON,
+    UNKNOWN_INTENSITY,
+    MISCODED,
+    INCOMPLETE,
+    DUPLICATE,
+    LOW_QUALITY_LOCATION,
+    UNRESOLVED_LOCATION_TEXT
+}

@@ -15,6 +15,11 @@ import org.tash.extensions.notam.FdcLaserAirspaceParser;
 import org.tash.extensions.notam.NotamAirspaceRestriction;
 import org.tash.extensions.reservation.CarfRouteMessage;
 import org.tash.extensions.reservation.CarfRouteMessageParser;
+import org.tash.extensions.weather.pirep.PirepIngestResult;
+import org.tash.extensions.weather.pirep.PirepIngestService;
+import org.tash.extensions.weather.product.WeatherProductParseResult;
+import org.tash.extensions.weather.product.WeatherProductParser;
+import org.tash.extensions.weather.product.WeatherProductType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,6 +34,8 @@ public class UsnsIngestService {
     private final FdcLaserAirspaceParser fdcLaserAirspaceParser;
     private final CarfMessageFamilyParser familyParser = new CarfMessageFamilyParser();
     private final UsnsTransactionPolicy transactionPolicy = new UsnsTransactionPolicy();
+    private final WeatherProductParser weatherProductParser = new WeatherProductParser();
+    private final PirepIngestService pirepIngestService = new PirepIngestService();
 
     public UsnsIngestService() {
         this(new UsnsMessageEnvelopeParser(), new UsnsTransactionSplitter(), new DomesticNotamParser(),
@@ -153,6 +160,28 @@ public class UsnsIngestService {
                 return supported(transaction).serviceTable(ServiceTableCommand.parse(transaction.getRawText()))
                         .routingOutcome(routingOutcome).warnings(warnings).errors(errors).build();
             }
+            if (isWeatherTransaction(transaction.getType())) {
+                WeatherProductParseResult weatherResult = weatherProductParser.parse(transaction.getRawText(),
+                        weatherHint(transaction.getType()));
+                warnings.addAll(weatherResult.getWarnings());
+                errors.addAll(weatherResult.getErrors());
+                PirepIngestResult pirepResult = weatherResult.getPirepReport() == null
+                        ? null
+                        : pirepIngestService.ingest(weatherResult.getPirepReport(), null);
+                if (pirepResult != null) {
+                    pirepResult.getDiagnostics().forEach(d -> warnings.add(d.getMessage()));
+                    if (!pirepResult.isAccepted()) {
+                        errors.add("PIREP rejected: " + pirepResult.getDiagnostics());
+                    }
+                }
+                return supported(transaction)
+                        .routingOutcome(routingOutcome)
+                        .weatherProductResult(weatherResult)
+                        .pirepIngestResult(pirepResult)
+                        .warnings(warnings)
+                        .errors(errors)
+                        .build();
+            }
             warnings.add("Unsupported but classified transaction: " + transaction.getType());
             CarfMessageFamilyParseResult familyResult = familyParser.parse(transaction);
             warnings.addAll(familyResult.getWarnings());
@@ -176,6 +205,35 @@ public class UsnsIngestService {
         return normalized.matches("(?s).*\\n?A\\.\\s+.*")
                 && normalized.matches("(?s).*\\nD\\.\\s+.*")
                 && normalized.matches("(?s).*\\nF\\.\\s+.*");
+    }
+
+    private boolean isWeatherTransaction(UsnsTransactionType type) {
+        return type == UsnsTransactionType.PIREP
+                || type == UsnsTransactionType.SIGMET
+                || type == UsnsTransactionType.AIRMET
+                || type == UsnsTransactionType.METAR
+                || type == UsnsTransactionType.TAF
+                || type == UsnsTransactionType.NEXRAD_ADVISORY
+                || type == UsnsTransactionType.WEATHER_ADVISORY;
+    }
+
+    private WeatherProductType weatherHint(UsnsTransactionType type) {
+        switch (type) {
+            case PIREP:
+                return WeatherProductType.PIREP_DERIVED;
+            case SIGMET:
+                return WeatherProductType.SIGMET;
+            case AIRMET:
+                return WeatherProductType.AIRMET;
+            case METAR:
+                return WeatherProductType.METAR;
+            case TAF:
+                return WeatherProductType.TAF;
+            case NEXRAD_ADVISORY:
+                return WeatherProductType.NEXRAD_POLYGON;
+            default:
+                return WeatherProductType.GENERIC_FORECAST_HAZARD;
+        }
     }
 
     private UsnsTransactionIngestResult.UsnsTransactionIngestResultBuilder supported(UsnsTransaction transaction) {

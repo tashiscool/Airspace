@@ -201,6 +201,7 @@ class FullGapClosureTest {
 
         assertEquals("CarfReferenceDataProvider", mapped.getDomainType());
         assertEquals("DQN", mapped.getPrimaryId());
+        assertTrue(mapped.isKnownTable());
         assertEquals("-84.633", mapped.getFields().get("LON"));
     }
 

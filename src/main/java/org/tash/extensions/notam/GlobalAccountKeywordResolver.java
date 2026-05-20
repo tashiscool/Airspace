@@ -1,11 +1,12 @@
 package org.tash.extensions.notam;
 
-import org.tash.extensions.evaluation.LegacyArtifactTextExtractor;
-
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -40,9 +41,8 @@ public class GlobalAccountKeywordResolver {
     }
 
     public static GlobalAccountKeywordResolver fromLegacySpreadsheet(Path path) throws IOException {
-        LegacyArtifactTextExtractor extractor = new LegacyArtifactTextExtractor();
         Set<String> accounts = new HashSet<>(defaultAccounts());
-        for (String text : extractor.printableStrings(path, 3)) {
+        for (String text : printableStrings(path, 3)) {
             for (String token : text.split("[^A-Za-z0-9]+")) {
                 String normalized = normalize(token);
                 if (normalized.matches("K?[A-Z0-9]{3,4}") && isLikelyAccount(normalized)) {
@@ -53,6 +53,29 @@ public class GlobalAccountKeywordResolver {
             }
         }
         return new GlobalAccountKeywordResolver(accounts);
+    }
+
+    private static List<String> printableStrings(Path path, int minimumLength) throws IOException {
+        byte[] bytes = Files.readAllBytes(path);
+        List<String> strings = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        for (byte value : bytes) {
+            int ch = value & 0xff;
+            if ((ch >= 32 && ch <= 126) || ch == '\n' || ch == '\r' || ch == '\t') {
+                current.append((char) ch);
+            } else {
+                addIfLongEnough(strings, current, minimumLength);
+            }
+        }
+        addIfLongEnough(strings, current, minimumLength);
+        return strings;
+    }
+
+    private static void addIfLongEnough(List<String> strings, StringBuilder current, int minimumLength) {
+        if (current.length() >= minimumLength) {
+            strings.add(current.toString());
+        }
+        current.setLength(0);
     }
 
     private static boolean isLikelyAccount(String token) {

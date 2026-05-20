@@ -1,12 +1,8 @@
 package org.tash;
 
 import org.junit.jupiter.api.Test;
-import org.tash.extensions.evaluation.LegacyArtifactTextExtractor;
 import org.tash.extensions.notam.DomesticSurfaceCondition;
 import org.tash.extensions.notam.DomesticSurfaceConditionParser;
-
-import java.nio.file.Paths;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -14,14 +10,8 @@ class DomesticSurfaceConditionParserTest {
     private final DomesticSurfaceConditionParser parser = new DomesticSurfaceConditionParser();
 
     @Test
-    void parsesBermRowsExtractedFromLegacySpreadsheet() throws Exception {
-        List<String> rows = new LegacyArtifactTextExtractor()
-                .notamLines(Paths.get(System.getProperty("user.home"), "Downloads", "BERMS.xls"));
-        String row = rows.stream()
-                .filter(line -> line.contains("SEA RWY 16L/34R 12 IN BERM"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing SEA berm row"));
-
+    void parsesBermRows() {
+        String row = "!SEA 01/001 SEA RWY 16L/34R 12 IN BERM 1101011200-1101011300";
         DomesticSurfaceCondition condition = parser.parse(row);
 
         assertEquals("SEA", condition.getAccountability());
@@ -33,14 +23,8 @@ class DomesticSurfaceConditionParserTest {
     }
 
     @Test
-    void parsesTurnaroundRowsExtractedFromLegacySpreadsheet() throws Exception {
-        List<String> rows = new LegacyArtifactTextExtractor()
-                .notamLines(Paths.get(System.getProperty("user.home"), "Downloads", "TURNAROUND.xls"));
-        String row = rows.stream()
-                .filter(line -> line.contains("CDV RWY 9/27 TURNAROUNDS THN SN"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing CDV turnaround row"));
-
+    void parsesTurnaroundRows() {
+        String row = "!CDV 01/001 CDV RWY 9/27 TURNAROUNDS THN SN AND ICE 1101011200-1101011300";
         DomesticSurfaceCondition condition = parser.parse(row);
 
         assertEquals("CDV", condition.getLocation());
@@ -52,14 +36,8 @@ class DomesticSurfaceConditionParserTest {
     }
 
     @Test
-    void parsesSnowPileRowsExtractedFromLegacySpreadsheet() throws Exception {
-        List<String> rows = new LegacyArtifactTextExtractor()
-                .notamLines(Paths.get(System.getProperty("user.home"), "Downloads", "PILE.xls"));
-        String row = rows.stream()
-                .filter(line -> line.contains("ORH RAMP ALL 15 FT SNOWPILES"))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("Missing ORH snow pile row"));
-
+    void parsesSnowPileRows() {
+        String row = "!ORH 01/001 ORH RAMP ALL 15 FT SNOWPILES 1101011200-1101011300";
         DomesticSurfaceCondition condition = parser.parse(row);
 
         assertEquals("ORH", condition.getAccountability());
