@@ -17,7 +17,7 @@ import org.tash.data.BoundingBox;
 import org.tash.data.GeoCoordinate;
 import org.tash.data.Vector3D;
 import org.tash.event.AirspaceEvent;
-import org.tash.event.AirspaceEventManager;
+import org.tash.event.AirspaceEventBus;
 import org.tash.event.AirspaceInfringementEvent;
 import org.tash.event.TrajectoryConflictEvent;
 import org.tash.event.conflict.*;
@@ -35,7 +35,7 @@ import org.jgrapht.alg.shortestpath.DijkstraShortestPath;
 import org.jgrapht.graph.DefaultDirectedGraph;
 
 /**
- * Highly polymorphic model for airspace management
+ * Airspace model for trajectories, spatial reservations, conflict checks, and eventing.
  */
 public class AirspaceModel {
 
@@ -57,7 +57,7 @@ public class AirspaceModel {
     private SpatialIndex spatialIndex;
 
     // Event manager for notification
-    private AirspaceEventManager eventManager;
+    private AirspaceEventBus eventBus;
 
     // Conflict detection strategies
     private Map<String, ConflictDetectionStrategy> conflictStrategies;
@@ -70,7 +70,7 @@ public class AirspaceModel {
         this.flightTrajectories = new HashMap<>();
         this.reservedVolumes = new ArrayList<>();
         this.spatialIndex = new QuadtreeSpatialIndex();
-        this.eventManager = new AirspaceEventManager();
+        this.eventBus = new AirspaceEventBus();
         this.conflictStrategies = new HashMap<>();
 
         // Register default conflict detection strategies
@@ -239,7 +239,7 @@ public class AirspaceModel {
     }
 
     public void addEventListener(String eventType, Consumer<AirspaceEvent> listener) {
-        eventManager.addEventListener(eventType, listener);
+        eventBus.addEventListener(eventType, listener);
     }
 
     public CurvedTrajectorySegment addCurvedSegment(SpatialPoint wp2,
@@ -329,7 +329,7 @@ public class AirspaceModel {
 
         List<SeparationConflict> conflicts = strategy.detectConflicts(getAllTrajectorySegments());
         for (SeparationConflict conflict : conflicts) {
-            eventManager.fireEvent(new TrajectoryConflictEvent(
+            eventBus.fireEvent(new TrajectoryConflictEvent(
                     conflict.getSegment1(),
                     conflict.getSegment2(),
                     conflict.getTime(),
@@ -389,7 +389,7 @@ public class AirspaceModel {
                                         .volume(volume)
                                         .build();
                                 infringements.add(event);
-                                eventManager.fireEvent(event);
+                                eventBus.fireEvent(event);
                             }
                     );
                 }

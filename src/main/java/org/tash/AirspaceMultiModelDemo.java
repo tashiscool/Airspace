@@ -18,9 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Demonstration of the highly polymorphic airspace model
+ * Demonstration of the airspace model across routes, reservations, conflicts, and visitors.
  */
-public class PolymorphicAirspaceModelDemo {
+public class AirspaceMultiModelDemo {
 
     public static void main(String[] args) {
         // Create the model
@@ -164,8 +164,8 @@ public class PolymorphicAirspaceModelDemo {
             System.out.println("  " + element.getElementType() + ": " + element.getId());
         }
         
-        // Demonstrate polymorphic intersection testing between different element types
-        System.out.println("\nDemonstrating polymorphic intersection testing:");
+        // Demonstrate intersections between different airspace element types
+        System.out.println("\nChecking intersections between airspace elements:");
         
         boolean curveSeg_holdingSeg = altSeg1.intersects(holdingSegment);
         System.out.println("Curved segment intersects holding pattern: " + curveSeg_holdingSeg);
@@ -204,8 +204,8 @@ public class PolymorphicAirspaceModelDemo {
             System.out.println("No path found");
         }
         
-        // Demonstrate using the visitor pattern
-        System.out.println("\nDemonstrating visitor pattern:");
+        // Demonstrate model traversal
+        System.out.println("\nTraversing model elements:");
         
         // Custom visitor that counts elements by type
         CountingVisitor counter = new CountingVisitor();
@@ -224,7 +224,7 @@ public class PolymorphicAirspaceModelDemo {
         System.out.println("  Trajectories: " + counter.getTrajectoryCount());
         
         // Example of using a finder visitor
-        System.out.println("\nDemonstrating finder visitor:");
+        System.out.println("\nFinding model elements:");
         FinderVisitor finder = new FinderVisitor("HOLD");
         
         for (SpatialElement element : elementsInBox) {
