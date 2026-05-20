@@ -6,6 +6,8 @@ import org.tash.extensions.carf.api.CarfAnalysisResult;
 import org.tash.extensions.messaging.UsnsIngestResult;
 import org.tash.extensions.reservation.AirspaceReservation;
 import org.tash.extensions.reservation.ReservationConflict;
+import org.tash.extensions.routing.OperationalRoutePlanResult;
+import org.tash.extensions.uncertainty.UncertaintyAssessmentResult;
 import org.tash.extensions.weather.coordination.WeatherCoordinationResult;
 import org.tash.extensions.weather.decision.RouteBlockagePrediction;
 import org.tash.extensions.weather.decision.WeatherDecisionAction;
@@ -39,6 +41,10 @@ public class OperationalDecisionResult {
     private final DecisionTrace trace;
     private final OperationalDecisionAuditEnvelope auditEnvelope;
     private final OperationalDecisionReplayBundle replayBundle;
+    private final OperationalRoutePlanResult routePlanResult;
+    private final UncertaintyAssessmentResult uncertaintyAssessment;
+    @Builder.Default private final Map<String, String> persistedArtifactIds = new LinkedHashMap<>();
+    @Builder.Default private final Map<String, Double> metricsSummary = new LinkedHashMap<>();
 
     public List<OperationalConstraint> getConstraints() {
         return fusionResult == null ? Collections.emptyList() : fusionResult.getConstraints();

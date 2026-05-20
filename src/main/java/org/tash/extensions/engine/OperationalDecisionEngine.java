@@ -9,6 +9,13 @@ import org.tash.extensions.messaging.UsnsIngestService;
 import org.tash.extensions.notam.NotamAirspaceRestriction;
 import org.tash.extensions.reservation.AirspaceReservation;
 import org.tash.extensions.reservation.ReservationConflict;
+import org.tash.extensions.routing.OperationalRoutePlanRequest;
+import org.tash.extensions.routing.OperationalRoutePlanResult;
+import org.tash.extensions.routing.RoutePlanningConstraint;
+import org.tash.extensions.routing.RouteReplanningService;
+import org.tash.extensions.uncertainty.DecisionUncertaintyService;
+import org.tash.extensions.uncertainty.UncertaintyAssessmentRequest;
+import org.tash.extensions.uncertainty.UncertaintyAssessmentResult;
 import org.tash.extensions.weather.coordination.WeatherCoordinationResult;
 import org.tash.extensions.weather.coordination.WeatherCoordinationService;
 import org.tash.extensions.weather.decision.RouteBlockagePrediction;
@@ -210,10 +217,13 @@ public class OperationalDecisionEngine {
         OperationalDecisionReplayBundle replayBundle = replayBundle(safe, baseResult, decisionTime);
         OperationalDecisionAuditEnvelope auditEnvelope = auditEnvelope(safe, baseResult, replayBundle, decisionTime);
         replayBundle = replayBundle.toBuilder().auditEnvelope(auditEnvelope).build();
-        return baseResult.toBuilder()
+        OperationalDecisionResult enriched = baseResult.toBuilder()
                 .auditEnvelope(auditEnvelope)
                 .replayBundle(replayBundle)
                 .build();
+        enriched = applyOptionalUncertainty(safe, enriched, route, weatherProducts, decisionTime, trace);
+        enriched = applyOptionalRoutePlanning(safe, enriched, route, decisionTime, trace);
+        return enriched;
     }
 
     public ReplayVerificationResult replay(OperationalDecisionReplayBundle bundle) {
@@ -440,6 +450,71 @@ public class OperationalDecisionEngine {
             }
         }
         return Collections.emptyList();
+    }
+
+    private OperationalDecisionResult applyOptionalUncertainty(OperationalDecisionRequest request,
+                                                               OperationalDecisionResult result,
+                                                               List<GeoCoordinate> route,
+                                                               List<WeatherProduct> products,
+                                                               ZonedDateTime decisionTime,
+                                                               DecisionTrace trace) {
+        if (request.getUncertaintyRequest() == null) {
+            return result;
+        }
+        UncertaintyAssessmentRequest uncertaintyRequest = request.getUncertaintyRequest().toBuilder()
+                .route(route)
+                .weatherProducts(products)
+                .decisionTime(decisionTime)
+                .baseConfidence(result.getConfidence())
+                .build();
+        UncertaintyAssessmentResult uncertainty = new DecisionUncertaintyService().assess(uncertaintyRequest);
+        trace.addRule("uncertainty", "Adjusted decision confidence for uncertainty", decisionTime,
+                DecisionRuleCatalog.WX_LEAD_TIME_CONFIDENCE,
+                "adjustedConfidence=" + uncertainty.getAdjustedConfidence()
+                        + ", penalty=" + uncertainty.getConfidencePenalty(),
+                DecisionRuleCatalog.WX_LEAD_TIME_CONFIDENCE.getDefaultThresholds(),
+                uncertainty.getWarnings(),
+                Collections.singletonList(source("uncertainty", "decision")));
+        return result.toBuilder()
+                .confidence(uncertainty.getAdjustedConfidence())
+                .uncertaintyAssessment(uncertainty)
+                .trace(trace)
+                .build();
+    }
+
+    private OperationalDecisionResult applyOptionalRoutePlanning(OperationalDecisionRequest request,
+                                                                 OperationalDecisionResult result,
+                                                                 List<GeoCoordinate> route,
+                                                                 ZonedDateTime decisionTime,
+                                                                 DecisionTrace trace) {
+        if (!needsRoutePlan(result.getAction()) && request.getRoutePlanRequest() == null) {
+            return result;
+        }
+        OperationalRoutePlanRequest planRequest = request.getRoutePlanRequest();
+        if (planRequest == null) {
+            List<RoutePlanningConstraint> constraints = new ArrayList<>();
+            for (OperationalConstraint constraint : result.getBlockingConstraints()) {
+                constraints.add(RoutePlanningConstraint.from(constraint));
+            }
+            planRequest = OperationalRoutePlanRequest.builder()
+                    .originalRoute(route)
+                    .constraints(constraints)
+                    .decisionTime(decisionTime)
+                    .build();
+        }
+        OperationalRoutePlanResult plan = new RouteReplanningService().plan(planRequest);
+        trace.add("route-plan", plan.getRationale(), decisionTime,
+                source("routeCandidates", String.valueOf(plan.getCandidates().size())));
+        return result.toBuilder()
+                .routePlanResult(plan)
+                .trace(trace)
+                .build();
+    }
+
+    private boolean needsRoutePlan(WeatherDecisionAction action) {
+        return action == WeatherDecisionAction.REROUTE
+                || action == WeatherDecisionAction.AVOID
+                || action == WeatherDecisionAction.BLOCKED;
     }
 
     private <T> List<T> nullSafe(List<T> values) {

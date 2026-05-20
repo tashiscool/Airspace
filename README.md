@@ -1,93 +1,218 @@
-# Airspace Management System Models
+# Airspace
 
-## Project Motivation
-Recent tragic events, including the fatal January 29 collision near Ronald Reagan Washington National Airport, have underscored the critical importance of modernizing airspace management systems. The FAA is actively pursuing comprehensive upgrades, integrating advanced technology and artificial intelligence to prevent similar incidents. This project aligns directly with these initiatives, leveraging extensive professional experience to deliver an innovative solution for dynamic, safe, and efficient airspace management.
+Airspace is a Java 17 framework for modeling airspace reservations, legacy FAA-style messaging, NOTAM constraints, aviation weather hazards, PIREPs, route impact, and explainable operational decisions.
 
-Key motivations include:
-- **Enhanced Safety**: Utilizing predictive analytics and real-time conflict detection to prevent accidents.
-- **Dynamic Adaptability**: Addressing real-time environmental changes, including weather conditions and airspace constraints.
-- **Scalable Architecture**: Ensuring flexibility and extensibility with cloud-based, microservice-oriented infrastructure.
-- **Precision and Efficiency**: Incorporating advanced geospatial calculations and optimized routing algorithms.
+The project started as a general airspace-modeling sandbox, but the current codebase is now centered on an engine that can turn CARF/ALTRV reservations, USNS traffic, NOTAMs, weather products, and aircraft reports into structured constraints, conflict checks, route blockage predictions, and auditable recommendations.
 
----
+## What Is Implemented
 
-## Core Features
+### CARF / ALTRV / Reservation Engine
 
-### Polymorphic Airspace Model
-- **Spatial Elements**: Points, lines, polygons, and volumes with spatial indexing.
-- **Temporal Management**: Handling time-sensitive airspace components effectively.
+- CARF route-message parsing and reservation construction.
+- Modern ALTRV parser package under `org.tash.extensions.carf.altrv`.
+- A-G section/domain models, route events, route graph building, route graph validation, diagnostics, and spatial mapping.
+- Reservation conflict detection with explicit lateral, longitudinal, vertical, and time explanations.
+- Regression coverage for the 2010 legacy CARF examples that motivated the project, including:
+  - lateral-separation-safe parallel routes,
+  - head-on examples,
+  - too-short/zero-duration conflicts,
+  - navaid/fix-backed route examples.
+- CARF reference-data abstractions and schema catalog under `org.tash.extensions.carf.refdata`.
 
-### Dynamic Route Planning
-- **Real-Time Replanning**: Capable of adjusting routes dynamically to evolving conditions.
-- **Advanced Pathfinding**: Custom heuristics with A* and RRT algorithms tailored for aviation scenarios.
+Key entry points:
 
-### Uncertainty and Predictive Modeling
-- **Kalman Filtering**: Predictive modeling of flight trajectories under uncertainty.
-- **Fuzzy Logic Resolution**: Conflict resolution under imprecise data conditions.
-
-### Conflict Detection and Management
-- **Robust Conflict Detection**: Standard and emergency scenario handling with event-driven architecture.
-- **Centralized Event Management**: Efficient monitoring and response to airspace events.
-
-### Advanced 3D Spatial Modeling
-- **Complex Volumes**: Advanced modeling capabilities including compound and helical segments.
-- **Realistic Trajectories**: Detailed flight path modeling using sophisticated geometric structures.
-
-### Time-Based Airspace Operations
-- **Time-Critical Operations**: Precise timing for arrival and sequencing tasks.
-- **Flexible Constraints**: Managing temporary or periodic airspace restrictions effectively.
-
-### Weather Integration
-- **Comprehensive Weather Modeling**: Real-time wind fields and hazardous weather avoidance.
-- **Strategic Route Adjustment**: Proactive trajectory alterations based on weather forecasts.
-
----
-
-## Technical Highlights
-- **Geospatial Precision**: Accurate navigation calculations using the WGS84 model.
-- **Cloud-Native Architecture**: Scalable microservices hosted on modern cloud infrastructure.
-- **Robust Integration**: Real-time data processing and communication using Kafka and REST APIs.
-- **Front-End Modernization**: Responsive React-based interfaces for effective user interaction.
-
----
-
-## Technology Stack
-- **Backend**: Java 8+, Spring Boot, Scala, Play Framework
-- **Frontend**: ReactJS
-- **Persistence**: Oracle, PostgreSQL, DynamoDB, MongoDB
-- **Messaging and Async**: Kafka, RabbitMQ
-- **Infrastructure**: AWS, Docker, Kubernetes
-- **Monitoring**: ElasticSearch, Log4J, AWS CloudWatch
-
----
-
-## Example Usage
-
-### Route Planning Example
 ```java
-DynamicRoutePlanner planner = new DynamicRoutePlanner.Builder()
-    .addConstraint(new AltitudeConstraint(30000, 40000))
-    .addConstraint(new RestrictedAirspaceConstraint(restrictedAreaPolygon))
-    .sensorConfig(new ReplanningSensorConfig.Builder().samplingInterval(15).build())
-    .build();
-
-DynamicRoute route = planner.planRoute(startPoint, endPoint, departureTime);
+CarfAnalysisService service = new CarfAnalysisService();
+CarfAnalysisResult result = service.parseValidateMap(rawCarfOrAltrvText);
 ```
 
-### Conflict Detection Example
+### USNS / Messaging / NOTAM Compatibility
+
+- USNS envelope parsing for MRS/NADIN/WMSCR-style traffic.
+- Transaction splitting and family classification for DOM, FDC, ICAO NOTAM, Canadian domestic, SNOWTAM, BIRDTAM, ASHTAM, GENOT, service requests, CARF-like bodies, and weather/advisory traffic.
+- Batch-oriented parse diagnostics and routing outcomes.
+- Domestic NOTAM parser support for DOM1/DOM2-style grammar behavior, cancellations, edits, comments, WEF/TIL, PERM/EST, 10/12-digit date forms, keyword defaults, and q-code/contraction classification.
+- NOTAM access-policy abstractions and in-memory reference data.
+
+Key entry point:
+
 ```java
-StandardConflictDetection conflictDetection = new StandardConflictDetection();
-List<SeparationConflict> conflicts = conflictDetection.detectConflicts(flightTrajectory.getMainPath());
+UsnsIngestService ingest = new UsnsIngestService();
+UsnsIngestResult result = ingest.parse(rawUsnsMessage);
 ```
 
----
+### Weather Decision Engine
+
+- Structured weather product model for convection, turbulence, icing, ceiling, visibility, SIGMET, AIRMET, METAR, TAF, NEXRAD/CWAP/CWAF-style advisories, PIREP-derived hazards, and generic forecast hazards.
+- Product-specific decoders for pragmatic METAR, TAF, SIGMET, AIRMET, CWAP/CWAF, and PIREP parsing.
+- Forecast slicing for TAF/CWAP-style products.
+- Route weather decision support with actions such as clear, monitor, caution, delay, altitude change, reroute, avoid, and blocked.
+- Route blockage prediction with severity, echo tops, growth/decay, storm phase, lead-time confidence, stale-product diagnostics, ensemble uncertainty, and capacity-impact seams.
+- PIREP ingestion, duplicate detection, quality diagnostics, automated draft capture, and dissemination status modeling.
+- ATC/weather coordination models for review items, operational constraints, controller handoff notes, and meteorologist review priority.
+
+Key entry point:
+
+```java
+WeatherDecisionSupportService weather = new WeatherDecisionSupportService();
+RouteWeatherAdvisory advisory = weather.adviseRoute(request);
+```
+
+### Unified Operational Decision Engine
+
+- Top-level fusion facade under `org.tash.extensions.engine`.
+- Fuses raw USNS messages, raw CARF/ALTRV text, structured weather products, PIREPs, NOTAM restrictions, route candidates, reference data, and decision time.
+- Produces reservations, conflicts, weather products, PIREP results, route blockage predictions, coordination advisories, recommended actions, and a structured decision trace.
+- Includes deterministic audit/replay support:
+  - canonical JSON,
+  - HMAC signing,
+  - request/result hashes,
+  - engine/rule-catalog versions,
+  - replay verification.
+
+Key entry point:
+
+```java
+OperationalDecisionEngine engine = new OperationalDecisionEngine();
+OperationalDecisionResult result = engine.evaluate(request);
+```
+
+### Spatial / Geometry / Visualization
+
+- Core spatial model: points, lines, polygons, circles, arcs, volumes, trajectories, time intervals, wind fields, and 3D volume primitives.
+- Engine geometry service for overlap, route-corridor, distance, segment-impact, and bbox prefilter behavior.
+- Pluggable topology extensions:
+  - native geometry fallback,
+  - JTS for precise planar topology,
+  - H3 for discrete cell indexing,
+  - S2 for discrete cell indexing.
+- Constraint spatial index with time buckets, altitude buckets, bbox filtering, product-validity filtering, and optional discrete topology cells.
+- Rendering-neutral visualization model and GeoJSON exporter. Output is generic GeoJSON-compatible feature collections that can be consumed by Leaflet, OpenLayers, Mapbox, or another browser map layer.
+
+Key entry points:
+
+```java
+OperationalGeometryService geometry =
+    new PluggableOperationalGeometryService();
+
+AirspaceVisualizationService visualization =
+    new AirspaceVisualizationService();
+```
+
+### Reservation Workflow
+
+- Engine/domain workflow support for reservation drafts, validation, submission, approval, rejection, cancellation, completion, locks, stale locks, conflict review, and audit events.
+- In-memory and JSON-file repository implementations.
+- Quarkus REST resources exist for local testing and integration, but the core framework does not require HTTP or persistence to use the engine.
+
+## Current Technology Stack
+
+- Java 17
+- Maven
+- JUnit 5
+- JaCoCo coverage gate
+- Quarkus REST/Jackson for optional local HTTP resources
+- JGraphT for graph support
+- JTS, H3, and S2 as pluggable spatial/topology extensions
+- Jackson JSR-310 for time-aware JSON handling
+- Lombok
+
+The README previously mentioned Spring Boot, React, Kafka, RabbitMQ, Oracle, DynamoDB, MongoDB, Docker, and Kubernetes as if they were implemented. They are not part of the current checked-in runtime. Live FAA/NWS/SWIM feeds, certified cockpit UI behavior, production databases, and deployment infrastructure are future adapter/deployment concerns.
+
+## Test Coverage And Verification
+
+Run the full test and coverage gate:
+
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn verify -q
+```
+
+Current status from the latest verification run:
+
+- Tests: 195
+- Failures: 0
+- Errors: 0
+- Enforced JaCoCo line coverage: 77.5%
+- Active framework coverage:
+  - `org.tash.extensions.engine`: 85.3%
+  - `org.tash.extensions.weather`: 91.6%
+  - `org.tash.extensions.messaging`: 85.7%
+  - `org.tash.extensions.carf`: 88.1%
+  - `org.tash.extensions.notam`: 81.9%
+
+Coverage report:
+
+```text
+target/site/jacoco/index.html
+```
+
+The coverage gate excludes demo/experimental prototype surfaces that are not part of the current engine commitment, including demo classes, experimental routing search/replan packages, the old RRT planner prototype, and large Kalman/probabilistic estimator prototypes.
+
+## Test Fixtures
+
+The project no longer depends on files in `~/Downloads`. Legacy evidence that remains relevant has been copied into test resources:
+
+```text
+src/test/resources/legacy/carf/
+src/test/resources/scenarios/weather-engine/
+```
+
+Examples include CARF reservation text, head-on and lateral-separation regressions, navaid/fix fixtures, PTR-style examples, METAR/SPECI corpora, TAF corpora, SIGMET/AIRMET corpora, CWAP/CWAF examples, PIREP examples, and mixed USNS/CARF/NOTAM/weather scenarios.
+
+## Useful Commands
+
+Run all tests without coverage report generation:
+
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn test -q
+```
+
+Run verification with coverage:
+
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn verify -q
+```
+
+Run one test class:
+
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn -q -Dtest=OperationalDecisionEngineTest test
+```
+
+## Project Boundaries
+
+Implemented as engine/framework code:
+
+- CARF/ALTRV parsing, mapping, and conflict checks.
+- USNS-style message parsing and transaction routing.
+- Domestic NOTAM parsing and structured NOTAM restrictions.
+- Aviation weather product modeling and pragmatic decoding.
+- PIREP validation and quality diagnostics.
+- Route blockage and operational decision support.
+- Structured decision traces, rule catalog references, audit/replay envelopes, and deterministic local signing.
+- Visualization-neutral GeoJSON feature generation.
+
+Not implemented as production integrations:
+
+- Live FAA/NWS/SWIM data feed adapters.
+- Certified FAA/NWS decoders.
+- Certified cockpit UI.
+- Live database/KVM connectivity.
+- Operational alert dissemination.
+- Production deployment, monitoring, or infrastructure automation.
+
+## Repository Notes From Recent Work
+
+The last 24 hours of commits moved the repo substantially:
+
+- Completed the modern CARF/ALTRV, USNS/NOTAM, weather, PIREP, workflow, visualization, and operational decision engine layers.
+- Removed final-product legacy evaluation utilities that referenced external artifact locations.
+- Renamed the old polymorphic demo to `AirspaceMultiModelDemo`.
+- Added pluggable spatial backends for JTS/H3/S2.
+- Added JaCoCo coverage enforcement and raised enforced line coverage above 75%.
+- Added regression fixtures under `src/test/resources` so the project is testable from the repository alone.
 
 ## Author
-- **Tashdid Khan**  
-  Senior Software Architect  
-  Vienna, VA 22180  
-  [GitHub](https://github.com/tashiscool) | tashdid@gmail.com | (571) 527-8316
 
----
+Tashdid Khan
 
-This project directly addresses critical FAA airspace management challenges highlighted by recent events, aiming to significantly enhance safety, efficiency, and reliability in aviation.
