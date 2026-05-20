@@ -39,3 +39,6 @@ frontend/*.tsbuildinfo
 
 ### Mac OS ###
 .DS_Store
+
+# Local Codex display/export artifacts
+.codex_display.*
