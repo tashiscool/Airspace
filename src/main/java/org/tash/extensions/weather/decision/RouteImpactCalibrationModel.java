@@ -40,6 +40,30 @@ public class RouteImpactCalibrationModel {
         return type == null ? 1.0 : productTypeWeights.getOrDefault(type, 1.0);
     }
 
+    public static RouteImpactCalibrationModel load(CalibrationDataset dataset) {
+        if (dataset == null || dataset.outcomes().isEmpty()) {
+            return RouteImpactCalibrationModel.builder().build();
+        }
+        double blocked = 0.0;
+        double deviation = 0.0;
+        double capacity = 0.0;
+        for (HistoricalWeatherOutcome outcome : dataset.outcomes()) {
+            if (outcome.isRouteBlocked()) {
+                blocked += 1.0;
+            }
+            deviation += outcome.getObservedDeviationRate();
+            capacity += outcome.getObservedCapacityImpact();
+        }
+        double count = dataset.outcomes().size();
+        return RouteImpactCalibrationModel.builder()
+                .version("loaded-" + dataset.getId())
+                .blockedThreshold(clamp(0.55 + (blocked / count) * 0.35))
+                .probabilityScale(clamp(0.65 + (deviation / count) * 0.35))
+                .multiIntersectionCapacityBoost(clamp((capacity / count) * 0.10))
+                .maxCapacityBoost(clamp(0.10 + (capacity / count) * 0.25))
+                .build();
+    }
+
     private static Map<HazardSeverity, Double> defaultSeverityWeights() {
         Map<HazardSeverity, Double> weights = new EnumMap<>(HazardSeverity.class);
         weights.put(HazardSeverity.EXTREME, 1.0);
@@ -58,5 +82,9 @@ public class RouteImpactCalibrationModel {
         weights.put(WeatherProductType.TAF, 0.70);
         weights.put(WeatherProductType.METAR, 0.60);
         return weights;
+    }
+
+    private static double clamp(double value) {
+        return Math.max(0.0, Math.min(1.0, value));
     }
 }

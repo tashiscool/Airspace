@@ -2,12 +2,37 @@ package org.tash.extensions.weather.decision;
 
 import org.tash.data.GeoCoordinate;
 import org.tash.extensions.weather.product.WeatherProduct;
+import org.tash.extensions.weather.product.WeatherProductType;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 public class StormCellLifecycleTracker {
+    public List<StormCellLifecycle> update(List<StormCellLifecycle> existing, List<StormCellObservation> observations) {
+        List<WeatherProduct> products = new ArrayList<>();
+        if (existing != null) {
+            for (StormCellLifecycle lifecycle : existing) {
+                products.addAll(lifecycle.getProducts());
+            }
+        }
+        if (observations != null) {
+            for (StormCellObservation observation : observations) {
+                products.add(WeatherProduct.builder()
+                        .id(observation.getObservationId())
+                        .type(observation.getProductType() == null ? WeatherProductType.NEXRAD_POLYGON : observation.getProductType())
+                        .geometry(observation.getGeometry())
+                        .issuedAt(observation.getObservedAt())
+                        .receivedAt(observation.getObservedAt())
+                        .echoTopFeet(observation.getEchoTopFeet())
+                        .growthTrend(observation.getGrowthTrend())
+                        .stormPhase(observation.getStormPhase())
+                        .build());
+            }
+        }
+        return track(products);
+    }
+
     public List<StormCellLifecycle> track(List<WeatherProduct> products) {
         if (products == null || products.isEmpty()) {
             return Collections.emptyList();

@@ -11,6 +11,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import org.tash.extensions.visualization.AirspaceFeatureCollection;
 import org.tash.extensions.visualization.AirspaceVisualizationService;
+import org.tash.extensions.product.application.AirspaceProductService;
+import org.tash.extensions.product.dto.ProductDtos;
 import org.tash.extensions.workflow.ReservationWorkflowRecord;
 import org.tash.extensions.workflow.ReservationWorkflowResult;
 import org.tash.extensions.workflow.ReservationWorkflowService;
@@ -24,6 +26,8 @@ public class ReservationWorkflowResource {
     @Inject
     ReservationWorkflowService workflowService;
     @Inject
+    AirspaceProductService productService;
+    @Inject
     AirspaceVisualizationService visualizationService;
 
     @POST
@@ -36,56 +40,79 @@ public class ReservationWorkflowResource {
     @PUT
     @Path("/{id}")
     public ReservationWorkflowResult updateDraft(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.updateDraft(id, request == null ? null : request.getRawText(),
-                actor(request));
+        return productService.updateReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/validate")
     public ReservationWorkflowResult validate(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.validate(id, actor(request));
+        return productService.validateReservation(id, reservationRequest(request));
+    }
+
+    @POST
+    @Path("/{id}/parse")
+    public ReservationWorkflowResult parse(@PathParam("id") String id, RawTextRequest request) {
+        return productService.validateReservation(id, reservationRequest(request));
+    }
+
+    @POST
+    @Path("/{id}/deconflict")
+    public ReservationWorkflowResult deconflict(@PathParam("id") String id, RawTextRequest request) {
+        return productService.validateReservation(id, reservationRequest(request));
+    }
+
+    @POST
+    @Path("/{id}/force-parse")
+    public ReservationWorkflowResult forceParse(@PathParam("id") String id, RawTextRequest request) {
+        return productService.validateReservation(id, reservationRequest(request));
+    }
+
+    @POST
+    @Path("/{id}/force-deconflict")
+    public ReservationWorkflowResult forceDeconflict(@PathParam("id") String id, RawTextRequest request) {
+        return productService.validateReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/submit")
     public ReservationWorkflowResult submit(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.submit(id, actor(request));
+        return productService.submitReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/approve")
     public ReservationWorkflowResult approve(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.approve(id, actor(request));
+        return productService.approveReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/reject")
     public ReservationWorkflowResult reject(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.reject(id, actor(request), request == null ? null : request.getNote());
+        return productService.rejectReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/cancel")
     public ReservationWorkflowResult cancel(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.cancel(id, actor(request), request == null ? null : request.getNote());
+        return productService.cancelReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/complete")
     public ReservationWorkflowResult complete(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.complete(id, actor(request));
+        return productService.completeReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/lock")
     public ReservationWorkflowResult lock(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.lock(id, actor(request));
+        return productService.lockReservation(id, reservationRequest(request));
     }
 
     @POST
     @Path("/{id}/unlock")
     public ReservationWorkflowResult unlock(@PathParam("id") String id, RawTextRequest request) {
-        return workflowService.unlock(id, actor(request));
+        return productService.unlockReservation(id, reservationRequest(request));
     }
 
     @POST
@@ -115,5 +142,15 @@ public class ReservationWorkflowResource {
 
     private String actor(RawTextRequest request) {
         return request == null || request.getActor() == null ? "system" : request.getActor();
+    }
+
+    private ProductDtos.ReservationRequest reservationRequest(RawTextRequest request) {
+        ProductDtos.ReservationRequest out = new ProductDtos.ReservationRequest();
+        if (request != null) {
+            out.setRawText(request.getRawText());
+            out.setActor(request.getActor());
+            out.setNote(request.getNote());
+        }
+        return out;
     }
 }

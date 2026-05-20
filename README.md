@@ -77,6 +77,65 @@ OperationalDecisionEngine engine = new OperationalDecisionEngine();
 OperationalDecisionResult result = engine.evaluate(request);
 ```
 
+### Operations Product Layer
+
+- Quarkus product API resources under `org.tash.extensions.product.api` for auth, missions, messages, feed ingest, decisions, reference data, config, history, and metrics.
+- Product DTOs keep HTTP payloads separate from engine models and persistence entities.
+- Baseline PostgreSQL/Flyway schema under `src/main/resources/db/migration`.
+- JPA entity/repository seams under `org.tash.extensions.product.persistence` for missions, reservations, messages, NOTAMs, APREQs, approvals, weather products, PIREPs, operational decisions, users, reference points, and parsed ALTRV route graph targets.
+- Quarkus ORM/Flyway/JDBC wiring is active: dev/test use H2 in PostgreSQL mode, while prod points at PostgreSQL through `AIRSPACE_JDBC_URL`, `AIRSPACE_DB_USERNAME`, and `AIRSPACE_DB_PASSWORD`.
+- `ProductPersistenceService` provides transactional JPA persistence for product aggregates; the product API can run in in-memory mode or persisted mode through `airspace.product.persistence.enabled`.
+- Persisted product aggregates currently include missions, mission locks, reservation workflow summaries, messages, weather products, and operational decisions/audit payloads.
+- Persisted decisions can be reloaded into typed decision/audit/replay objects for restart-safe replay checks and GeoJSON feature generation. If a historical payload cannot be fully rehydrated, the API falls back to stored JSON hash/signature verification and returns explicit diagnostics.
+- Product workflow APIs include distinct reservation parse/deconflict and force-parse/force-deconflict actions, message reply/forward actions, feed transaction inspection, reservation supplements, decision replay verification, and decision feature export.
+- Reservation supplement lifecycle transitions are exposed for NOTAM/APREQ/approval-style records so operator actions can move draft/open records through submitted, approved, rejected, or cancelled states.
+- Product search surfaces cover missions, messages, feed artifacts, decisions, and history, with a `ProductSearchService` facade for typed search entry points.
+- The second product migration captures the useful legacy `MissionModelMapping.hbm.xml` shape without restoring legacy Hibernate/XML runtime: ALTRV messages, route groups, routes, route events, fix-times, areas, exits/destinations, notes/images, message recipients, airspace info, separation groups, aircraft validation, and preferred navaids.
+- Local adapter seams are present for USNS/NADIN/WMSCR traffic, weather traffic, KVM-style bridge input, and reference-data sync. The checked-in implementations are file/in-memory replay adapters only; they are shaped for future live adapters without requiring credentials or network services.
+- Reference-data import preview/apply endpoints accept local CSV-style navaid/fix/aerodrome/global-account records and preserve source/version metadata in reference-point records.
+- Local RBAC auth is available for product development with default users:
+  - `planner` / `planner`
+  - `supervisor` / `supervisor`
+  - `admin` / `admin`
+- When `airspace.product.auth.required=true`, product APIs enforce role-aware workflow access: planners can create/edit/submit, supervisors can approve/reject, and admins can manage reference/config surfaces.
+
+The first product API path is intentionally local/test-friendly: the engine remains usable without a live database, while the production Postgres schema and JPA model are present for deployment hardening.
+
+### React Operations Console
+
+- A React + TypeScript + Vite frontend lives in `frontend/`.
+- It provides the initial operations shell for login, a four-pane CARF-style Mission Explorer, mission/reservation workspace, reservation save/lock/parse/submit/approve/reject/cancel/complete actions, deconfliction placeholder, messaging, decision review, search, history, and config.
+- The map stack is OpenLayers and consumes the backend’s GeoJSON-compatible feature collections.
+
+Frontend commands:
+
+```bash
+cd frontend
+npm install
+npm test -- --run
+npm run build
+```
+
+Local product dev:
+
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn quarkus:dev -Dquarkus.http.port=8090 -Dquarkus.test.continuous-testing=disabled
+cd frontend
+npm run dev -- --host 127.0.0.1
+```
+
+The Vite dev proxy defaults to `http://localhost:8090` and can be overridden with `VITE_API_PROXY_TARGET`.
+
+### Product Demo Corpus
+
+A self-contained demo corpus lives under:
+
+```text
+src/test/resources/scenarios/product-demo/
+```
+
+It includes mixed USNS/weather traffic, a CARF/ALTRV reservation, and an expected summary. `ProductDemoCorpusTest` verifies the local feed adapter, transaction inspection, operational decision evaluation, audit/replay payloads, and metrics without external files or live FAA/NWS/SWIM feeds.
+
 ### Spatial / Geometry / Visualization
 
 - Core spatial model: points, lines, polygons, circles, arcs, volumes, trajectories, time intervals, wind fields, and 3D volume primitives.
@@ -112,10 +171,12 @@ AirspaceVisualizationService visualization =
 - JUnit 5
 - JaCoCo coverage gate
 - Quarkus REST/Jackson for optional local HTTP resources
+- PostgreSQL-shaped Flyway migrations and JPA entity/repository seams
 - JGraphT for graph support
 - JTS, H3, and S2 as pluggable spatial/topology extensions
 - Jackson JSR-310 for time-aware JSON handling
 - Lombok
+- React, TypeScript, Vite, TanStack Query/Table, React Hook Form, Zustand, and OpenLayers for the browser console
 
 The README previously mentioned Spring Boot, React, Kafka, RabbitMQ, Oracle, DynamoDB, MongoDB, Docker, and Kubernetes as if they were implemented. They are not part of the current checked-in runtime. Live FAA/NWS/SWIM feeds, certified cockpit UI behavior, production databases, and deployment infrastructure are future adapter/deployment concerns.
 
@@ -173,6 +234,12 @@ Run verification with coverage:
 JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn verify -q
 ```
 
+Build the browser console:
+
+```bash
+cd frontend && npm run build
+```
+
 Run one test class:
 
 ```bash
@@ -191,6 +258,8 @@ Implemented as engine/framework code:
 - Route blockage and operational decision support.
 - Structured decision traces, rule catalog references, audit/replay envelopes, and deterministic local signing.
 - Visualization-neutral GeoJSON feature generation.
+- Restart-safe product decision replay verification and persisted decision feature export.
+- Local product workflow APIs for reservation parse/deconflict, message reply/forward, feed transaction inspection, and RBAC-gated operator actions.
 
 Not implemented as production integrations:
 
@@ -215,4 +284,3 @@ The last 24 hours of commits moved the repo substantially:
 ## Author
 
 Tashdid Khan
-

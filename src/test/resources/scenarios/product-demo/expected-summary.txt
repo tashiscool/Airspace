@@ -1,0 +1,4 @@
+scenario=product-demo
+inputs=USNS,CARF,PIREP,SIGMET,METAR
+expected=accepted-or-classified-with-diagnostics
+decision=auditable-replayable
