@@ -77,11 +77,8 @@ public class SpatialCircle implements SpatialElement {
 
     @Override
     public SpatialPoint getPointAtFraction(double v) {
-        SpatialPoint pt = getPointAtFraction(v);
-        double lat = center.getCoordinate().getLatitude() + v * (pt.getCoordinate().getLatitude() - center.getCoordinate().getLatitude());
-        double lon = center.getCoordinate().getLongitude() + v * (pt.getCoordinate().getLongitude() - center.getCoordinate().getLongitude());
-        double angle = Math.toDegrees(2 * Math.asin(radius / center.getCoordinate().distanceTo(new GeoCoordinate(lat, lon, center.getCoordinate().getAltitude()))));
-        return getPointAtAngle(angle).getCoordinate().equals(new GeoCoordinate(lat, lon, center.getCoordinate().getAltitude())) ? getPointAtAngle(angle) : getPointAtAngle(360 - angle);
+        double fraction = Math.max(0, Math.min(1, v));
+        return getPointAtAngle(360.0 * fraction);
     }
 
     /**

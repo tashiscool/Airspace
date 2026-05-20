@@ -135,53 +135,61 @@ public class FuzzyConflictResolver {
      * @return Resolution action
      */
     public ResolutionAction resolveConflicts(TrajectorySegment segment1, TrajectorySegment segment2) {
-        // Evaluate membership functions for each attribute
-        // Horizontal separation
-        // Vertical separation
-        // Closure rate
-        // Position uncertainty
-        // Conflict risk
-        // Combine antecedents with fuzzy rules
-        // Defuzzify the consequent
-        // Return resolution action
-        // Calculate closest point of approach
-        // Check if separation standards are violated
-        // Create a conflict
-        // Check each pair of segments
-        // Check for conflicts in a set of trajectory segments
-        // Base interface for conflict detection strategies (Strategy pattern)
-        // Specialized conflict detection for emergency situations (relaxed standards)
-        // Reduced separation standards for emergency
-        // Represents a separation conflict between two trajectory segments
-        // Standard conflict detection implementation
-        // First check temporal overlap
-        // Check if reduced separation standards are violated
-        // Check if separation standards are violated
-        // Calculate closest point of approach
-        // Check each pair of segments
-        // Check for conflicts in a set of trajectory segments
-        // Fuzzy logic system for conflict resolution with imprecise data
-        // Minimum horizontal separation for conflict (nautical miles)
-        //
-        //  * Constructor with default separation minima
-        //  * Constructor with custom separation minima
-        //
-        //          * Initialize fuzzy membership functions
-        //          * Initialize rule base
-        //          * Define fuzzy rules}
+        if (segment1 == null || segment2 == null) {
+            return ResolutionAction.builder()
+                    .riskScore(0)
+                    .rationale("No resolution required: one or both trajectory segments are missing")
+                    .build();
+        }
 
-        return null;
-        // TODO: Implement conflict resolution logic
-        // TODO: Implement fuzzy logic system for conflict resolution
-        // TODO: Implement minimum horizontal separation for conflict
-        // TODO: Implement other necessary methods
+        double horizontalSeparation = horizontalSeparation(segment1, segment2);
+        double verticalSeparation = verticalSeparation(segment1, segment2);
+        double horizontalRisk = 1.0 - membership("horizontalSeparation.adequate", horizontalSeparation);
+        double verticalRisk = 1.0 - membership("verticalSeparation.adequate", verticalSeparation);
+        double veryCloseBoost = Math.max(membership("horizontalSeparation.veryClose", horizontalSeparation),
+                membership("verticalSeparation.veryClose", verticalSeparation));
+        double risk = clamp((horizontalRisk * 0.55) + (verticalRisk * 0.35) + (veryCloseBoost * 0.10));
 
-        // Example implementation using fuzzy logic with JFuzzyLogic library
-        // FuzzyEngine engine = new FuzzyEngine();
-        // engine.addRule(new FuzzyRule(new FuzzySet[] {membershipFunctions.get("horizontalSeparation.adequate"), membershipFunctions.get("verticalSeparation.adequate")}, membershipFunctions.get("closureRate.stable")));
-        // engine.addRule(new FuzzyRule(new FuzzySet[] {membershipFunctions.get("horizontalSeparation.far"), membershipFunctions.get("verticalSeparation.adequate")}, membershipFunctions.get("closureRate.diverging")));
-        // engine.addRule(new FuzzyRule(new FuzzySet[] {membershipFunctions.get("horizontalSeparation.veryFar"), membershipFunctions.get("verticalSeparation.adequate")}, membershipFunctions.get("closureRate.converging")));
-        // engine.addRule(new FuzzyRule(new FuzzySet[] {membershipFunctions.get("horizontalSeparation.adequate"), membershipFunctions.get("verticalSeparation.close")}, membershipFunctions.get("closureRate.stable")));
-        // engine.addRule(new FuzzyRule(new FuzzySet[] {membershipFunctions.get("horizontalSeparation.far"), membershipFunctions.get("verticalSeparation.close")}, membershipFunctions.get("closureRate.diverging")));
+        if (horizontalSeparation >= minHorizontalSeparation && verticalSeparation >= minVerticalSeparation) {
+            return ResolutionAction.builder()
+                    .riskScore(Math.min(risk, 0.25))
+                    .rationale("No maneuver required: horizontal and vertical minima are satisfied")
+                    .build();
+        }
+
+        double headingChange = risk < 0.35 ? 10 : risk < 0.70 ? 25 : 45;
+        double altitudeChange = verticalSeparation < minVerticalSeparation
+                ? Math.max(500, minVerticalSeparation - verticalSeparation)
+                : 0;
+        double speedChange = horizontalSeparation < minHorizontalSeparation ? Math.max(25, risk * 150) : 0;
+
+        return ResolutionAction.builder()
+                .headingChangeDegrees(headingChange)
+                .altitudeChangeFeet(altitudeChange)
+                .speedChangeKnots(speedChange)
+                .riskScore(risk)
+                .rationale("Fuzzy resolution based on horizontal=" + horizontalSeparation
+                        + "NM vertical=" + verticalSeparation + "ft")
+                .build();
+    }
+
+    private double horizontalSeparation(TrajectorySegment first, TrajectorySegment second) {
+        GeoCoordinate a = first.getSource().getCoordinate();
+        GeoCoordinate b = second.getSource().getCoordinate();
+        return GeodeticCalculator.vincentyDistance(a, b);
+    }
+
+    private double verticalSeparation(TrajectorySegment first, TrajectorySegment second) {
+        return Math.abs(first.getSource().getCoordinate().getAltitude()
+                - second.getSource().getCoordinate().getAltitude());
+    }
+
+    private double membership(String name, double value) {
+        FuzzyMembershipFunction function = membershipFunctions.get(name);
+        return function == null ? 0 : function.getMembership(value);
+    }
+
+    private double clamp(double value) {
+        return Math.max(0, Math.min(1, value));
     }
 }

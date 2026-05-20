@@ -116,7 +116,6 @@ public class GreatCircleTrajectorySegment extends AbstractTrajectorySegment {
 
     @Override
     public Date getDuration() {
-        return new Date(motionModel.getTimeInterval().getDuration().toMillis());
+        return new Date(getMotionModel().getTimeInterval().getDuration().toMillis());
     }
 }
-

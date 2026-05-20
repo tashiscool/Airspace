@@ -260,8 +260,8 @@ public class GeodeticCalculator {
         );
 
         double lambda = Math.atan2(
-                sinAlpha,
-                tmp * Math.cos(lat2)
+                sinSigma * sinAlpha1,
+                cosU1 * cosSigma - sinU1 * sinSigma * cosAlpha1
         );
 
         double C = f / 16 * cos2Alpha * (4 + f * (4 - 3 * cos2Alpha));
@@ -269,6 +269,7 @@ public class GeodeticCalculator {
                 (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
 
         double lon2 = lon1 + L;
+        lon2 = (lon2 + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
 
         return GeoCoordinate.builder()
                 .latitude(Math.toDegrees(lat2))

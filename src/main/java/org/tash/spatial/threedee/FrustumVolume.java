@@ -112,12 +112,7 @@ public class FrustumVolume implements SpatialElement, TemporalElement {
             return false;
         }
 
-        // Check time bounds
-        if (startTime != null && endTime != null
-         // TODO: Fix this point has the time?
-        ) {
-            return false;
-        }
+        // GeoCoordinate carries no timestamp; temporal filtering is handled by callers using TemporalElement.
 
         // Find nearest point on central axis
         GeoCoordinate topCenter = getTopCenter();

@@ -28,6 +28,18 @@ public class HoldingPatternTrajectorySegment extends AbstractTrajectorySegment {
 
     @Override
     public MotionModel getMotionModel() {
+        if (motionModel == null) {
+            motionModel = HoldingPatternMotionModel.builder()
+                    .centerPoint(centerPoint.getCoordinate())
+                    .entryPoint(source.getCoordinate())
+                    .exitPoint(target.getCoordinate())
+                    .legLength(legLength)
+                    .heading(heading)
+                    .turns(turns > 0 ? turns : 1)
+                    .startTime(startTime)
+                    .endTime(endTime)
+                    .build();
+        }
         return motionModel;
     }
 
@@ -70,8 +82,11 @@ public class HoldingPatternTrajectorySegment extends AbstractTrajectorySegment {
 
     @Override
     public boolean intersectsVolume(SpatialVolume volume) {
+        if (volume == null) {
+            return false;
+        }
         // Check if the start or end position intersects the volume
-        if (volume.contains(centerPoint.getCoordinate().getLongitude(), centerPoint.getCoordinate().getLongitude(), centerPoint.getCoordinate().getAltitude())) {
+        if (volume.contains(centerPoint.getCoordinate())) {
             return true;
         }
 
@@ -88,7 +103,7 @@ public class HoldingPatternTrajectorySegment extends AbstractTrajectorySegment {
 
     @Override
     public Date getDuration() {
-        return new Date(motionModel.getTimeInterval().getDuration().toMillis());
+        return new Date(getMotionModel().getTimeInterval().getDuration().toMillis());
     }
 
     @Override

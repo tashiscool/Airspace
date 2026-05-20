@@ -119,12 +119,7 @@ public class ConicalVolume implements SpatialElement, TemporalElement {
             return false;
         }
 
-        // Check time bounds
-        if (startTime != null && endTime != null
-                // TODO: Fix this point has the time?
-        ) {
-            return false;
-        }
+        // GeoCoordinate carries no timestamp; temporal filtering is handled by callers using TemporalElement.
 
         // Calculate horizontal distance from apex to point
         double distance = apex.getCoordinate().distanceTo(point);

@@ -88,7 +88,8 @@ import java.util.List;
         double verticalDistance = Math.abs(closestPoint1.getZ() - closestPoint2.getZ());
 
         // Calculate time of closest approach
-        ZonedDateTime timeOfClosestApproach = segment1.getStartTime().plusSeconds((long) (t * segment1.getDuration().getSeconds()));
+        long durationSeconds = java.time.Duration.between(segment1.getStartTime(), segment1.getEndTime()).getSeconds();
+        ZonedDateTime timeOfClosestApproach = segment1.getStartTime().plusSeconds((long) (t * durationSeconds));
 
         // Create and return ClosestPointOfApproach object
         return ClosestPointOfApproach.builder()

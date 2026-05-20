@@ -77,22 +77,31 @@ import java.util.Date;
 
     @Override
     public Vector3D getStartPosition() {
-        return null;
+        return Vector3D.fromGeoCoordinate(source.getCoordinate());
     }
 
     @Override
     public Vector3D getEndPosition() {
-        return null;
+        return Vector3D.fromGeoCoordinate(target.getCoordinate());
     }
 
     @Override
     public boolean intersectsVolume(SpatialVolume volume) {
+        if (volume == null) {
+            return false;
+        }
+        for (int i = 0; i <= 100; i++) {
+            SpatialPoint point = getPointAtFraction(i / 100.0);
+            if (volume.contains(point)) {
+                return true;
+            }
+        }
         return false;
     }
 
     @Override
     public Date getDuration() {
-        return null;
+        return new Date(java.time.Duration.between(startTime, endTime).toMillis());
     }
 
     @Override

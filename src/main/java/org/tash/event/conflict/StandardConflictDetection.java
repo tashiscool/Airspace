@@ -111,8 +111,7 @@ import static org.tash.AirspaceModel.MIN_VERTICAL_SEPARATION_FT;
 
     // Placeholder methods for distance calculations
     private double calculateHorizontalDistance(SpatialPoint pos1, SpatialPoint pos2) {
-            return Math.sqrt(Math.pow(pos1.getCoordinate().getLatitude() - pos2.getCoordinate().getLatitude(), 2) +
-                    Math.pow(pos1.getCoordinate().getLongitude() - pos2.getCoordinate().getLongitude(), 2));
+            return pos1.getCoordinate().distanceTo(pos2.getCoordinate());
     }
 
     private double calculateVerticalDistance(SpatialPoint pos1, SpatialPoint pos2) {

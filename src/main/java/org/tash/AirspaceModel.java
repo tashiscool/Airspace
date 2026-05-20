@@ -19,6 +19,7 @@ import org.tash.data.Vector3D;
 import org.tash.event.AirspaceEvent;
 import org.tash.event.AirspaceEventManager;
 import org.tash.event.AirspaceInfringementEvent;
+import org.tash.event.TrajectoryConflictEvent;
 import org.tash.event.conflict.*;
 import org.tash.flight.FlightTrajectory;
 import org.tash.spatial.SpatialPoint;
@@ -175,6 +176,7 @@ public class AirspaceModel {
                 .type(type)
                 .build();
         airspaceGraph.addEdge(segment, source, target);
+        spatialIndex.add(segment);
         return segment;
     }
 
@@ -260,6 +262,7 @@ public class AirspaceModel {
                 .type(trajectoryType)
                 .build();
         airspaceGraph.addEdge(segment, wp2, wp4);
+        spatialIndex.add(segment);
         return segment;
     }
 
@@ -282,10 +285,14 @@ public class AirspaceModel {
                         .source(holdEntry)
                         .target(holdExit)
                         .centerPoint(holdCenter)
+                        .legLength(v)
+                        .heading(i)
+                        .turns(i1)
                         .startTime(startTime)
                         .endTime(endTime)
                         .build();
         airspaceGraph.addEdge(segment, holdEntry, holdExit);
+        spatialIndex.add(segment);
         return segment;
     }
 
@@ -297,9 +304,12 @@ public class AirspaceModel {
                 .id(id != null ? id : "VOL-" + UUID.randomUUID().toString())
                 .startTime(startTime)
                 .endTime(endTime)
+                .lowerAltitude(i)
+                .upperAltitude(i1)
                 .basePolygon(toBasePolygon(boundaryPoints))
                 .build();
         reservedVolumes.add(volume);
+        spatialIndex.add(volume);
         return volume;
     }
 
@@ -312,28 +322,30 @@ public class AirspaceModel {
     }
 
     public List<SeparationConflict> checkTrajectoryConflicts(String strategyName) {
-        List<SeparationConflict> conflicts = new ArrayList<>();
+        ConflictDetectionStrategy strategy = conflictStrategies.get(strategyName);
+        if (strategy == null) {
+            throw new IllegalArgumentException("Unknown conflict strategy: " + strategyName);
+        }
 
-        // Check each pair of segments
-        for (SpatialPoint segment1 : airspaceGraph.getVertices()) {
-            for (SpatialPoint segment2 : airspaceGraph.getVertices()) {
-                if (segment1 == segment2) {
-                    continue;
-                }
-
-                if (airspaceGraph.isNeighbor(segment1, segment2)) {
-                    continue;
-                }
-                if ( segment1 instanceof TrajectorySegment && segment2 instanceof TrajectorySegment) {
-                    SeparationConflict conflict = detectConflict((TrajectorySegment) segment1, (TrajectorySegment) segment2);
-                    if (conflict != null) {
-                        conflicts.add(conflict);
-                    }
-                }
-            }
+        List<SeparationConflict> conflicts = strategy.detectConflicts(getAllTrajectorySegments());
+        for (SeparationConflict conflict : conflicts) {
+            eventManager.fireEvent(new TrajectoryConflictEvent(
+                    conflict.getSegment1(),
+                    conflict.getSegment2(),
+                    conflict.getTime(),
+                    conflict.getHorizontalSeparation(),
+                    conflict.getVerticalSeparation()));
         }
 
         return conflicts;
+    }
+
+    private List<TrajectorySegment> getAllTrajectorySegments() {
+        List<TrajectorySegment> segments = new ArrayList<>();
+        for (FlightTrajectory trajectory : flightTrajectories.values()) {
+            segments.addAll(trajectory.getAllSegments());
+        }
+        return segments;
     }
 
     private SeparationConflict detectConflict(TrajectorySegment segment1, TrajectorySegment segment2) {
@@ -369,7 +381,16 @@ public class AirspaceModel {
             for (SpatialVolume volume : reservedVolumes) {
                 if (trajectory.intersectsVolume(volume)) {
                     trajectory.getAllSegments().forEach(
-                            segment -> infringements.add(AirspaceInfringementEvent.builder().segment(segment).volume(volume).build())
+                            segment -> {
+                                AirspaceInfringementEvent event = AirspaceInfringementEvent.builder()
+                                        .eventType("AIRSPACE_INFRINGEMENT")
+                                        .timestamp(ZonedDateTime.now())
+                                        .segment(segment)
+                                        .volume(volume)
+                                        .build();
+                                infringements.add(event);
+                                eventManager.fireEvent(event);
+                            }
                     );
                 }
             }

@@ -17,7 +17,7 @@ import org.tash.spatial.SpatialPoint;
 
     public Vector3D(SpatialPoint s) {
         this.x = s.getCoordinate().getLatitude();
-        this.y = s.getCoordinate().getLatitude();
+        this.y = s.getCoordinate().getLongitude();
         this.z = s.getCoordinate().getAltitude();
     }
 
