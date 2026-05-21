@@ -423,6 +423,57 @@ details summary span { float: right; }
   overflow-wrap: anywhere;
 }
 .metric-tile.attention { border-color: color-mix(in srgb, var(--bad) 65%, var(--border)); }
+.safety-loop-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.safety-card, .guidance-card {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, #164e63), var(--surface));
+  padding: 9px;
+}
+.safety-card header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--primary);
+  font: 11px var(--font-mono);
+  text-transform: uppercase;
+}
+.safety-card strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 16px;
+}
+.safety-card p, .guidance-card p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+.attention-card {
+  border-color: color-mix(in srgb, var(--warn) 70%, var(--border));
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .08);
+}
+.guidance-stack {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+.guidance-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.guidance-card small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
 .selection-console {
   display: flex;
   align-items: center;
@@ -1143,7 +1194,7 @@ details summary span { float: right; }
     grid-template-columns: 1fr;
   }
   .metric-sidebar, .split-tree, .feed-list, .decision-queue, .config-tree { display: none; }
-  .metric-strip, .mission-summary-grid, .decision-summary-grid, .sections-grid, .config-split, .policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .command-button { display: none; }
 }
 
@@ -1152,5 +1203,5 @@ details summary span { float: right; }
   .breadcrumb, .ops-footer > span:last-child, .operator-block small { display: none; }
   .ops-rail { width: 58px; }
   .ops-rail span, .ops-rail small, .rail-collapse { display: none; }
-  .form-grid, .metric-strip, .mission-summary-grid, .decision-summary-grid, .sections-grid, .map-semantics, .config-split, .policy-grid { grid-template-columns: 1fr; }
+  .form-grid, .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .policy-grid { grid-template-columns: 1fr; }
 }

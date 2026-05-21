@@ -138,6 +138,16 @@ The screenshot script uses the real local product APIs to create a mission, rese
 
 The current operator-facing product path is working locally as an integrated prototype. These screenshots are generated from the checked-in app, not mockups.
 
+The safety loop this product is trying to close is explicit in the workbench:
+
+- **Weather product intake:** METAR/TAF/SIGMET/AIRMET/CWAP-style products, PIREPs, and generic weather advisories enter through USNS/feed/message paths.
+- **Route blockage and avoidance:** weather products are fused with route candidates, CARF/ALTRV reservations, NOTAM constraints, altitude bands, timing windows, and route-segment metadata.
+- **PIREP handling:** aircraft reports are modeled separately from forecasts so turbulence/icing observations can drive review priority and route/altitude guidance.
+- **ATC/weather coordination:** severe, urgent, stale, or low-confidence products become review/coordination items instead of disappearing into raw text.
+- **Pilot/operator decision support:** the decision engine returns a single recommended action with confidence, rationale, blocking constraints, map features, trace steps, audit envelope, and replay bundle.
+
+This is not a certified cockpit system or live FAA feed integration. It is a local, auditable operations prototype showing the engine and workbench path for turning weather, reports, forecasts, reservations, NOTAMs, and ATC constraints into clear guidance quickly.
+
 ![Login](/docs/screenshots/01-login.png)
 
 | Mission Explorer | Mission Workspace |

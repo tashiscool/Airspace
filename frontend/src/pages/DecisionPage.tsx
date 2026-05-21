@@ -116,16 +116,25 @@ export function DecisionPage() {
           <MutationNotice mutation={replay} label="Replay verification" />
         </div>
         {tab === 'summary' && (
-          <section className="decision-summary-grid">
-            <Metric label="Action" value={decision?.recommendedAction || decision?.action || '—'} />
-            <Metric label="Confidence" value={decision ? `${Math.round(decision.confidence * 100)}%` : '—'} />
-            <Metric label="Blocking Constraints" value={String(blockingConstraints.length ?? 0)} attention={(blockingConstraints.length ?? 0) > 0} />
-            <Metric label="Route Predictions" value={String(routePredictions.length ?? 0)} />
-            <div className="panel wide">
-              <h3>Rationale</h3>
-              <p>{decision?.rationale ?? 'No decision has been evaluated yet.'}</p>
-            </div>
-          </section>
+          <>
+            <section className="safety-loop-grid">
+              <DecisionSafetyCard title="Inputs fused" value={inputCoverage(effectiveResult)} detail="USNS, CARF/ALTRV, NOTAM, weather, PIREP, and route candidates are normalized into one decision request." />
+              <DecisionSafetyCard title="Route guidance" value={decision?.recommendedAction || decision?.action || '—'} detail="The operator sees a single action instead of raw products: clear, monitor, caution, delay, altitude change, avoid, reroute, or blocked." attention={isBlockingAction(decision?.recommendedAction || decision?.action)} />
+              <DecisionSafetyCard title="Constraints" value={`${blockingConstraints.length} blocking`} detail="CARF conflicts, NOTAM restrictions, weather hazards, and route impacts remain linked to source IDs and map features." attention={blockingConstraints.length > 0} />
+              <DecisionSafetyCard title="Auditability" value={`${trace.length} trace steps`} detail="Rule IDs, thresholds, source refs, warnings, and replay envelopes explain why the action was selected." />
+            </section>
+            <section className="decision-summary-grid">
+              <Metric label="Action" value={decision?.recommendedAction || decision?.action || '—'} />
+              <Metric label="Confidence" value={decision ? `${Math.round(decision.confidence * 100)}%` : '—'} />
+              <Metric label="Blocking Constraints" value={String(blockingConstraints.length ?? 0)} attention={(blockingConstraints.length ?? 0) > 0} />
+              <Metric label="Route Predictions" value={String(routePredictions.length ?? 0)} />
+              <div className="panel wide">
+                <h3>Operational Rationale</h3>
+                <p>{decision?.rationale ?? 'No decision has been evaluated yet.'}</p>
+                <p className="muted">This is the engine’s answer to the core safety problem: convert live traffic, aircraft reports, forecasts, reservations, NOTAMs, and ATC constraints into clear operational guidance with traceable reasons.</p>
+              </div>
+            </section>
+          </>
         )}
         {tab === 'constraints' && (
           <section className="panel">
@@ -216,4 +225,37 @@ function Metric({ label, value, attention }: { label: string; value: string; att
       {attention && <CheckCircle2 size={14} />}
     </div>
   );
+}
+
+function DecisionSafetyCard({ title, value, detail, attention }: { title: string; value: string; detail: string; attention?: boolean }) {
+  return (
+    <article className={attention ? 'safety-card attention-card' : 'safety-card'}>
+      <header><span>{title}</span></header>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </article>
+  );
+}
+
+function isBlockingAction(value?: string) {
+  return /BLOCK|REROUTE|AVOID|DELAY|ALTITUDE/i.test(value ?? '');
+}
+
+function inputCoverage(result?: JsonRecord) {
+  if (!result) return 'No result';
+  const labels = [
+    ['rawMessages', 'messages'],
+    ['reservations', 'CARF'],
+    ['notamRestrictions', 'NOTAM'],
+    ['weatherProducts', 'weather'],
+    ['pirepResults', 'PIREPs'],
+    ['routeBlockagePredictions', 'route']
+  ];
+  const present = labels
+    .filter(([key]) => {
+      const value = result[key];
+      return Array.isArray(value) ? value.length > 0 : value != null;
+    })
+    .map(([, label]) => label);
+  return present.length ? present.join(' + ') : 'Decision trace';
 }
