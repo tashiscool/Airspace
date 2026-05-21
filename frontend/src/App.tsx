@@ -16,6 +16,7 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage').then((module) => ({
 const ConfigPage = lazy(() => import('./pages/ConfigPage').then((module) => ({ default: module.ConfigPage })));
 const NotamsPage = lazy(() => import('./pages/NotamsPage').then((module) => ({ default: module.NotamsPage })));
 const WeatherPage = lazy(() => import('./pages/WeatherPage').then((module) => ({ default: module.WeatherPage })));
+const PilotBriefPage = lazy(() => import('./pages/PilotBriefPage').then((module) => ({ default: module.PilotBriefPage })));
 
 function Guarded() {
   const token = useSession((state) => state.token);
@@ -38,6 +39,7 @@ export function App() {
           <Route element={<Guarded />}>
             <Route path="/explorer" element={<ExplorerPage />} />
             <Route path="/missions/:missionId" element={<MissionPage />} />
+            <Route path="/missions/:missionId/brief" element={<PilotBriefPage />} />
             <Route path="/missions/:missionId/reservations/:reservationId" element={<ReservationPage />} />
             <Route path="/deconfliction" element={<DeconflictionPage />} />
             <Route path="/deconfliction/:reservationId" element={<DeconflictionPage />} />

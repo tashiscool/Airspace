@@ -58,6 +58,117 @@ export type MessageSummary = {
   createdAt?: string;
 };
 
+export type WeatherSourceSummary = {
+  id: string;
+  family: string;
+  label?: string;
+  route?: string;
+  severity?: string;
+  rationale?: string;
+  observedAt?: string;
+  ageMinutes?: number;
+  agingCategory?: string;
+  relevanceScore?: number;
+  stale: boolean;
+};
+
+export type MissionWeatherVerdictSummary = {
+  missionId: string;
+  action: string;
+  priority: string;
+  confidence: number;
+  sourceCount: number;
+  stale: boolean;
+  summary: string;
+  recommendedAction: string;
+  sources: WeatherSourceSummary[];
+  diagnostics: string[];
+};
+
+export type RouteImpactSummary = {
+  missionId: string;
+  reservationId?: string;
+  action: string;
+  recommendedAction?: string;
+  confidence: number;
+  rationale: string;
+  impactedSegmentCount: number;
+  blockingConstraintCount: number;
+  impactedSegments: string[];
+  sourceRefs: string[];
+  avoidanceCandidates: string[];
+  diagnostics: string[];
+};
+
+export type PirepRelevanceResult = {
+  missionId: string;
+  totalPireps: number;
+  relevantCount: number;
+  staleCount: number;
+  averageRelevanceScore: number;
+  altitudeToleranceFeet: number;
+  recencyMinutes: number;
+  corridorNauticalMiles: number;
+  relevant: WeatherSourceSummary[];
+  excluded: WeatherSourceSummary[];
+};
+
+export type PirepRelevanceRequest = {
+  reservationId?: string;
+  lowerAltitudeFeet?: number;
+  upperAltitudeFeet?: number;
+  altitudeToleranceFeet?: number;
+  recencyMinutes?: number;
+  corridorNauticalMiles?: number;
+  route?: number[][];
+};
+
+export type CoordinationDraftSummary = {
+  id: string;
+  missionId: string;
+  reservationId?: string;
+  subject: string;
+  family: string;
+  direction: string;
+  rawText: string;
+  recommendedAction: string;
+  recipients: string[];
+  sourceRefs: string[];
+};
+
+export type PilotBriefSummary = {
+  missionId: string;
+  missionNumber: string;
+  generatedAt: string;
+  verdict: MissionWeatherVerdictSummary;
+  routeImpact: RouteImpactSummary;
+  coordinationDraft: CoordinationDraftSummary;
+  changes: WeatherSourceSummary[];
+  sourceSummaryLines: string[];
+  decisionTraceSummary: string;
+  printableText: string;
+};
+
+export type AffectedMissionSummary = {
+  missionId: string;
+  missionNumber: string;
+  status: string;
+  action: string;
+  priority: string;
+  confidence: number;
+  sourceCount: number;
+  impactedSegmentCount: number;
+  blockingConstraintCount: number;
+  route?: string;
+  rationale?: string;
+  lastObservedAt?: string;
+  ageSeconds: number;
+  stale: boolean;
+  guidanceLatencySeconds: number;
+  guidanceTargetMet: boolean;
+  sourceRefs: string[];
+};
+
 export type MissionDetail = {
   mission: MissionSummary;
   reservations: ReservationSummary[];

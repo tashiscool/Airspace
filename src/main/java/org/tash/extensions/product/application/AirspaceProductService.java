@@ -9,6 +9,7 @@ import org.tash.extensions.engine.OperationalDecisionAuditEnvelope;
 import org.tash.extensions.engine.OperationalDecisionRequest;
 import org.tash.extensions.engine.OperationalDecisionReplayBundle;
 import org.tash.extensions.engine.OperationalDecisionResult;
+import org.tash.extensions.engine.OperationalConstraint;
 import org.tash.extensions.feed.InMemoryOperationalFeedSource;
 import org.tash.extensions.feed.LocalReferenceDataSyncAdapter;
 import org.tash.extensions.feed.OperationalFeedBatchResult;
@@ -19,10 +20,17 @@ import org.tash.extensions.feed.OperationalFeedType;
 import org.tash.extensions.feed.ReferenceDataImportRecord;
 import org.tash.extensions.feed.ReferenceDataSyncResult;
 import org.tash.extensions.product.dto.ProductDtos;
+import org.tash.extensions.routing.RouteCandidate;
+import org.tash.extensions.weather.decision.RouteBlockagePrediction;
+import org.tash.extensions.weather.pirep.PirepReport;
+import org.tash.extensions.weather.product.WeatherProduct;
+import org.tash.extensions.weather.product.WeatherProductParseResult;
+import org.tash.extensions.weather.product.WeatherProductParser;
 import org.tash.extensions.workflow.ReservationWorkflowRecord;
 import org.tash.extensions.workflow.ReservationWorkflowResult;
 import org.tash.extensions.workflow.ReservationWorkflowService;
 
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -32,6 +40,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @ApplicationScoped
 public class AirspaceProductService {
@@ -41,6 +51,7 @@ public class AirspaceProductService {
     private final boolean persistenceEnabled;
     private final OperationalFeedIngestService feedIngestService = new OperationalFeedIngestService();
     private final OperationalDecisionEngine decisionEngine = new OperationalDecisionEngine();
+    private final WeatherProductParser weatherProductParser = new WeatherProductParser();
 
     @Inject
     public AirspaceProductService(ReservationWorkflowService workflowService,
@@ -435,6 +446,319 @@ public class AirspaceProductService {
         return summary;
     }
 
+    public ProductDtos.MissionWeatherVerdictSummary missionWeatherVerdict(String missionId) {
+        requireMission(missionId);
+        List<ProductDtos.MessageSummary> weather = guidanceMessagesForMission(missionId);
+        List<ProductDtos.WeatherSourceSummary> sources = new ArrayList<>();
+        List<String> diagnostics = new ArrayList<>();
+        for (ProductDtos.MessageSummary message : weather) {
+            sources.add(sourceSummary(message, guidanceAction(message), guidanceRationale(message)));
+        }
+        ProductDtos.RouteImpactSummary impact = routeImpact(missionId, null);
+        String action = strongestAction(impact, sources);
+        boolean stale = sources.stream().anyMatch(ProductDtos.WeatherSourceSummary::isStale);
+        double confidence = Math.max(0.35, Math.min(0.97,
+                impact.getConfidence() > 0.0 ? impact.getConfidence() : sources.isEmpty() ? 0.95 : 0.78));
+        if (stale) {
+            confidence = Math.max(0.35, confidence - 0.08);
+            diagnostics.add("One or more weather/PIREP products are stale relative to the local decision clock");
+        }
+        return ProductDtos.MissionWeatherVerdictSummary.builder()
+                .missionId(missionId)
+                .action(action)
+                .priority(priorityFor(action, sources))
+                .confidence(confidence)
+                .sourceCount(sources.size())
+                .stale(stale)
+                .summary(sources.isEmpty()
+                        ? "No active weather, PIREP, or NOTAM source artifacts are linked to this mission."
+                        : sources.size() + " source artifact(s); " + impact.getRationale())
+                .recommendedAction(recommendedActionFor(action))
+                .sources(sources)
+                .diagnostics(diagnostics)
+                .build();
+    }
+
+    public List<ProductDtos.WeatherSourceSummary> weatherChanges(String missionId, String since, Integer limit) {
+        requireMission(missionId);
+        ZonedDateTime sinceTime = blank(since) ? ZonedDateTime.now(ZoneOffset.UTC).minusHours(4) : parseTime(since);
+        int max = limit == null || limit <= 0 ? 12 : Math.min(limit, 100);
+        List<ProductDtos.WeatherSourceSummary> changes = new ArrayList<>();
+        for (ProductDtos.MessageSummary message : guidanceMessagesForMission(missionId)) {
+            ProductDtos.WeatherSourceSummary source = sourceSummary(message, guidanceAction(message), guidanceRationale(message));
+            if (source.getObservedAt() == null || !source.getObservedAt().isBefore(sinceTime)) {
+                changes.add(source);
+            }
+        }
+        changes.sort((left, right) -> {
+            int byTime = String.valueOf(right.getObservedAt()).compareTo(String.valueOf(left.getObservedAt()));
+            if (byTime != 0) {
+                return byTime;
+            }
+            return severityRank(right.getSeverity()) - severityRank(left.getSeverity());
+        });
+        return changes.size() > max ? new ArrayList<>(changes.subList(0, max)) : changes;
+    }
+
+    public ProductDtos.RouteImpactSummary routeImpact(String missionId, String reservationId) {
+        ProductDtos.MissionDetail detail = mission(missionId);
+        List<GeoCoordinate> route = routeForMission(detail, reservationId);
+        ParsedWeatherInputs inputs = parsedWeatherInputs(weatherMessagesForMission(missionId));
+        OperationalDecisionResult decision = decisionEngine.evaluate(OperationalDecisionRequest.builder()
+                .decisionTime(ZonedDateTime.now(ZoneOffset.UTC))
+                .weatherProducts(inputs.products)
+                .pireps(inputs.pireps)
+                .route(route)
+                .build());
+        List<String> impacted = new ArrayList<>();
+        List<String> sourceRefs = new ArrayList<>();
+        int segments = 0;
+        int notamConstraints = 0;
+        for (RouteBlockagePrediction blockage : decision.getRouteBlockages()) {
+            if (blockage.getPrimaryHazardId() != null) {
+                sourceRefs.add(blockage.getPrimaryHazardId());
+            }
+            for (Integer index : blockage.getBlockedSegmentIndexes()) {
+                impacted.add("segment " + index + " forecast-hour " + blockage.getForecastHour()
+                        + " probability " + Math.round(blockage.getBlockedProbability() * 100.0) + "%");
+            }
+            segments += blockage.getBlockedSegmentIndexes().size();
+        }
+        for (OperationalConstraint constraint : decision.getBlockingConstraints()) {
+            constraint.getSources().forEach(source -> sourceRefs.add(source.getType() + ":" + source.getId()));
+        }
+        for (ProductDtos.MessageSummary message : guidanceMessagesForMission(missionId)) {
+            if (!isNotamTraffic(message.getFamily(), message.getRawText(), message.getSubject())) {
+                continue;
+            }
+            if (reservationId != null && message.getReservationId() != null && !reservationId.equals(message.getReservationId())) {
+                continue;
+            }
+            notamConstraints++;
+            sourceRefs.add(value(message.getFamily(), "NOTAM") + ":" + message.getId());
+            impacted.add("NOTAM constraint " + value(message.getSubject(), snippet(message.getRawText()))
+                    + " requires route/altitude/time review");
+        }
+        List<String> candidates = new ArrayList<>();
+        if (decision.getRoutePlanResult() != null) {
+            for (RouteCandidate candidate : decision.getRoutePlanResult().getCandidates()) {
+                candidates.add(candidate.getId() + " avoids " + candidate.getAvoidedConstraintIds()
+                        + " cost " + Math.round(candidate.getCost()));
+            }
+        }
+        return ProductDtos.RouteImpactSummary.builder()
+                .missionId(missionId)
+                .reservationId(reservationId)
+                .action(decision.getAction() == null ? "CLEAR" : decision.getAction().name())
+                .recommendedAction(decision.getRecommendedAction() == null ? "NONE" : decision.getRecommendedAction().name())
+                .confidence(decision.getConfidence())
+                .rationale(routeImpactRationale(decision, notamConstraints))
+                .impactedSegmentCount(segments + notamConstraints)
+                .blockingConstraintCount(decision.getBlockingConstraints().size() + notamConstraints)
+                .impactedSegments(impacted)
+                .sourceRefs(distinct(sourceRefs))
+                .avoidanceCandidates(candidates)
+                .diagnostics(inputs.diagnostics)
+                .build();
+    }
+
+    public ProductDtos.PirepRelevanceResult relevantPireps(String missionId, ProductDtos.PirepRelevanceRequest request) {
+        ProductDtos.PirepRelevanceRequest safe = request == null ? new ProductDtos.PirepRelevanceRequest() : request;
+        List<GeoCoordinate> route = safe.getRoute() == null || safe.getRoute().isEmpty()
+                ? routeForMission(mission(missionId), safe.getReservationId())
+                : route(safe.getRoute());
+        double lower = safe.getLowerAltitudeFeet() == null ? 0.0 : safe.getLowerAltitudeFeet();
+        double upper = safe.getUpperAltitudeFeet() == null ? 60000.0 : safe.getUpperAltitudeFeet();
+        double altitudeTolerance = safe.getAltitudeToleranceFeet() == null ? 2000.0 : Math.max(0.0, safe.getAltitudeToleranceFeet());
+        int recency = safe.getRecencyMinutes() == null ? 60 : safe.getRecencyMinutes();
+        double corridor = safe.getCorridorNauticalMiles() == null ? 50.0 : safe.getCorridorNauticalMiles();
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        ParsedWeatherInputs inputs = parsedWeatherInputs(weatherMessagesForMission(missionId));
+        List<ProductDtos.WeatherSourceSummary> relevant = new ArrayList<>();
+        List<ProductDtos.WeatherSourceSummary> excluded = new ArrayList<>();
+        double scoreTotal = 0.0;
+        int staleCount = 0;
+        for (PirepReport report : inputs.pireps) {
+            boolean altitudeMatch = report.getAltitudeFeet() == null
+                    || (report.getAltitudeFeet() >= lower - altitudeTolerance && report.getAltitudeFeet() <= upper + altitudeTolerance);
+            long ageMinutes = ageMinutes(report.getObservationTime(), now);
+            boolean timeMatch = report.getObservationTime() == null
+                    || !report.getObservationTime().isBefore(now.minusMinutes(recency));
+            boolean routeMatch = report.getLocation() == null || route.isEmpty()
+                    || distanceToRoute(report.getLocation(), route) <= corridor;
+            double relevanceScore = pirepRelevanceScore(altitudeMatch, timeMatch, routeMatch, ageMinutes, recency);
+            String agingCategory = agingCategory(ageMinutes, recency);
+            boolean stale = !timeMatch || "STALE".equals(agingCategory);
+            if (stale) {
+                staleCount++;
+            }
+            scoreTotal += relevanceScore;
+            ProductDtos.WeatherSourceSummary summary = ProductDtos.WeatherSourceSummary.builder()
+                    .id(value(report.getId(), "PIREP"))
+                    .family("PIREP")
+                    .label(value(report.getLocationText(), value(report.getAircraftType(), "PIREP")))
+                    .route("/weather")
+                    .severity(report.isUrgent() ? "SEVERE" : String.valueOf(report.getIntensity()))
+                    .rationale("PIREP " + value(report.getPhenomenon() == null ? null : report.getPhenomenon().name(), "WEATHER")
+                            + " at " + (report.getAltitudeFeet() == null ? "unknown altitude" : Math.round(report.getAltitudeFeet()) + " ft")
+                            + "; relevance " + Math.round(relevanceScore * 100.0) + "%")
+                    .observedAt(report.getObservationTime())
+                    .ageMinutes(ageMinutes)
+                    .agingCategory(agingCategory)
+                    .relevanceScore(relevanceScore)
+                    .stale(stale)
+                    .build();
+            if (altitudeMatch && timeMatch && routeMatch) {
+                relevant.add(summary);
+            } else {
+                excluded.add(summary);
+            }
+        }
+        return ProductDtos.PirepRelevanceResult.builder()
+                .missionId(missionId)
+                .totalPireps(inputs.pireps.size())
+                .relevantCount(relevant.size())
+                .staleCount(staleCount)
+                .averageRelevanceScore(inputs.pireps.isEmpty() ? 0.0 : scoreTotal / inputs.pireps.size())
+                .altitudeToleranceFeet(altitudeTolerance)
+                .recencyMinutes(recency)
+                .corridorNauticalMiles(corridor)
+                .relevant(relevant)
+                .excluded(excluded)
+                .build();
+    }
+
+    public ProductDtos.CoordinationDraftSummary coordinationDraft(String missionId,
+                                                                  ProductDtos.CoordinationDraftRequest request) {
+        ProductDtos.CoordinationDraftRequest safe = request == null ? new ProductDtos.CoordinationDraftRequest() : request;
+        ProductDtos.MissionSummary mission = requireMission(missionId);
+        ProductDtos.MissionWeatherVerdictSummary verdict = missionWeatherVerdict(missionId);
+        ProductDtos.RouteImpactSummary impact = routeImpact(missionId, safe.getReservationId());
+        List<String> refs = new ArrayList<>(impact.getSourceRefs());
+        verdict.getSources().forEach(source -> refs.add(source.getFamily() + ":" + source.getId()));
+        String subject = "WX COORD " + mission.getMissionNumber() + " " + verdict.getAction();
+        String body = "USNS WEATHER COORDINATION\n"
+                + "MISSION: " + mission.getMissionNumber() + "\n"
+                + "ACTION: " + verdict.getAction() + "\n"
+                + "RECOMMENDED: " + verdict.getRecommendedAction() + "\n"
+                + "IMPACT: " + impact.getRationale() + "\n"
+                + "SOURCES: " + String.join(", ", distinct(refs)) + "\n"
+                + "REQUEST: WEATHER DESK / TRAFFIC MANAGER REVIEW AND ROUTE RELEASE GUIDANCE.";
+        return ProductDtos.CoordinationDraftSummary.builder()
+                .id(UUID.nameUUIDFromBytes((missionId + ":" + subject).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString())
+                .missionId(missionId)
+                .reservationId(safe.getReservationId())
+                .subject(subject)
+                .family("USNS")
+                .direction("OUTBOUND")
+                .rawText(body)
+                .recommendedAction(verdict.getRecommendedAction())
+                .recipients(defaultWeatherRecipients())
+                .sourceRefs(distinct(refs))
+                .build();
+    }
+
+    public ProductDtos.PilotBriefSummary pilotBrief(String missionId, String since) {
+        ProductDtos.MissionSummary mission = requireMission(missionId);
+        ProductDtos.MissionWeatherVerdictSummary verdict = missionWeatherVerdict(missionId);
+        ProductDtos.RouteImpactSummary impact = routeImpact(missionId, null);
+        ProductDtos.CoordinationDraftSummary draft = coordinationDraft(missionId, null);
+        ZonedDateTime sinceTime = blank(since) ? ZonedDateTime.now(ZoneOffset.UTC).minusHours(4) : parseTime(since);
+        List<ProductDtos.WeatherSourceSummary> changes = new ArrayList<>();
+        for (ProductDtos.WeatherSourceSummary source : verdict.getSources()) {
+            if (source.getObservedAt() == null || !source.getObservedAt().isBefore(sinceTime)) {
+                changes.add(source);
+            }
+        }
+        String traceSummary = "Action " + impact.getAction() + " at " + Math.round(impact.getConfidence() * 100)
+                + "% confidence; " + impact.getBlockingConstraintCount() + " blocking constraint(s); sources "
+                + impact.getSourceRefs();
+        List<String> sourceSummaryLines = pilotBriefSourceSummary(verdict, impact);
+        String printable = "AIRSPACE PILOT BRIEF\n"
+                + "MISSION: " + mission.getMissionNumber() + "\n"
+                + "VERDICT: " + verdict.getAction() + " (" + Math.round(verdict.getConfidence() * 100) + "%)\n"
+                + "RECOMMENDED: " + verdict.getRecommendedAction() + "\n"
+                + "ROUTE IMPACT: " + impact.getRationale() + "\n"
+                + "SOURCE DRIVERS:\n" + String.join("\n", sourceSummaryLines) + "\n"
+                + "WHAT CHANGED: " + changes.size() + " weather/PIREP/NOTAM source(s)\n"
+                + "TRACE: " + traceSummary + "\n";
+        return ProductDtos.PilotBriefSummary.builder()
+                .missionId(missionId)
+                .missionNumber(mission.getMissionNumber())
+                .generatedAt(ZonedDateTime.now(ZoneOffset.UTC))
+                .verdict(verdict)
+                .routeImpact(impact)
+                .coordinationDraft(draft)
+                .changes(changes)
+                .sourceSummaryLines(sourceSummaryLines)
+                .decisionTraceSummary(traceSummary)
+                .printableText(printable)
+                .build();
+    }
+
+    public List<ProductDtos.AffectedMissionSummary> affectedMissions(String sourceId, Integer limit) {
+        int max = limit == null || limit <= 0 ? 50 : Math.min(limit, 250);
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        List<ProductDtos.AffectedMissionSummary> affected = new ArrayList<>();
+        for (ProductDtos.MissionSummary mission : missions()) {
+            ProductDtos.MissionWeatherVerdictSummary verdict = missionWeatherVerdict(mission.getId());
+            ProductDtos.RouteImpactSummary impact = routeImpact(mission.getId(), null);
+            List<String> refs = new ArrayList<>(impact.getSourceRefs());
+            ZonedDateTime lastObserved = null;
+            for (ProductDtos.WeatherSourceSummary source : verdict.getSources()) {
+                refs.add(source.getFamily() + ":" + source.getId());
+                refs.add(source.getId());
+                if (source.getObservedAt() != null
+                        && (lastObserved == null || source.getObservedAt().isAfter(lastObserved))) {
+                    lastObserved = source.getObservedAt();
+                }
+            }
+            List<String> distinctRefs = distinct(refs);
+            if (!blank(sourceId) && distinctRefs.stream().noneMatch(ref -> ref.equals(sourceId) || ref.endsWith(":" + sourceId))) {
+                continue;
+            }
+            boolean actionable = !"CLEAR".equals(verdict.getAction())
+                    || verdict.getSourceCount() > 0
+                    || impact.getImpactedSegmentCount() > 0
+                    || impact.getBlockingConstraintCount() > 0;
+            if (!actionable) {
+                continue;
+            }
+            long ageSeconds = lastObserved == null ? -1 : Math.max(0, Duration.between(lastObserved, now).getSeconds());
+            affected.add(ProductDtos.AffectedMissionSummary.builder()
+                    .missionId(mission.getId())
+                    .missionNumber(mission.getMissionNumber())
+                    .status(mission.getStatus())
+                    .action(verdict.getAction())
+                    .priority(verdict.getPriority())
+                    .confidence(Math.min(verdict.getConfidence(), impact.getConfidence() == 0.0 ? verdict.getConfidence() : impact.getConfidence()))
+                    .sourceCount(verdict.getSourceCount())
+                    .impactedSegmentCount(impact.getImpactedSegmentCount())
+                    .blockingConstraintCount(impact.getBlockingConstraintCount())
+                    .route("/missions/" + mission.getId())
+                    .rationale(impact.getRationale())
+                    .lastObservedAt(lastObserved)
+                    .ageSeconds(ageSeconds)
+                    .stale(lastObserved != null && lastObserved.plus(Duration.ofMinutes(90)).isBefore(now))
+                    .guidanceLatencySeconds(ageSeconds)
+                    .guidanceTargetMet(ageSeconds >= 0 && ageSeconds <= 5)
+                    .sourceRefs(distinctRefs)
+                    .build());
+        }
+        affected.sort((left, right) -> {
+            int byPriority = severityRank(right.getPriority()) - severityRank(left.getPriority());
+            if (byPriority != 0) {
+                return byPriority;
+            }
+            int byAction = actionRank(right.getAction()) - actionRank(left.getAction());
+            if (byAction != 0) {
+                return byAction;
+            }
+            return String.valueOf(right.getLastObservedAt()).compareTo(String.valueOf(left.getLastObservedAt()));
+        });
+        return affected.size() > max ? new ArrayList<>(affected.subList(0, max)) : affected;
+    }
+
     public ProductDtos.DecisionSummary decision(String id) {
         ProductDtos.DecisionSummary decision = store.decisions.get(id);
         if (decision == null && usePersistence()) {
@@ -750,7 +1074,7 @@ public class AirspaceProductService {
 
     public java.util.Map<String, Double> metrics() {
         if (usePersistence()) {
-            return persistenceService.metrics();
+            return withGuidanceMetrics(new LinkedHashMap<>(persistenceService.metrics()));
         }
         Map<String, Double> values = new LinkedHashMap<>();
         List<ProductDtos.FeedArtifactSummary> feeds = feedArtifacts();
@@ -765,6 +1089,24 @@ public class AirspaceProductService {
         values.put("product.referencePoints", (double) referencePoints(null).size());
         values.put("product.supplements", (double) store.supplements.size());
         values.put("product.records", values.values().stream().mapToDouble(Double::doubleValue).sum());
+        return withGuidanceMetrics(values);
+    }
+
+    private Map<String, Double> withGuidanceMetrics(Map<String, Double> values) {
+        List<ProductDtos.AffectedMissionSummary> affected = affectedMissions(null, 250);
+        long targetMet = affected.stream().filter(ProductDtos.AffectedMissionSummary::isGuidanceTargetMet).count();
+        long stale = affected.stream().filter(ProductDtos.AffectedMissionSummary::isStale).count();
+        double averageLatency = affected.stream()
+                .filter(item -> item.getGuidanceLatencySeconds() >= 0)
+                .mapToLong(ProductDtos.AffectedMissionSummary::getGuidanceLatencySeconds)
+                .average()
+                .orElse(0.0);
+        values.put("product.weather.affectedMissions", (double) affected.size());
+        values.put("product.weather.guidanceTargetMet", (double) targetMet);
+        values.put("product.weather.guidanceTargetMissed", (double) (affected.size() - targetMet));
+        values.put("product.weather.staleAffectedMissions", (double) stale);
+        values.put("product.weather.averageGuidanceLatencySeconds", averageLatency);
+        values.put("product.weather.guidanceTargetRate", affected.isEmpty() ? 1.0 : targetMet / (double) affected.size());
         return values;
     }
 
@@ -904,6 +1246,350 @@ public class AirspaceProductService {
                 .source(source)
                 .updatedAt(ZonedDateTime.parse("2026-05-20T00:00:00Z"))
                 .build();
+    }
+
+    private List<ProductDtos.MessageSummary> weatherMessagesForMission(String missionId) {
+        List<ProductDtos.MessageSummary> out = new ArrayList<>();
+        for (ProductDtos.MessageSummary message : messages()) {
+            if ((message.getMissionId() == null || missionId.equals(message.getMissionId()))
+                    && isWeatherFamily(message.getFamily(), message.getRawText(), message.getSubject())) {
+                out.add(message);
+            }
+        }
+        return out;
+    }
+
+    private List<ProductDtos.MessageSummary> guidanceMessagesForMission(String missionId) {
+        List<ProductDtos.MessageSummary> out = new ArrayList<>();
+        for (ProductDtos.MessageSummary message : messages()) {
+            if ((message.getMissionId() == null || missionId.equals(message.getMissionId()))
+                    && (isWeatherFamily(message.getFamily(), message.getRawText(), message.getSubject())
+                    || isNotamTraffic(message.getFamily(), message.getRawText(), message.getSubject()))) {
+                out.add(message);
+            }
+        }
+        return out;
+    }
+
+    private boolean isWeatherFamily(String family, String rawText, String subject) {
+        String text = (String.valueOf(family) + " " + String.valueOf(subject) + " " + String.valueOf(rawText))
+                .toUpperCase(Locale.US);
+        return text.contains("PIREP") || text.contains("SIGMET") || text.contains("AIRMET")
+                || text.contains("METAR") || text.contains("TAF") || text.contains("CWAP")
+                || text.contains("CWAF") || text.contains("CWA") || text.contains("/TB")
+                || text.contains("/IC");
+    }
+
+    private boolean isNotamTraffic(String family, String rawText, String subject) {
+        String text = (String.valueOf(family) + " " + String.valueOf(subject) + " " + String.valueOf(rawText))
+                .toUpperCase(Locale.US);
+        return text.contains("NOTAM") || text.contains("!FDC") || text.contains("!DCA")
+                || text.contains("SNOWTAM") || text.contains("BIRDTAM") || text.contains("ASHTAM")
+                || text.contains("GENOT") || "DOM".equals(String.valueOf(family).toUpperCase(Locale.US))
+                || "FDC".equals(String.valueOf(family).toUpperCase(Locale.US));
+    }
+
+    private ProductDtos.WeatherSourceSummary sourceSummary(ProductDtos.MessageSummary message,
+                                                           String severity,
+                                                           String rationale) {
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        ZonedDateTime observedAt = message.getCreatedAt();
+        long ageMinutes = ageMinutes(observedAt, now);
+        boolean stale = observedAt != null
+                && observedAt.plus(Duration.ofMinutes(90)).isBefore(now);
+        return ProductDtos.WeatherSourceSummary.builder()
+                .id(message.getId())
+                .family(message.getFamily())
+                .label(value(message.getSubject(), snippet(message.getRawText())))
+                .route("/messages/" + message.getId())
+                .severity(severity)
+                .rationale(rationale)
+                .observedAt(observedAt)
+                .ageMinutes(ageMinutes)
+                .agingCategory(agingCategory(ageMinutes, 90))
+                .relevanceScore(weatherSourceRelevanceScore(ageMinutes, stale))
+                .stale(stale)
+                .build();
+    }
+
+    private String guidanceAction(ProductDtos.MessageSummary message) {
+        String family = value(message.getFamily(), "").toUpperCase(Locale.US);
+        String text = (String.valueOf(message.getSubject()) + " " + String.valueOf(message.getRawText())).toUpperCase(Locale.US);
+        if (isNotamTraffic(family, message.getRawText(), message.getSubject())) {
+            return text.contains("CLSD") || text.contains("CLOSED") || text.contains("PROHIBIT")
+                    || text.contains("RESTRICT") || text.contains("TFR") ? "SEVERE" : "MODERATE";
+        }
+        if (family.contains("SIGMET") || text.contains("CONV") || text.contains("EMBD TS")) return "SEVERE";
+        if (family.contains("PIREP") && (text.contains("SEV") || text.contains("URGENT"))) return "SEVERE";
+        if (family.contains("PIREP") || text.contains("/TB") || text.contains("/IC")) return "OBSERVED";
+        if (family.contains("AIRMET") || text.contains("TURB") || text.contains("ICE")) return "MODERATE";
+        return "ADVISORY";
+    }
+
+    private String guidanceRationale(ProductDtos.MessageSummary message) {
+        String text = (String.valueOf(message.getFamily()) + " " + String.valueOf(message.getRawText())).toUpperCase(Locale.US);
+        if (isNotamTraffic(message.getFamily(), message.getRawText(), message.getSubject())) {
+            return "NOTAM constraint is retained separately from CARF/ALTRV reservations and must be reviewed against route, altitude, and timing before release.";
+        }
+        if (text.contains("SIGMET") || text.contains("CONV")) {
+            return "Convective weather can close route corridors and reduce sector capacity.";
+        }
+        if (text.contains("/IC") || text.contains("ICE")) {
+            return "Icing report or forecast requires altitude and route-risk review.";
+        }
+        if (text.contains("/TB") || text.contains("TURB")) {
+            return "Turbulence report or forecast requires crew briefing and altitude review.";
+        }
+        if (text.contains("METAR") || text.contains("TAF")) {
+            return "Ceiling, visibility, or terminal forecast may affect release timing.";
+        }
+        return "Weather source retained for operational fusion and replay.";
+    }
+
+    private String strongestAction(ProductDtos.RouteImpactSummary impact, List<ProductDtos.WeatherSourceSummary> sources) {
+        if ("BLOCKED".equals(impact.getAction())) return "BLOCKED";
+        if ("REROUTE".equals(impact.getAction()) || "AVOID".equals(impact.getAction())) return impact.getAction();
+        if (sources.stream().anyMatch(source -> "SEVERE".equals(source.getSeverity()))) return "AVOID";
+        if (sources.stream().anyMatch(source -> "MODERATE".equals(source.getSeverity()) || "OBSERVED".equals(source.getSeverity()))) return "CAUTION";
+        return sources.isEmpty() ? "CLEAR" : "MONITOR";
+    }
+
+    private String priorityFor(String action, List<ProductDtos.WeatherSourceSummary> sources) {
+        if ("BLOCKED".equals(action) || "AVOID".equals(action) || "REROUTE".equals(action)) return "HIGH";
+        if ("CAUTION".equals(action) || sources.stream().anyMatch(ProductDtos.WeatherSourceSummary::isStale)) return "MEDIUM";
+        return "LOW";
+    }
+
+    private String recommendedActionFor(String action) {
+        switch (action) {
+            case "BLOCKED":
+                return "Hold route release until blocking constraints clear or alternate route is accepted.";
+            case "REROUTE":
+            case "AVOID":
+                return "Coordinate reroute or delay with weather desk, traffic manager, and mission owner.";
+            case "CAUTION":
+                return "Brief crew and review altitude/route exposure before release.";
+            case "MONITOR":
+                return "Monitor next weather update and reassess if hazard moves toward route.";
+            default:
+                return "Continue normal monitoring.";
+        }
+    }
+
+    private String routeImpactRationale(OperationalDecisionResult decision, int notamConstraints) {
+        String base = value(decision.getRationale(), "No route impact decision has been generated.");
+        if (notamConstraints <= 0) {
+            return base;
+        }
+        return base + " " + notamConstraints
+                + " NOTAM constraint source(s) are retained separately from CARF/ALTRV reservations and require operational review.";
+    }
+
+    private List<String> pilotBriefSourceSummary(ProductDtos.MissionWeatherVerdictSummary verdict,
+                                                 ProductDtos.RouteImpactSummary impact) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (ProductDtos.WeatherSourceSummary source : verdict.getSources()) {
+            String family = sourceRefFamily(source.getFamily() + ":" + source.getId());
+            counts.put(family, counts.getOrDefault(family, 0) + 1);
+        }
+        for (String ref : impact.getSourceRefs()) {
+            String family = sourceRefFamily(ref);
+            counts.put(family, counts.getOrDefault(family, 0) + 1);
+        }
+        if (counts.isEmpty()) {
+            return Collections.singletonList("- SOURCE: no explicit source refs retained");
+        }
+        List<String> lines = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+            lines.add("- " + entry.getKey() + ": " + entry.getValue() + " source reference(s)");
+        }
+        return lines;
+    }
+
+    private String sourceRefFamily(String ref) {
+        String text = String.valueOf(ref).toUpperCase(Locale.US);
+        if (text.startsWith("FDC:") || text.startsWith("DOM:") || text.contains("NOTAM")
+                || text.contains("SNOWTAM") || text.contains("BIRDTAM")
+                || text.contains("ASHTAM") || text.contains("GENOT")) {
+            return "NOTAM";
+        }
+        if (text.startsWith("PIREP:") || text.contains("PIREP")) {
+            return "PIREP";
+        }
+        if (text.startsWith("SIGMET:") || text.startsWith("AIRMET:") || text.startsWith("METAR:")
+                || text.startsWith("TAF:") || text.startsWith("WEATHER:") || text.contains("WX")) {
+            return "WEATHER";
+        }
+        if (text.startsWith("CARF:") || text.startsWith("ALTRV:") || text.startsWith("RESERVATION:")) {
+            return "CARF/ALTRV";
+        }
+        if (text.startsWith("USNS:") || text.startsWith("MESSAGE:")) {
+            return "USNS";
+        }
+        return "SOURCE";
+    }
+
+    private int severityRank(String severity) {
+        if ("HIGH".equals(severity)) return 4;
+        if ("MEDIUM".equals(severity)) return 3;
+        if ("LOW".equals(severity)) return 2;
+        if ("SEVERE".equals(severity)) return 4;
+        if ("MODERATE".equals(severity) || "OBSERVED".equals(severity)) return 3;
+        if ("ADVISORY".equals(severity)) return 2;
+        return 1;
+    }
+
+    private int actionRank(String action) {
+        if ("BLOCKED".equals(action)) return 7;
+        if ("REROUTE".equals(action)) return 6;
+        if ("AVOID".equals(action)) return 5;
+        if ("CAUTION".equals(action)) return 4;
+        if ("MONITOR".equals(action)) return 3;
+        if ("CLEAR".equals(action)) return 2;
+        return 1;
+    }
+
+    private long ageMinutes(ZonedDateTime observedAt, ZonedDateTime now) {
+        if (observedAt == null) {
+            return -1;
+        }
+        return Math.max(0, Duration.between(observedAt, now).toMinutes());
+    }
+
+    private String agingCategory(long ageMinutes, int recencyMinutes) {
+        if (ageMinutes < 0) {
+            return "UNKNOWN";
+        }
+        if (ageMinutes > recencyMinutes) {
+            return "STALE";
+        }
+        if (ageMinutes > Math.max(15, recencyMinutes / 2)) {
+            return "AGING";
+        }
+        return "CURRENT";
+    }
+
+    private double weatherSourceRelevanceScore(long ageMinutes, boolean stale) {
+        if (ageMinutes < 0) {
+            return 0.7;
+        }
+        if (stale) {
+            return Math.max(0.15, 0.45 - Math.min(ageMinutes, 240) / 800.0);
+        }
+        return Math.max(0.45, 1.0 - ageMinutes / 240.0);
+    }
+
+    private double pirepRelevanceScore(boolean altitudeMatch,
+                                      boolean timeMatch,
+                                      boolean routeMatch,
+                                      long ageMinutes,
+                                      int recencyMinutes) {
+        double ageFactor;
+        if (ageMinutes < 0) {
+            ageFactor = 0.7;
+        } else {
+            ageFactor = Math.max(0.15, 1.0 - ageMinutes / Math.max(1.0, recencyMinutes * 2.0));
+        }
+        double score = ageFactor;
+        if (!altitudeMatch) {
+            score *= 0.45;
+        }
+        if (!routeMatch) {
+            score *= 0.45;
+        }
+        if (!timeMatch) {
+            score *= 0.5;
+        }
+        return Math.max(0.0, Math.min(1.0, score));
+    }
+
+    private ParsedWeatherInputs parsedWeatherInputs(List<ProductDtos.MessageSummary> messages) {
+        ParsedWeatherInputs inputs = new ParsedWeatherInputs();
+        for (ProductDtos.MessageSummary message : messages) {
+            String raw = value(message.getRawText(), message.getSubject());
+            if (blank(raw)) {
+                continue;
+            }
+            try {
+                WeatherProductParseResult parsed = weatherProductParser.parse(raw, null);
+                if (parsed.getProduct() != null) {
+                    inputs.products.add(parsed.getProduct());
+                }
+                if (parsed.getPirepReport() != null) {
+                    inputs.pireps.add(parsed.getPirepReport());
+                }
+                inputs.diagnostics.addAll(parsed.getWarnings());
+                inputs.diagnostics.addAll(parsed.getErrors());
+            } catch (RuntimeException ex) {
+                inputs.diagnostics.add("Weather parse failed for " + message.getId() + ": " + ex.getMessage());
+            }
+        }
+        return inputs;
+    }
+
+    private List<GeoCoordinate> routeForMission(ProductDtos.MissionDetail detail, String reservationId) {
+        for (ProductDtos.ReservationSummary reservation : detail.getReservations()) {
+            if (reservationId == null || reservationId.equals(reservation.getId())) {
+                List<GeoCoordinate> route = routeFromText(reservation.getRawText());
+                if (route.size() >= 2) {
+                    return route;
+                }
+            }
+        }
+        return List.of(
+                GeoCoordinate.builder().latitude(30.0).longitude(-150.5).altitude(24000.0).build(),
+                GeoCoordinate.builder().latitude(30.0).longitude(-148.5).altitude(24000.0).build());
+    }
+
+    private List<GeoCoordinate> routeFromText(String raw) {
+        if (raw == null) return Collections.emptyList();
+        List<GeoCoordinate> points = new ArrayList<>();
+        Matcher matcher = Pattern.compile("(\\d{2})(\\d{2})?\\s*N\\s*(\\d{3})(\\d{2})?\\s*W").matcher(raw.toUpperCase(Locale.US));
+        while (matcher.find()) {
+            double lat = Double.parseDouble(matcher.group(1)) + minutes(matcher.group(2)) / 60.0;
+            double lon = -(Double.parseDouble(matcher.group(3)) + minutes(matcher.group(4)) / 60.0);
+            points.add(GeoCoordinate.builder().latitude(lat).longitude(lon).altitude(24000.0).build());
+        }
+        return points;
+    }
+
+    private double minutes(String value) {
+        return value == null || value.isEmpty() ? 0.0 : Double.parseDouble(value);
+    }
+
+    private double distanceToRoute(GeoCoordinate point, List<GeoCoordinate> route) {
+        if (point == null || route == null || route.isEmpty()) return Double.POSITIVE_INFINITY;
+        double best = Double.POSITIVE_INFINITY;
+        for (int i = 0; i + 1 < route.size(); i++) {
+            best = Math.min(best, Math.abs(point.crossTrackDistanceToPath(route.get(i), route.get(i + 1))));
+            best = Math.min(best, point.distanceTo(route.get(i)));
+            best = Math.min(best, point.distanceTo(route.get(i + 1)));
+        }
+        return best;
+    }
+
+    private List<String> defaultWeatherRecipients() {
+        List<String> recipients = new ArrayList<>();
+        recipients.add("FAA-ATCSCC");
+        recipients.add("WEATHER-DESK");
+        recipients.add("MISSION-OWNER");
+        return recipients;
+    }
+
+    private List<String> distinct(List<String> values) {
+        List<String> out = new ArrayList<>();
+        for (String value : values) {
+            if (!blank(value) && !out.contains(value)) {
+                out.add(value);
+            }
+        }
+        return out;
+    }
+
+    private static class ParsedWeatherInputs {
+        private final List<WeatherProduct> products = new ArrayList<>();
+        private final List<PirepReport> pireps = new ArrayList<>();
+        private final List<String> diagnostics = new ArrayList<>();
     }
 
     private ProductDtos.ReferenceDataImportResult referenceDataResult(ReferenceDataSyncResult sync, boolean applied) {

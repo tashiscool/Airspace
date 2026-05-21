@@ -6,7 +6,7 @@ import { api } from '../api/client';
 import { OperationsMap } from '../components/OperationsMap';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { StatusBadge } from '../components/StatusBadge';
-import { arrayValue, asRecord, groupDecisionTrace, normalizeDecisionTrace, recordLabel, type JsonRecord } from '../lib/decisionView';
+import { arrayValue, asRecord, decisionAvoidanceCandidates, decisionRoutePredictions, decisionSourceLinks, decisionSourceReferences, groupDecisionTrace, normalizeDecisionTrace, recordLabel, type JsonRecord } from '../lib/decisionView';
 import { compactId, parseJson } from '../lib/viewModels';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
 
@@ -58,7 +58,10 @@ export function DecisionPage() {
   }, [trace, traceFilter, traceStageFilter]);
   const traceStages = useMemo(() => ['ALL', ...new Set(trace.map((step) => recordLabel(step, ['stage', 'category', 'ruleId'], 'trace').toUpperCase()))], [trace]);
   const blockingConstraints = arrayValue(effectiveResult?.blockingConstraints) ?? arrayValue(effectiveResult?.constraints) ?? [];
-  const routePredictions = arrayValue(effectiveResult?.routeBlockagePredictions) ?? arrayValue(effectiveResult?.routeWeatherImpacts) ?? [];
+  const routePredictions = useMemo(() => decisionRoutePredictions(effectiveResult), [effectiveResult]);
+  const avoidanceCandidates = useMemo(() => decisionAvoidanceCandidates(effectiveResult), [effectiveResult]);
+  const sourceRefs = useMemo(() => decisionSourceReferences(trace, effectiveResult), [trace, effectiveResult]);
+  const sourceLinks = useMemo(() => decisionSourceLinks(trace, effectiveResult), [trace, effectiveResult]);
   useEffect(() => {
     if (!decision) return;
     const selection: WorkbenchSelection = {
@@ -128,10 +131,52 @@ export function DecisionPage() {
               <Metric label="Confidence" value={decision ? `${Math.round(decision.confidence * 100)}%` : '—'} />
               <Metric label="Blocking Constraints" value={String(blockingConstraints.length ?? 0)} attention={(blockingConstraints.length ?? 0) > 0} />
               <Metric label="Route Predictions" value={String(routePredictions.length ?? 0)} />
+              <Metric label="Avoidance Candidates" value={String(avoidanceCandidates.length ?? 0)} attention={isBlockingAction(decision?.recommendedAction || decision?.action) && avoidanceCandidates.length === 0} />
+              <Metric label="Source Refs" value={String(sourceRefs.length)} attention={isBlockingAction(decision?.recommendedAction || decision?.action) && sourceRefs.length === 0} />
               <div className="panel wide">
                 <h3>Operational Rationale</h3>
                 <p>{decision?.rationale ?? 'No decision has been evaluated yet.'}</p>
                 <p className="muted">This is the engine’s answer to the core safety problem: convert live traffic, aircraft reports, forecasts, reservations, NOTAMs, and ATC constraints into clear operational guidance with traceable reasons.</p>
+              </div>
+              <div className="panel wide">
+                <h3>Source Artifacts Driving This Decision</h3>
+                {sourceLinks.length ? (
+                  <div className="source-link-grid">
+                    {sourceLinks.map((ref) => (
+                      ref.route ? (
+                        <button key={`${ref.type}:${ref.id}`} onClick={() => navigate(ref.route!)}>
+                          <StatusBadge value={ref.type} />
+                          <span>{ref.label}</span>
+                          <small>{ref.id}</small>
+                        </button>
+                      ) : (
+                        <span key={`${ref.type}:${ref.id}`} className="source-link-static">
+                          <StatusBadge value={ref.type} />
+                          <span>{ref.label}</span>
+                          <small>{ref.id}</small>
+                        </span>
+                      )
+                    ))}
+                  </div>
+                ) : (
+                  <div className="source-ref-grid">
+                    {(sourceRefs.length ? sourceRefs : ['No explicit weather/PIREP/NOTAM source refs were emitted by this decision.']).map((ref) => (
+                      <span key={ref}>{ref}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="panel wide">
+                <h3>Suggested Avoidance Corridors</h3>
+                <div className="constraint-grid">
+                  {(avoidanceCandidates.length ? avoidanceCandidates : ['No alternate corridor is attached to this decision.']).map((item, index) => (
+                    <article className="event supplement" key={index}>
+                      <strong>{recordLabel(item, ['id', 'name'], 'No candidate')}</strong>
+                      <p>{recordLabel(item, ['rationale'], typeof item === 'string' ? item : JSON.stringify(item))}</p>
+                      <small>{recordLabel(item, ['avoidedConstraintIds'], '')}</small>
+                    </article>
+                  ))}
+                </div>
               </div>
             </section>
           </>
@@ -149,7 +194,19 @@ export function DecisionPage() {
               {routePredictions.map((item, index) => (
                 <article className="event supplement" key={`route-${index}`}>
                   <strong>Route impact</strong>
-                  <p>{recordLabel(item, ['rationale', 'primaryHazard'], JSON.stringify(item))}</p>
+                  <p>{recordLabel(item, ['rationale', 'primaryHazardId', 'primaryHazard'], JSON.stringify(item))}</p>
+                  <small>
+                    probability {recordLabel(item, ['blockedProbability'], 'n/a')}
+                    {' · '}confidence {recordLabel(item, ['confidence'], 'n/a')}
+                    {' · '}forecast {recordLabel(item, ['forecastHour'], '?')}h
+                  </small>
+                </article>
+              ))}
+              {avoidanceCandidates.map((item, index) => (
+                <article className="event supplement" key={`avoid-${index}`}>
+                  <strong>Avoidance corridor · {recordLabel(item, ['id'], `candidate-${index}`)}</strong>
+                  <p>{recordLabel(item, ['rationale'], JSON.stringify(item))}</p>
+                  <small>avoids {recordLabel(item, ['avoidedConstraintIds'], 'none retained')}</small>
                 </article>
               ))}
             </div>

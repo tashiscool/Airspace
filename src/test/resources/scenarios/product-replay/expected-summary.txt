@@ -1,4 +1,7 @@
 scenario=product-replay
-inputs=USNS,CARF,PIREP,SIGMET,METAR
+inputs=USNS,CARF,PIREP,SIGMET,METAR,NOTAM
 expected=accepted-or-classified-with-diagnostics
 decision=auditable-replayable
+minSources=4
+allowedActions=AVOID,REROUTE,BLOCKED,CAUTION,MONITOR
+operatorSurfaces=mission-verdict,route-impact,pirep-relevance,coordination-draft,pilot-brief,affected-mission-metrics

@@ -143,6 +143,7 @@ public class WeatherDecisionSupportService {
                     .rationale(rationale(action, intersections, warnings))
                     .recommendedAction(recommendedAction)
                     .primaryHazardId(primaryHazardId(intersections))
+                    .forecastSliceId(forecastSliceId(intersections, forecastHour))
                     .confidence(leadTimeConfidence(confidence(intersections), forecastHour, calibration))
                     .deviationLikelihood(breakdown.getDeviationLikelihood())
                     .capacityImpact(breakdown.getCapacityImpact())
@@ -150,6 +151,7 @@ public class WeatherDecisionSupportService {
                     .confidenceMath("confidence=minIntersectionConfidence(" + confidence(intersections)
                             + ") * leadTimeCurve(hour=" + forecastHour + ")")
                     .ruleIds(ruleIds(intersections, blockedProbability, calibration))
+                    .sourceRefs(sourceRefs(intersections))
                     .ruleApplications(breakdown.getRuleApplications())
                     .scoringBreakdown(breakdown)
                     .ensembleSpread(ensembleSpread(request, cursor))
@@ -527,6 +529,31 @@ public class WeatherDecisionSupportService {
             }
         }
         return rules;
+    }
+
+    private List<String> sourceRefs(List<RouteHazardIntersection> intersections) {
+        List<String> refs = new ArrayList<>();
+        if (intersections == null) {
+            return refs;
+        }
+        for (RouteHazardIntersection intersection : intersections) {
+            if (intersection.getProductId() != null && !refs.contains("WEATHER:" + intersection.getProductId())) {
+                refs.add("WEATHER:" + intersection.getProductId());
+            }
+            if (intersection.getHazardId() != null && !refs.contains("HAZARD:" + intersection.getHazardId())) {
+                refs.add("HAZARD:" + intersection.getHazardId());
+            }
+        }
+        return refs;
+    }
+
+    private String forecastSliceId(List<RouteHazardIntersection> intersections, int forecastHour) {
+        if (intersections == null || intersections.isEmpty()) {
+            return "T+" + forecastHour;
+        }
+        RouteHazardIntersection first = intersections.get(0);
+        String product = first.getProductId() == null ? "weather" : first.getProductId();
+        return product + "#T+" + forecastHour;
     }
 
     private double deviationLikelihood(List<RouteHazardIntersection> intersections, int forecastHour, RouteImpactCalibrationModel calibration) {

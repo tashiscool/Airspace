@@ -14,6 +14,8 @@ import {
   extractAltrvSections,
   fmtZ,
   notamRowsFromSources,
+  sourceRefLabel,
+  sourceRefRoute,
   validateAltrvSections
 } from '../lib/viewModels';
 import {
@@ -49,6 +51,11 @@ export function ReservationPage() {
     queryKey: ['reservation-features', reservationId],
     queryFn: () => api.reservationFeatures(reservationId),
     enabled: !!reservationId
+  });
+  const routeImpact = useQuery({
+    queryKey: ['reservation-route-impact', missionId, reservationId],
+    queryFn: () => api.missionRouteImpact(missionId, reservationId),
+    enabled: !!missionId && !!reservationId
   });
   const reservation = useMemo(
     () => mission.data?.reservations.find((item) => item.id === reservationId),
@@ -152,6 +159,9 @@ export function ReservationPage() {
       }),
     onSuccess: invalidate
   });
+  const coordinationDraft = useMutation({
+    mutationFn: () => api.coordinateWeather(missionId, { reservationId, actor: 'planner' })
+  });
 
   const relatedMessages = (messages.data ?? []).filter((message) => message.reservationId === reservationId || message.missionId === missionId);
   const notams = notamRowsFromSources(relatedMessages, supplements.data ?? []);
@@ -191,11 +201,13 @@ export function ReservationPage() {
         <QueryNotice query={mission} label="Mission detail" />
         <ErrorNotice error={supplements.error} title="Supplements unavailable" />
         <ErrorNotice error={features.error} title="Reservation features unavailable" />
+        <QueryNotice query={routeImpact} label="Route impact" />
         {Object.entries(action).map(([label, mutation]) => (
           <MutationNotice key={label} mutation={mutation} label={label} />
         ))}
         <MutationNotice mutation={addSupplement} label="Create supplement" />
         <MutationNotice mutation={transitionSupplement} label="Transition supplement" />
+        <MutationNotice mutation={coordinationDraft} label="Coordinate weather" />
       </div>
 
       <div className="reservation-layout">
@@ -248,6 +260,39 @@ export function ReservationPage() {
               </div>
             ))}
           </div>
+          <div className="route-impact-card">
+            <strong>Route Impact</strong>
+            <StatusBadge value={routeImpact.data?.action ?? 'MONITOR'} />
+            <p>{routeImpact.data?.rationale ?? 'Route impact is evaluated from reservation geometry plus weather, PIREP, NOTAM, and CARF constraints.'}</p>
+            <small>{routeImpact.data?.impactedSegmentCount ?? 0} segment(s) · {routeImpact.data?.blockingConstraintCount ?? 0} blocker(s) · {Math.round((routeImpact.data?.confidence ?? 0) * 100)}%</small>
+            {!!routeImpact.data?.impactedSegments?.length && (
+              <div className="source-ref-grid">{routeImpact.data.impactedSegments.map((item) => <span key={item}>{item}</span>)}</div>
+            )}
+            {!!routeImpact.data?.sourceRefs?.length && (
+              <div className="route-source-grid">
+                {routeImpact.data.sourceRefs.map((ref) => (
+                  <button
+                    key={ref}
+                    type="button"
+                    className={`route-source route-source-${sourceRefLabel(ref).family.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                    disabled={!sourceRefRoute(ref)}
+                    onClick={() => {
+                      const route = sourceRefRoute(ref);
+                      if (route) guardedNavigate(route);
+                    }}
+                  >
+                    <strong>{sourceRefLabel(ref).family}</strong>
+                    {sourceRefLabel(ref).id || ref}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!!routeImpact.data?.avoidanceCandidates?.length && (
+              <div className="source-ref-grid">{routeImpact.data.avoidanceCandidates.map((item) => <span key={item}>{item}</span>)}</div>
+            )}
+            <button onClick={() => coordinationDraft.mutate()}>Coordinate From Hazard</button>
+          </div>
+          {coordinationDraft.data && <pre className="raw-panel">{coordinationDraft.data.rawText}</pre>}
           <OperationsMap features={features.data} />
         </aside>
       </div>

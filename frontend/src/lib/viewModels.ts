@@ -73,6 +73,30 @@ export type NotamLikeRow = {
   updatedAt?: string;
 };
 
+export type WeatherGuidanceItem = {
+  id: string;
+  hazard: string;
+  action: 'CLEAR' | 'MONITOR' | 'CAUTION' | 'DELAY' | 'ALTITUDE CHANGE' | 'AVOID' | 'REROUTE' | 'BLOCKED';
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  coordination: string;
+  rationale: string;
+  sourceFamily: string;
+  sourceLabel: string;
+  missionId?: string;
+  reservationId?: string;
+  createdAt?: string;
+};
+
+export type MissionWeatherVerdict = {
+  action: WeatherGuidanceItem['action'];
+  priority: WeatherGuidanceItem['priority'];
+  confidence: number;
+  count: number;
+  summary: string;
+  recommendedAction: string;
+  sources: WeatherGuidanceItem[];
+};
+
 export function fmtZ(value?: string) {
   if (!value) return '—';
   const date = new Date(value);
@@ -307,6 +331,343 @@ export function weatherRowsFromMessages(messages: MessageSummary[] = []) {
   return messages.filter((message) =>
     ['PIREP', 'SIGMET', 'AIRMET', 'METAR', 'TAF', 'WEATHER_ADVISORY', 'WX_ADVISORY'].includes(String(message.family).toUpperCase())
   );
+}
+
+export function weatherGuidanceFromMessage(message: MessageSummary): WeatherGuidanceItem {
+  const family = message.family.toUpperCase();
+  const raw = `${message.subject ?? ''} ${message.rawText ?? ''}`.toUpperCase();
+  if (family.includes('SIGMET') || family.includes('CWAP') || family.includes('CWAF') || raw.includes('EMBD TS') || raw.includes('CONV')) {
+    return {
+      id: message.id,
+      missionId: message.missionId,
+      reservationId: message.reservationId,
+      createdAt: message.createdAt,
+      hazard: family.includes('SIGMET') ? 'Convective SIGMET' : 'Convective weather',
+      action: raw.includes('TOP FL') || raw.includes('INTSF') ? 'REROUTE' : 'AVOID',
+      priority: 'HIGH',
+      coordination: 'Weather desk + traffic manager review',
+      sourceFamily: family,
+      sourceLabel: message.subject || compactId(message.id),
+      rationale: 'Embedded or intensifying convection can block route segments and reduce sector capacity.'
+    };
+  }
+  if (family.includes('PIREP') || raw.includes('/TB') || raw.includes('/IC')) {
+    const severe = raw.includes('SEV') || raw.includes('URGENT');
+    return {
+      id: message.id,
+      missionId: message.missionId,
+      reservationId: message.reservationId,
+      createdAt: message.createdAt,
+      hazard: raw.includes('/IC') ? 'Aircraft icing report' : 'Aircraft turbulence report',
+      action: severe ? 'ALTITUDE CHANGE' : 'CAUTION',
+      priority: severe ? 'HIGH' : 'MEDIUM',
+      coordination: 'Solicit/verify PIREP and disseminate',
+      sourceFamily: family,
+      sourceLabel: message.subject || compactId(message.id),
+      rationale: 'Aircraft reports close the gap between forecasts and observed hazards along the active route.'
+    };
+  }
+  if (family.includes('METAR') || family.includes('TAF') || raw.includes('BKN00') || raw.includes('OVC00') || raw.includes(' 1/2SM')) {
+    return {
+      id: message.id,
+      missionId: message.missionId,
+      reservationId: message.reservationId,
+      createdAt: message.createdAt,
+      hazard: family.includes('TAF') ? 'Forecast ceiling/visibility' : 'Observed ceiling/visibility',
+      action: raw.includes('1/2SM') || raw.includes('BKN004') ? 'DELAY' : 'MONITOR',
+      priority: raw.includes('1/2SM') || raw.includes('BKN004') ? 'MEDIUM' : 'LOW',
+      coordination: 'Terminal weather and route-release check',
+      sourceFamily: family,
+      sourceLabel: message.subject || compactId(message.id),
+      rationale: 'Low ceiling or visibility affects departure/arrival decisions more than enroute lateral avoidance.'
+    };
+  }
+  if (family.includes('AIRMET') || raw.includes('TURB') || raw.includes('ICE')) {
+    return {
+      id: message.id,
+      missionId: message.missionId,
+      reservationId: message.reservationId,
+      createdAt: message.createdAt,
+      hazard: 'AIRMET turbulence/icing',
+      action: raw.includes('ICE') ? 'ALTITUDE CHANGE' : 'CAUTION',
+      priority: 'MEDIUM',
+      coordination: 'Monitor forecast confidence and pilot reports',
+      sourceFamily: family,
+      sourceLabel: message.subject || compactId(message.id),
+      rationale: 'AIRMET hazards usually require altitude or route-risk management rather than an automatic block.'
+    };
+  }
+  return {
+    id: message.id,
+    missionId: message.missionId,
+    reservationId: message.reservationId,
+    createdAt: message.createdAt,
+    hazard: message.family,
+    action: 'MONITOR',
+    priority: 'LOW',
+    coordination: 'Retain and classify',
+    sourceFamily: family,
+    sourceLabel: message.subject || compactId(message.id),
+    rationale: 'Product is preserved for fusion, review, and later replay even when no immediate block is detected.'
+  };
+}
+
+export function missionWeatherVerdict(missionId: string, messages: MessageSummary[] = []): MissionWeatherVerdict {
+  const guidance = weatherRowsFromMessages(messages)
+    .map(weatherGuidanceFromMessage)
+    .filter((item) => item.missionId === missionId || !item.missionId);
+  if (!guidance.length) {
+    return {
+      action: 'CLEAR',
+      priority: 'LOW',
+      confidence: 0.95,
+      count: 0,
+      summary: 'No active weather products linked to this mission.',
+      recommendedAction: 'Continue normal monitoring.',
+      sources: []
+    };
+  }
+  const ranked = [...guidance].sort((a, b) => actionRank(b.action) - actionRank(a.action) || priorityRank(b.priority) - priorityRank(a.priority));
+  const top = ranked[0];
+  return {
+    action: top.action,
+    priority: top.priority,
+    confidence: verdictConfidence(top, guidance),
+    count: guidance.length,
+    summary: `${guidance.length} weather/PIREP product(s); ${top.hazard}: ${top.rationale}`,
+    recommendedAction: top.coordination,
+    sources: ranked.slice(0, 5)
+  };
+}
+
+export function weatherChangeFeed(messages: MessageSummary[] = [], limit = 8): WeatherGuidanceItem[] {
+  return weatherRowsFromMessages(messages)
+    .map(weatherGuidanceFromMessage)
+    .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')) || priorityRank(b.priority) - priorityRank(a.priority))
+    .slice(0, limit);
+}
+
+export function weatherFeaturesFromMessages(messages: MessageSummary[] = []): AirspaceFeature[] {
+  return weatherRowsFromMessages(messages).flatMap((message) => {
+    const raw = `${message.subject ?? ''}\n${message.rawText ?? ''}`;
+    const coordinates = extractWeatherCoordinates(raw);
+    if (!coordinates.length) return [];
+    const guidance = weatherGuidanceFromMessage(message);
+    const altitude = extractWeatherAltitudeBand(raw);
+    const timing = extractWeatherTiming(raw);
+    const movement = extractWeatherMovement(raw);
+    const geometry = coordinates.length === 1
+      ? { type: 'Point', coordinates: coordinates[0] }
+      : coordinates.length === 2
+        ? { type: 'LineString', coordinates }
+        : { type: 'Polygon', coordinates: [closedRing(coordinates)] };
+    return [{
+      id: `weather-message-${message.id}`,
+      type: 'Feature',
+      geometry,
+      properties: {
+        featureKind: 'weather-product',
+        sourceFamily: message.family.toUpperCase().includes('PIREP') ? 'PIREP' : 'WEATHER',
+        sourceId: message.id,
+        label: message.subject || guidance.hazard,
+        hazardType: guidance.hazard,
+        recommendedAction: guidance.action,
+        rationale: guidance.rationale,
+        confidence: guidance.priority === 'HIGH' ? 0.86 : guidance.priority === 'MEDIUM' ? 0.72 : 0.58,
+        minAltitudeFeet: altitude.minAltitudeFeet,
+        maxAltitudeFeet: altitude.maxAltitudeFeet,
+        altitudeLabel: altitude.label,
+        validStart: timing.validStart,
+        validEnd: timing.validEnd,
+        forecastHour: timing.forecastHour,
+        validDurationH: timing.validDurationH,
+        timingLabel: timing.label,
+        movementDirection: movement.direction,
+        movementSpeedKt: movement.speedKt,
+        movementVector: movement.label,
+        observedAt: message.createdAt,
+        createdAt: message.createdAt,
+        rawText: message.rawText
+      }
+    }];
+  });
+}
+
+export function sourceRefFamily(ref: string) {
+  const text = String(ref ?? '').toUpperCase();
+  if (text.startsWith('FDC:') || text.startsWith('DOM:') || text.includes('NOTAM') || text.includes('SNOWTAM')
+    || text.includes('BIRDTAM') || text.includes('ASHTAM') || text.includes('GENOT')) {
+    return 'NOTAM';
+  }
+  if (text.startsWith('PIREP:') || text.includes('PIREP')) return 'PIREP';
+  if (text.startsWith('SIGMET:') || text.startsWith('AIRMET:') || text.startsWith('METAR:') || text.startsWith('TAF:')
+    || text.startsWith('WEATHER:') || text.includes('WX')) {
+    return 'WEATHER';
+  }
+  if (text.startsWith('CARF:') || text.startsWith('ALTRV:') || text.startsWith('RESERVATION:')) return 'CARF/ALTRV';
+  if (text.startsWith('USNS:') || text.startsWith('MESSAGE:')) return 'USNS';
+  return 'SOURCE';
+}
+
+export function sourceRefLabel(ref: string) {
+  const family = sourceRefFamily(ref);
+  const value = String(ref ?? '').trim();
+  const typed = /^[A-Z_/ -]+:(.+)$/i.exec(value);
+  return {
+    family,
+    id: typed ? typed[1].trim() : value,
+    label: `${family}: ${typed ? typed[1].trim() : value}`
+  };
+}
+
+export function sourceRefRoute(ref: string) {
+  const source = sourceRefLabel(ref);
+  if (!source.id) return undefined;
+  if (['NOTAM', 'PIREP', 'WEATHER', 'USNS'].includes(source.family)) return `/messages/${encodeURIComponent(source.id)}`;
+  if (source.family === 'CARF/ALTRV') return `/deconfliction/${encodeURIComponent(source.id)}`;
+  return undefined;
+}
+
+function actionRank(action: WeatherGuidanceItem['action']) {
+  return ['CLEAR', 'MONITOR', 'CAUTION', 'DELAY', 'ALTITUDE CHANGE', 'AVOID', 'REROUTE', 'BLOCKED'].indexOf(action);
+}
+
+function priorityRank(priority: WeatherGuidanceItem['priority']) {
+  return priority === 'HIGH' ? 3 : priority === 'MEDIUM' ? 2 : 1;
+}
+
+function verdictConfidence(top: WeatherGuidanceItem, guidance: WeatherGuidanceItem[]) {
+  const base = top.priority === 'HIGH' ? 0.86 : top.priority === 'MEDIUM' ? 0.74 : 0.62;
+  const corroboration = Math.min(0.08, Math.max(0, guidance.length - 1) * 0.02);
+  const stalePenalty = top.createdAt && Date.now() - new Date(top.createdAt).getTime() > 90 * 60 * 1000 ? 0.08 : 0;
+  return Math.max(0.35, Math.min(0.97, base + corroboration - stalePenalty));
+}
+
+function extractWeatherCoordinates(raw: string): number[][] {
+  const coordinates: number[][] = [];
+  const compact = /\b(\d{2})(\d{2})([NS])\s*(\d{3})(\d{2})([EW])\b/g;
+  let match: RegExpExecArray | null;
+  while ((match = compact.exec(raw)) !== null) {
+    const lat = Number(match[1]) + Number(match[2]) / 60;
+    const lon = Number(match[4]) + Number(match[5]) / 60;
+    coordinates.push([match[6] === 'W' ? -lon : lon, match[3] === 'S' ? -lat : lat]);
+  }
+  const decimal = /\b([+-]?\d{1,2}\.\d+)\s*,\s*([+-]?\d{1,3}\.\d+)\b/g;
+  while ((match = decimal.exec(raw)) !== null) {
+    const lat = Number(match[1]);
+    const lon = Number(match[2]);
+    if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) coordinates.push([lon, lat]);
+  }
+  return dedupeCoordinateSequence(coordinates);
+}
+
+function dedupeCoordinateSequence(coordinates: number[][]) {
+  const output: number[][] = [];
+  for (const coordinate of coordinates) {
+    const previous = output[output.length - 1];
+    if (!previous || previous[0] !== coordinate[0] || previous[1] !== coordinate[1]) output.push(coordinate);
+  }
+  return output;
+}
+
+function closedRing(coordinates: number[][]) {
+  const ring = [...coordinates];
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first && last && (first[0] !== last[0] || first[1] !== last[1])) ring.push(first);
+  return ring;
+}
+
+function extractWeatherAltitudeBand(raw: string) {
+  const text = raw.toUpperCase();
+  const top = /\bTOPS?\s*(?:TO\s*)?FL\s?(\d{2,3})\b/.exec(text) ?? /\bTOP\s*FL\s?(\d{2,3})\b/.exec(text);
+  const between = /\b(?:BTN|BETWEEN)\s*FL\s?(\d{2,3})\s*(?:AND|-|\/)\s*FL\s?(\d{2,3})\b/.exec(text)
+    ?? /\bFL\s?(\d{2,3})\s*(?:-|\/)\s*FL\s?(\d{2,3})\b/.exec(text);
+  const above = /\bABV\s*FL\s?(\d{2,3})\b/.exec(text);
+  const below = /\bBLW\s*FL\s?(\d{2,3})\b/.exec(text);
+  if (between) {
+    const first = Number(between[1]) * 100;
+    const second = Number(between[2]) * 100;
+    return {
+      minAltitudeFeet: Math.min(first, second),
+      maxAltitudeFeet: Math.max(first, second),
+      label: `FL${between[1]}-FL${between[2]}`
+    };
+  }
+  if (top) {
+    return {
+      minAltitudeFeet: text.includes('SFC') ? 0 : undefined,
+      maxAltitudeFeet: Number(top[1]) * 100,
+      label: `${text.includes('SFC') ? 'SFC-' : 'TOP '}FL${top[1]}`
+    };
+  }
+  if (above) {
+    return {
+      minAltitudeFeet: Number(above[1]) * 100,
+      maxAltitudeFeet: undefined,
+      label: `ABV FL${above[1]}`
+    };
+  }
+  if (below) {
+    return {
+      minAltitudeFeet: undefined,
+      maxAltitudeFeet: Number(below[1]) * 100,
+      label: `BLW FL${below[1]}`
+    };
+  }
+  if (text.includes('SFC')) {
+    return {
+      minAltitudeFeet: 0,
+      maxAltitudeFeet: undefined,
+      label: 'SFC'
+    };
+  }
+  return {};
+}
+
+function extractWeatherTiming(raw: string) {
+  const text = raw.toUpperCase();
+  const valid = /\bVALID\s+(\d{2})(\d{2})(\d{2})\/(\d{2})(\d{2})(\d{2})\b/.exec(text)
+    ?? /\bVALID\s+(\d{2})(\d{2})(\d{2})\s*-\s*(\d{2})(\d{2})(\d{2})\b/.exec(text);
+  const forecast = /\b(?:T\+|FCST\s*HR\s*|FORECAST\s*HOUR\s*)(\d{1,2})\b/.exec(text);
+  if (valid) {
+    const start = `${valid[1]}${valid[2]}${valid[3]}Z`;
+    const end = `${valid[4]}${valid[5]}${valid[6]}Z`;
+    return {
+      validStart: start,
+      validEnd: end,
+      forecastHour: forecast ? Number(forecast[1]) : undefined,
+      validDurationH: durationHours(valid[2], valid[3], valid[5], valid[6]),
+      label: `VALID ${start}-${end}`
+    };
+  }
+  if (forecast) {
+    return {
+      forecastHour: Number(forecast[1]),
+      validDurationH: 1,
+      label: `T+${Number(forecast[1])}H`
+    };
+  }
+  return {};
+}
+
+function extractWeatherMovement(raw: string) {
+  const text = raw.toUpperCase();
+  const moving = /\b(?:MOV|MOVG|MOVE|MOVING)\s+([A-Z]{1,3})\s+(\d{1,3})\s?KT\b/.exec(text)
+    ?? /\b([A-Z]{1,3})\s+(\d{1,3})\s?KT\b/.exec(text);
+  if (!moving) return {};
+  return {
+    direction: moving[1],
+    speedKt: Number(moving[2]),
+    label: `${moving[1]} ${moving[2]}KT`
+  };
+}
+
+function durationHours(startHour: string, startMinute: string, endHour: string, endMinute: string) {
+  const start = Number(startHour) * 60 + Number(startMinute);
+  let end = Number(endHour) * 60 + Number(endMinute);
+  if (end < start) end += 24 * 60;
+  return Math.max(1, Math.round((end - start) / 60));
 }
 
 export function featureLabel(feature: AirspaceFeature) {

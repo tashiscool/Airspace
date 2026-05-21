@@ -62,7 +62,7 @@ export function featureDisplayLayer(featureOrProperties?: AirspaceFeature | Reco
   if (kind === 'flight-path' || constraint === 'CARF_ROUTE') return 'flight-paths';
   if (kind === 'reservation' || constraint === 'CARF_RESERVATION') return 'reservations';
   if (kind === 'conflict' || constraint === 'CARF_CONFLICT') return 'conflicts';
-  if (kind.includes('intersection') || constraint === 'ROUTE_BLOCKAGE') return 'route-impacts';
+  if (kind.includes('intersection') || kind.includes('avoidance') || constraint === 'ROUTE_BLOCKAGE' || constraint === 'ROUTE_AVOIDANCE') return 'route-impacts';
   if (pointType === 'NAVAID') return 'navaids';
   if (pointType === 'AERODROME' || pointType === 'AIRPORT') return 'aerodromes';
   if (kind === 'reference-point' || pointType === 'FIX' || family === 'REFERENCE') return 'fixes';
@@ -92,10 +92,46 @@ export type MapFeatureSummary = {
   title: string;
   subtitle: string;
   source: string;
+  risk?: string;
   timing?: string;
   altitude?: string;
   confidence?: string;
   action?: string;
+  freshness?: string;
+  movement?: string;
+};
+
+export type MapFeatureSourceLink = {
+  label: string;
+  route: string;
+};
+
+export type MapFeatureSourceRef = {
+  family: string;
+  id: string;
+  route?: string;
+};
+
+export type MapFeatureFreshness = {
+  observedAt?: string;
+  ageMinutes?: number;
+  stale: boolean;
+  category: 'current' | 'aging' | 'stale' | 'unknown';
+  label: string;
+  opacity: number;
+};
+
+export type MapFeatureConfidence = {
+  value?: number;
+  category: 'high' | 'medium' | 'low' | 'unknown';
+  label: string;
+  opacity: number;
+};
+
+export type MapFeatureSeverity = {
+  category: 'extreme' | 'severe' | 'moderate' | 'low' | 'unknown';
+  label: string;
+  widthBoost: number;
 };
 
 export function mapFeatureSummary(feature?: AirspaceFeature): MapFeatureSummary | undefined {
@@ -106,16 +142,155 @@ export function mapFeatureSummary(feature?: AirspaceFeature): MapFeatureSummary 
   const validEnd = stringProp(properties, 'validEnd') ?? stringProp(properties, 'endTime') ?? stringProp(properties, 'effectiveEnd');
   const minAlt = stringProp(properties, 'minAltitudeFeet') ?? stringProp(properties, 'minimumAltitudeFeet') ?? stringProp(properties, 'floor');
   const maxAlt = stringProp(properties, 'maxAltitudeFeet') ?? stringProp(properties, 'maximumAltitudeFeet') ?? stringProp(properties, 'ceiling');
-  const confidence = stringProp(properties, 'confidence') ?? stringProp(properties, 'probability') ?? stringProp(properties, 'blockedProbability');
+  const confidence = mapFeatureConfidence(feature);
+  const movement = stringProp(properties, 'movementVector') ?? movementLabel(properties);
+  const severity = mapFeatureSeverity(feature);
+  const freshness = mapFeatureFreshness(feature);
   return {
     title: stringProp(properties, 'label') ?? stringProp(properties, 'name') ?? stringProp(properties, 'featureKind') ?? String(feature.id ?? layer.label),
     subtitle: stringProp(properties, 'rationale') ?? stringProp(properties, 'explanation') ?? stringProp(properties, 'hazardType') ?? layer.label,
     source: stringProp(properties, 'sourceFamily') ?? stringProp(properties, 'sourceProduct') ?? layer.label,
+    risk: mapFeatureRiskLabel(feature),
     timing: validStart || validEnd ? `${validStart ?? 'start ?'} - ${validEnd ?? 'end ?'}` : undefined,
     altitude: minAlt || maxAlt ? `${minAlt ?? 'floor ?'} - ${maxAlt ?? 'ceiling ?'}` : undefined,
-    confidence: confidence != null ? `${confidence}` : undefined,
-    action: stringProp(properties, 'recommendedAction') ?? stringProp(properties, 'action')
+    confidence: confidence.label,
+    action: stringProp(properties, 'recommendedAction') ?? stringProp(properties, 'action'),
+    freshness: freshness?.label,
+    movement: movement ? `${movement} · ${severity.label}` : severity.label
   };
+}
+
+export function mapFeatureRiskLabel(feature?: AirspaceFeature) {
+  const severity = mapFeatureSeverity(feature);
+  const confidence = mapFeatureConfidence(feature);
+  const freshness = mapFeatureFreshness(feature);
+  const parts = [
+    severity.label,
+    confidence.label,
+    freshness?.label
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
+export function mapFeatureSeverity(feature?: AirspaceFeature): MapFeatureSeverity {
+  const properties = feature?.properties ?? {};
+  const text = [
+    stringProp(properties, 'severity'),
+    stringProp(properties, 'intensity'),
+    stringProp(properties, 'recommendedAction'),
+    stringProp(properties, 'action'),
+    stringProp(properties, 'hazardType'),
+    stringProp(properties, 'rationale')
+  ].join(' ').toUpperCase();
+  if (/\b(EXTREME|EXTRM|BLOCKED|EMERGENCY)\b/.test(text)) {
+    return { category: 'extreme', label: 'extreme severity', widthBoost: 2.2 };
+  }
+  if (/\b(SEV|SEVERE|REROUTE|AVOID|INTSF|URGENT)\b/.test(text)) {
+    return { category: 'severe', label: 'severe', widthBoost: 1.5 };
+  }
+  if (/\b(MOD|MODERATE|CAUTION|DELAY|ALTITUDE CHANGE)\b/.test(text)) {
+    return { category: 'moderate', label: 'moderate', widthBoost: 0.8 };
+  }
+  if (/\b(LOW|CLEAR|MONITOR)\b/.test(text)) {
+    return { category: 'low', label: 'low severity', widthBoost: 0 };
+  }
+  return { category: 'unknown', label: 'severity unknown', widthBoost: 0 };
+}
+
+export function mapFeatureConfidence(feature?: AirspaceFeature): MapFeatureConfidence {
+  const properties = feature?.properties ?? {};
+  const raw = numericProp(properties, 'confidence') ?? numericProp(properties, 'probability') ?? numericProp(properties, 'blockedProbability');
+  if (raw == null) {
+    return { category: 'unknown', label: 'confidence unknown', opacity: 0.82 };
+  }
+  const value = raw > 1 ? raw / 100 : raw;
+  const category = value >= 0.75 ? 'high' : value >= 0.45 ? 'medium' : 'low';
+  return {
+    value,
+    category,
+    label: `${Math.round(value * 100)}% confidence`,
+    opacity: category === 'high' ? 1 : category === 'medium' ? 0.74 : 0.46
+  };
+}
+
+export function mapFeatureSourceLink(feature?: AirspaceFeature): MapFeatureSourceLink | undefined {
+  const properties = feature?.properties ?? {};
+  const sourceId = stringProp(properties, 'sourceId') ?? stringProp(properties, 'messageId') ?? stringProp(properties, 'productId')
+    ?? stringProp(properties, 'pirepId') ?? stringProp(properties, 'notamId') ?? stringProp(properties, 'reservationId');
+  if (!sourceId) return undefined;
+  const layer = featureDisplayLayer(feature);
+  const family = String(properties.sourceFamily ?? properties.family ?? layer).toUpperCase();
+  if (layer === 'weather' || layer.startsWith('wx-') || layer === 'pireps' || layer === 'notams' || family.includes('WEATHER') || family.includes('PIREP') || family.includes('NOTAM')) {
+    return { label: `Open ${family || 'source'} ${sourceId}`, route: `/messages/${encodeURIComponent(sourceId)}` };
+  }
+  if (layer === 'reservations' || layer === 'flight-paths' || layer === 'conflicts' || family.includes('CARF') || family.includes('ALTRV')) {
+    return { label: `Open reservation ${sourceId}`, route: `/deconfliction/${encodeURIComponent(sourceId)}` };
+  }
+  return undefined;
+}
+
+export function mapFeatureSourceRefs(feature?: AirspaceFeature): MapFeatureSourceRef[] {
+  const properties = feature?.properties ?? {};
+  const values = [
+    properties.sourceRefs,
+    properties.sourceRef,
+    properties.sourceIds,
+    properties.blockingSourceRefs
+  ].flatMap((value) => sourceRefValues(value));
+  const direct = mapFeatureSourceLink(feature);
+  if (direct) values.unshift(direct.route.replace(/^\/messages\//, 'MESSAGE:').replace(/^\/deconfliction\//, 'RESERVATION:'));
+  const seen = new Set<string>();
+  return values.flatMap((value) => {
+    const ref = parseSourceRef(value);
+    const key = `${ref.family}:${ref.id}`;
+    if (!ref.id || seen.has(key)) return [];
+    seen.add(key);
+    return [ref];
+  }).slice(0, 12);
+}
+
+export function mapFeatureFreshness(feature?: AirspaceFeature, now = new Date()): MapFeatureFreshness | undefined {
+  const properties = feature?.properties ?? {};
+  const layer = featureDisplayLayer(feature);
+  const weatherRelevant = layer === 'pireps' || layer === 'weather' || layer.startsWith('wx-') || layer === 'route-impacts';
+  if (!weatherRelevant) return undefined;
+
+  const explicitAgeSeconds = numericProp(properties, 'ageSeconds') ?? numericProp(properties, 'guidanceLatencySeconds');
+  const observedAt = stringProp(properties, 'observedAt')
+    ?? stringProp(properties, 'receivedAt')
+    ?? stringProp(properties, 'createdAt')
+    ?? stringProp(properties, 'validStart')
+    ?? stringProp(properties, 'startTime');
+  const parsedAt = observedAt ? Date.parse(observedAt) : Number.NaN;
+  const ageMinutes = explicitAgeSeconds != null
+    ? Math.max(0, explicitAgeSeconds / 60)
+    : Number.isFinite(parsedAt)
+      ? Math.max(0, (now.getTime() - parsedAt) / 60000)
+      : undefined;
+  const explicitStale = booleanProp(properties, 'stale');
+  const stale = explicitStale || (ageMinutes != null && ageMinutes > 90);
+  const category = stale ? 'stale' : ageMinutes == null ? 'unknown' : ageMinutes > 60 ? 'aging' : 'current';
+  return {
+    observedAt,
+    ageMinutes,
+    stale,
+    category,
+    label: category === 'unknown' ? 'freshness unknown' : `${Math.round(ageMinutes ?? 0)}m old${stale ? ' · stale' : category === 'aging' ? ' · aging' : ''}`,
+    opacity: category === 'stale' ? 0.34 : category === 'aging' ? 0.58 : 1
+  };
+}
+
+export function featurePassesFreshnessFilter(
+  feature: AirspaceFeature,
+  options: { maxAgeMinutes?: number; hideStale?: boolean; now?: Date } = {}
+) {
+  const freshness = mapFeatureFreshness(feature, options.now ?? new Date());
+  if (!freshness) return true;
+  if (options.hideStale && freshness.stale) return false;
+  if (options.maxAgeMinutes != null && freshness.ageMinutes != null && freshness.ageMinutes > options.maxAgeMinutes) {
+    return false;
+  }
+  return true;
 }
 
 function isMapLayerId(value: string): value is MapLayerId {
@@ -126,4 +301,52 @@ function stringProp(properties: Record<string, unknown>, key: string) {
   const value = properties[key];
   if (value == null) return undefined;
   return String(value);
+}
+
+function numericProp(properties: Record<string, unknown>, key: string) {
+  const value = properties[key];
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
+function booleanProp(properties: Record<string, unknown>, key: string) {
+  const value = properties[key];
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.toLowerCase() === 'true';
+  return false;
+}
+
+function sourceRefValues(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return value.split(/[,\n;]/).map((item) => item.trim()).filter(Boolean);
+  }
+  if (Array.isArray(value)) return value.flatMap(sourceRefValues);
+  return [];
+}
+
+function parseSourceRef(value: string): MapFeatureSourceRef {
+  const typed = /^([A-Z_ -]+):(.+)$/i.exec(value.trim());
+  const rawFamily = typed ? typed[1].toUpperCase().replace(/\s+/g, '_') : '';
+  const id = (typed ? typed[2] : value).trim();
+  const text = `${rawFamily} ${id}`.toUpperCase();
+  const family = text.includes('PIREP') ? 'PIREP'
+    : text.includes('NOTAM') || text.startsWith('FDC ') || text.startsWith('DOM ') ? 'NOTAM'
+      : text.includes('SIGMET') || text.includes('AIRMET') || text.includes('WEATHER') || text.includes('METAR') || text.includes('TAF') || text.includes('WX') ? 'WEATHER'
+        : text.includes('RESERVATION') || text.includes('CARF') || text.includes('ALTRV') ? 'CARF/ALTRV'
+          : text.includes('MESSAGE') || text.includes('USNS') ? 'USNS'
+            : rawFamily || 'SOURCE';
+  const route = ['PIREP', 'NOTAM', 'WEATHER', 'USNS'].includes(family)
+    ? `/messages/${encodeURIComponent(id)}`
+    : family === 'CARF/ALTRV'
+      ? `/deconfliction/${encodeURIComponent(id)}`
+      : undefined;
+  return { family, id, route };
+}
+
+function movementLabel(properties: Record<string, unknown>) {
+  const direction = stringProp(properties, 'movementDirection');
+  const speed = stringProp(properties, 'movementSpeedKt') ?? stringProp(properties, 'speedKt');
+  if (!direction && !speed) return undefined;
+  return `${direction ?? 'MOV'} ${speed ? `${speed}KT` : ''}`.trim();
 }

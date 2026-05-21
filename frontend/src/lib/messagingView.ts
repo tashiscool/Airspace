@@ -44,3 +44,20 @@ export function recipientPresetSuggestions(query: string, presets: string[] = DE
   const q = query.trim().toUpperCase();
   return presets.filter((preset) => !q || preset.includes(q)).slice(0, 8);
 }
+
+export function messageDraftFromSearchParams(params: URLSearchParams) {
+  const body = params.get('body') ?? params.get('rawText');
+  if (!body && !params.get('subject') && !params.get('missionId')) {
+    return undefined;
+  }
+  return {
+    family: params.get('family') ?? 'USNS',
+    direction: params.get('direction') ?? 'OUTBOUND',
+    subject: params.get('subject') ?? 'Weather coordination',
+    rawText: body ?? 'USNS WEATHER COORDINATION',
+    missionId: params.get('missionId') ?? undefined,
+    reservationId: params.get('reservationId') ?? undefined,
+    recipients: params.get('recipients') ?? 'CARF, USNOF',
+    attachments: params.get('attachments') ?? ''
+  };
+}

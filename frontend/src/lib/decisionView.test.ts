@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupDecisionTrace, normalizeDecisionTrace, traceStage } from './decisionView';
+import { decisionAvoidanceCandidates, decisionRoutePredictions, decisionSourceLinks, decisionSourceReferences, groupDecisionTrace, normalizeDecisionTrace, traceStage } from './decisionView';
 
 describe('decision view helpers', () => {
   it('normalizes trace steps from persisted result shapes', () => {
@@ -20,5 +20,41 @@ describe('decision view helpers', () => {
       warningCount: 1,
       ruleIds: ['WX-STALE-001']
     });
+  });
+
+  it('normalizes route impacts, avoidance candidates, and source references', () => {
+    const result = {
+      routeImpacts: [{ primaryHazardId: 'WX-1', sourceRefs: ['WEATHER:WX-1'], blockedProbability: 0.9 }],
+      routePlanResult: { candidates: [{ id: 'north-east', avoidedConstraintIds: ['WX-1'] }] },
+      sourceRefs: [{ type: 'WEATHER', id: 'WX-1' }]
+    };
+
+    expect(decisionRoutePredictions(result)).toHaveLength(1);
+    expect(decisionAvoidanceCandidates(result)).toEqual([{ id: 'north-east', avoidedConstraintIds: ['WX-1'] }]);
+    expect(decisionSourceReferences([], result)).toEqual(expect.arrayContaining(['WEATHER:WX-1']));
+  });
+
+  it('builds typed source links from trace and result source references', () => {
+    const trace = [
+      {
+        stage: 'route-impact',
+        sources: [{ type: 'PIREP', id: 'UA-1', description: 'urgent turbulence report' }]
+      },
+      {
+        stage: 'fuse',
+        sourceRefs: ['NOTAM:ABC-123']
+      }
+    ];
+    const result = {
+      sourceRefs: [{ type: 'WEATHER', id: 'SIGMET-9', description: 'convective sigmet' }],
+      routeImpacts: [{ primaryHazardId: 'WX-1', sourceRefs: ['WEATHER:WX-1'] }]
+    };
+
+    expect(decisionSourceLinks(trace, result)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'PIREP', id: 'UA-1', route: '/messages/UA-1' }),
+      expect.objectContaining({ type: 'NOTAM', id: 'ABC-123', route: '/messages/ABC-123' }),
+      expect.objectContaining({ type: 'WEATHER', id: 'SIGMET-9', route: '/messages/SIGMET-9' }),
+      expect.objectContaining({ type: 'WEATHER', id: 'WX-1', route: '/messages/WX-1' })
+    ]));
   });
 });

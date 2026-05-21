@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Archive, Forward, Mail, Plus, Reply, Search, Send, X } from 'lucide-react';
 import { api } from '../api/client';
 import { DataTable } from '../components/DataTable';
 import { MutationNotice, QueryNotice } from '../components/Notices';
 import { StatusBadge } from '../components/StatusBadge';
-import { DEFAULT_RECIPIENT_PRESETS, messageBodyWithMetadata, recipientPresetSuggestions, relatedMessages } from '../lib/messagingView';
+import { DEFAULT_RECIPIENT_PRESETS, messageBodyWithMetadata, messageDraftFromSearchParams, recipientPresetSuggestions, relatedMessages } from '../lib/messagingView';
 import { MESSAGE_FAMILIES, fmtZ, isNotamFamily } from '../lib/viewModels';
 import { sourceFamilyForRow, writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
 import type { MessageSummary } from '../types';
@@ -26,13 +26,14 @@ const columns = [
 
 export function MessagesPage() {
   const { messageId = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [mailbox, setMailbox] = useState<MailboxMode>('INBOX');
   const [familyChips, setFamilyChips] = useState<Set<string>>(new Set());
   const [archived, setArchived] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
-  const [draft, setDraft] = useState({
+  const [draft, setDraft] = useState<Partial<MessageSummary> & { family: string; direction: string; subject: string; rawText: string }>({
     family: 'USNS',
     direction: 'OUTBOUND',
     subject: 'Coordination',
@@ -43,6 +44,21 @@ export function MessagesPage() {
   const [recipientFilter, setRecipientFilter] = useState('');
   const messages = useQuery({ queryKey: ['messages'], queryFn: api.messages });
   const selectedMessage = messages.data?.find((message) => message.id === messageId) ?? messages.data?.[0];
+  useEffect(() => {
+    const prefill = messageDraftFromSearchParams(searchParams);
+    if (!prefill) return;
+    setDraft((current) => ({
+      ...current,
+      family: prefill.family,
+      direction: prefill.direction,
+      subject: prefill.subject,
+      rawText: prefill.rawText,
+      missionId: prefill.missionId,
+      reservationId: prefill.reservationId
+    }));
+    setRecipients(prefill.recipients);
+    setAttachments(prefill.attachments);
+  }, [searchParams]);
   useEffect(() => {
     if (!selectedMessage) return;
     const selection: WorkbenchSelection = {

@@ -7,6 +7,7 @@ import org.tash.extensions.messaging.UsnsIngestResult;
 import org.tash.extensions.reservation.AirspaceReservation;
 import org.tash.extensions.reservation.ReservationConflict;
 import org.tash.extensions.routing.OperationalRoutePlanResult;
+import org.tash.extensions.routing.RouteCandidate;
 import org.tash.extensions.uncertainty.UncertaintyAssessmentResult;
 import org.tash.extensions.weather.coordination.WeatherCoordinationResult;
 import org.tash.extensions.weather.decision.RouteBlockagePrediction;
@@ -43,8 +44,14 @@ public class OperationalDecisionResult {
     private final OperationalDecisionReplayBundle replayBundle;
     private final OperationalRoutePlanResult routePlanResult;
     private final UncertaintyAssessmentResult uncertaintyAssessment;
+    private final String briefSummary;
     @Builder.Default private final Map<String, String> persistedArtifactIds = new LinkedHashMap<>();
     @Builder.Default private final Map<String, Double> metricsSummary = new LinkedHashMap<>();
+    @Builder.Default private final List<String> affectedMissionIds = new ArrayList<>();
+    @Builder.Default private final List<DecisionSourceRef> sourceRefs = new ArrayList<>();
+    @Builder.Default private final List<RouteBlockagePrediction> routeImpacts = new ArrayList<>();
+    @Builder.Default private final List<RouteCandidate> avoidanceCandidates = new ArrayList<>();
+    @Builder.Default private final List<String> coordinationDrafts = new ArrayList<>();
 
     public List<OperationalConstraint> getConstraints() {
         return fusionResult == null ? Collections.emptyList() : fusionResult.getConstraints();
@@ -92,5 +99,31 @@ public class OperationalDecisionResult {
             counts.put(constraint.getType(), counts.getOrDefault(constraint.getType(), 0L) + 1L);
         }
         return Collections.unmodifiableMap(counts);
+    }
+
+    public List<DecisionSourceRef> getSourceRefs() {
+        return Collections.unmodifiableList(sourceRefs == null ? Collections.emptyList() : sourceRefs);
+    }
+
+    public List<RouteBlockagePrediction> getRouteImpacts() {
+        if (routeImpacts != null && !routeImpacts.isEmpty()) {
+            return Collections.unmodifiableList(routeImpacts);
+        }
+        return getRouteBlockages();
+    }
+
+    public List<RouteCandidate> getAvoidanceCandidates() {
+        if (avoidanceCandidates != null && !avoidanceCandidates.isEmpty()) {
+            return Collections.unmodifiableList(avoidanceCandidates);
+        }
+        return routePlanResult == null ? Collections.emptyList() : routePlanResult.getCandidates();
+    }
+
+    public List<String> getAffectedMissionIds() {
+        return Collections.unmodifiableList(affectedMissionIds == null ? Collections.emptyList() : affectedMissionIds);
+    }
+
+    public List<String> getCoordinationDrafts() {
+        return Collections.unmodifiableList(coordinationDrafts == null ? Collections.emptyList() : coordinationDrafts);
     }
 }

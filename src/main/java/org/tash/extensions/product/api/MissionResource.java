@@ -7,6 +7,7 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.dto.ProductDtos;
@@ -53,5 +54,47 @@ public class MissionResource {
     @Path("/{id}/reservations")
     public ReservationWorkflowResult createReservation(@PathParam("id") String id, ProductDtos.ReservationRequest request) {
         return productService.createReservation(id, request);
+    }
+
+    @GET
+    @Path("/{id}/weather-verdict")
+    public ProductDtos.MissionWeatherVerdictSummary weatherVerdict(@PathParam("id") String id) {
+        return productService.missionWeatherVerdict(id);
+    }
+
+    @GET
+    @Path("/{id}/weather-changes")
+    public List<ProductDtos.WeatherSourceSummary> weatherChanges(@PathParam("id") String id,
+                                                                 @QueryParam("since") String since,
+                                                                 @QueryParam("limit") Integer limit) {
+        return productService.weatherChanges(id, since, limit);
+    }
+
+    @GET
+    @Path("/{id}/route-impact")
+    public ProductDtos.RouteImpactSummary routeImpact(@PathParam("id") String id,
+                                                      @QueryParam("reservationId") String reservationId) {
+        return productService.routeImpact(id, reservationId);
+    }
+
+    @POST
+    @Path("/{id}/pireps/relevant")
+    public ProductDtos.PirepRelevanceResult relevantPireps(@PathParam("id") String id,
+                                                           ProductDtos.PirepRelevanceRequest request) {
+        return productService.relevantPireps(id, request);
+    }
+
+    @POST
+    @Path("/{id}/coordinate-weather")
+    public ProductDtos.CoordinationDraftSummary coordinateWeather(@PathParam("id") String id,
+                                                                  ProductDtos.CoordinationDraftRequest request) {
+        return productService.coordinationDraft(id, request);
+    }
+
+    @GET
+    @Path("/{id}/pilot-brief")
+    public ProductDtos.PilotBriefSummary pilotBrief(@PathParam("id") String id,
+                                                    @QueryParam("since") String since) {
+        return productService.pilotBrief(id, since);
     }
 }

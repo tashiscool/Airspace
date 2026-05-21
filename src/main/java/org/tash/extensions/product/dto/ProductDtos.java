@@ -141,6 +141,153 @@ public final class ProductDtos {
     }
 
     @Data
+    public static class PirepRelevanceRequest {
+        private List<List<Double>> route = new ArrayList<>();
+        private String reservationId;
+        private Double lowerAltitudeFeet;
+        private Double upperAltitudeFeet;
+        private Double altitudeToleranceFeet;
+        private Integer recencyMinutes;
+        private Double corridorNauticalMiles;
+    }
+
+    @Data
+    public static class CoordinationDraftRequest {
+        private String hazardOrDecisionId;
+        private String missionId;
+        private String reservationId;
+        private String actor;
+    }
+
+    @Data
+    @Builder
+    public static class WeatherSourceSummary {
+        private String id;
+        private String family;
+        private String label;
+        private String route;
+        private String severity;
+        private String rationale;
+        private ZonedDateTime observedAt;
+        private long ageMinutes;
+        private String agingCategory;
+        private double relevanceScore;
+        private boolean stale;
+    }
+
+    @Data
+    @Builder
+    public static class MissionWeatherVerdictSummary {
+        private String missionId;
+        private String action;
+        private String priority;
+        private double confidence;
+        private int sourceCount;
+        private boolean stale;
+        private String summary;
+        private String recommendedAction;
+        @Builder.Default
+        private List<WeatherSourceSummary> sources = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class RouteImpactSummary {
+        private String missionId;
+        private String reservationId;
+        private String action;
+        private String recommendedAction;
+        private double confidence;
+        private String rationale;
+        private int impactedSegmentCount;
+        private int blockingConstraintCount;
+        @Builder.Default
+        private List<String> impactedSegments = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<String> avoidanceCandidates = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class PirepRelevanceResult {
+        private String missionId;
+        private int totalPireps;
+        private int relevantCount;
+        private int staleCount;
+        private double averageRelevanceScore;
+        private double altitudeToleranceFeet;
+        private int recencyMinutes;
+        private double corridorNauticalMiles;
+        @Builder.Default
+        private List<WeatherSourceSummary> relevant = new ArrayList<>();
+        @Builder.Default
+        private List<WeatherSourceSummary> excluded = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class CoordinationDraftSummary {
+        private String id;
+        private String missionId;
+        private String reservationId;
+        private String subject;
+        private String family;
+        private String direction;
+        private String rawText;
+        private String recommendedAction;
+        @Builder.Default
+        private List<String> recipients = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class PilotBriefSummary {
+        private String missionId;
+        private String missionNumber;
+        private ZonedDateTime generatedAt;
+        private MissionWeatherVerdictSummary verdict;
+        private RouteImpactSummary routeImpact;
+        private CoordinationDraftSummary coordinationDraft;
+        @Builder.Default
+        private List<WeatherSourceSummary> changes = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceSummaryLines = new ArrayList<>();
+        private String decisionTraceSummary;
+        private String printableText;
+    }
+
+    @Data
+    @Builder
+    public static class AffectedMissionSummary {
+        private String missionId;
+        private String missionNumber;
+        private String status;
+        private String action;
+        private String priority;
+        private double confidence;
+        private int sourceCount;
+        private int impactedSegmentCount;
+        private int blockingConstraintCount;
+        private String route;
+        private String rationale;
+        private ZonedDateTime lastObservedAt;
+        private long ageSeconds;
+        private boolean stale;
+        private long guidanceLatencySeconds;
+        private boolean guidanceTargetMet;
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+    }
+
+    @Data
     @Builder
     public static class DecisionSummary {
         private String id;

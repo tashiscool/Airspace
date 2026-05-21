@@ -1,4 +1,5 @@
 import type {
+  AffectedMissionSummary,
   DecisionSummary,
   FeedArtifactSummary,
   FeedTransactionSummary,
@@ -6,13 +7,20 @@ import type {
   HistoryEventSummary,
   MessageSummary,
   MissionDetail,
+  MissionWeatherVerdictSummary,
   MissionSummary,
+  PilotBriefSummary,
+  PirepRelevanceRequest,
+  PirepRelevanceResult,
   ReferencePointSummary,
   ReferenceDataImportResult,
   ReservationSupplementSummary,
   ReplayVerificationResult,
+  RouteImpactSummary,
   SearchResultSummary,
-  UserSummary
+  CoordinationDraftSummary,
+  UserSummary,
+  WeatherSourceSummary
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
@@ -63,6 +71,29 @@ export const api = {
   createMission: (body: { missionNumber?: string; title?: string; rawText?: string; actor?: string }) =>
     request<MissionSummary>('/api/missions', { method: 'POST', body: JSON.stringify(body) }),
   mission: (id: string) => request<MissionDetail>(`/api/missions/${id}`),
+  missionWeatherVerdict: (id: string) => request<MissionWeatherVerdictSummary>(`/api/missions/${id}/weather-verdict`),
+  missionWeatherChanges: (id: string, since?: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (since) params.set('since', since);
+    if (limit) params.set('limit', String(limit));
+    const query = params.toString();
+    return request<WeatherSourceSummary[]>(`/api/missions/${id}/weather-changes${query ? `?${query}` : ''}`);
+  },
+  affectedMissions: (sourceId?: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (sourceId) params.set('sourceId', sourceId);
+    if (limit) params.set('limit', String(limit));
+    const query = params.toString();
+    return request<AffectedMissionSummary[]>(`/api/weather/affected-missions${query ? `?${query}` : ''}`);
+  },
+  missionRouteImpact: (id: string, reservationId?: string) =>
+    request<RouteImpactSummary>(`/api/missions/${id}/route-impact${reservationId ? `?reservationId=${encodeURIComponent(reservationId)}` : ''}`),
+  relevantPireps: (id: string, body: PirepRelevanceRequest) =>
+    request<PirepRelevanceResult>(`/api/missions/${id}/pireps/relevant`, { method: 'POST', body: JSON.stringify(body) }),
+  coordinateWeather: (id: string, body: { hazardOrDecisionId?: string; missionId?: string; reservationId?: string; actor?: string }) =>
+    request<CoordinationDraftSummary>(`/api/missions/${id}/coordinate-weather`, { method: 'POST', body: JSON.stringify(body) }),
+  pilotBrief: (id: string, since?: string) =>
+    request<PilotBriefSummary>(`/api/missions/${id}/pilot-brief${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   lockMission: (id: string, actor: string) =>
     request<MissionSummary>(`/api/missions/${id}/lock`, { method: 'POST', body: JSON.stringify({ actor }) }),
   unlockMission: (id: string, actor: string) =>

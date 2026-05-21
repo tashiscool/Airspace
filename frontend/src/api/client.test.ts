@@ -43,13 +43,39 @@ describe('product API client', () => {
     await api.forceDeconflictReservation('reservation-2', 'planner', 'reason');
     await api.replayDecision('decision-1');
     await api.feedTransactions('artifact-1');
+    await api.missionWeatherVerdict('mission-1');
+    await api.missionWeatherChanges('mission-1', '2026-05-20T00:00:00Z', 5);
+    await api.affectedMissions('wx-1', 10);
+    await api.missionRouteImpact('mission-1', 'reservation-1');
+    await api.relevantPireps('mission-1', {
+      reservationId: 'reservation-1',
+      lowerAltitudeFeet: 22000,
+      upperAltitudeFeet: 28000,
+      altitudeToleranceFeet: 2000,
+      recencyMinutes: 60,
+      corridorNauticalMiles: 40
+    });
+    await api.coordinateWeather('mission-1', { reservationId: 'reservation-1' });
+    await api.pilotBrief('mission-1');
 
     expect(calls.map((call) => call.url)).toEqual([
       '/api/reservations/reservation-2/force-parse',
       '/api/reservations/reservation-2/force-deconflict',
       '/api/decisions/decision-1/replay',
-      '/api/feed/artifacts/artifact-1/transactions'
+      '/api/feed/artifacts/artifact-1/transactions',
+      '/api/missions/mission-1/weather-verdict',
+      '/api/missions/mission-1/weather-changes?since=2026-05-20T00%3A00%3A00Z&limit=5',
+      '/api/weather/affected-missions?sourceId=wx-1&limit=10',
+      '/api/missions/mission-1/route-impact?reservationId=reservation-1',
+      '/api/missions/mission-1/pireps/relevant',
+      '/api/missions/mission-1/coordinate-weather',
+      '/api/missions/mission-1/pilot-brief'
     ]);
+    expect(JSON.parse(String(calls[8].init.body))).toMatchObject({
+      reservationId: 'reservation-1',
+      altitudeToleranceFeet: 2000,
+      corridorNauticalMiles: 40
+    });
   });
 
   it('surfaces JSON diagnostics from failed API responses', async () => {

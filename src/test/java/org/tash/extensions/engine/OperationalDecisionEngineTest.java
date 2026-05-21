@@ -17,6 +17,9 @@ import org.tash.extensions.weather.decision.WeatherDecisionAction;
 import org.tash.extensions.weather.decision.WeatherRecommendedAction;
 import org.tash.extensions.weather.decision.WeatherRouteImpactModel;
 import org.tash.extensions.weather.pirep.PirepDiagnosticType;
+import org.tash.extensions.weather.pirep.PirepIntensity;
+import org.tash.extensions.weather.pirep.PirepPhenomenon;
+import org.tash.extensions.weather.pirep.PirepReport;
 import org.tash.extensions.weather.product.WeatherConfidence;
 import org.tash.extensions.weather.product.WeatherMovementVector;
 import org.tash.extensions.weather.product.WeatherProduct;
@@ -522,6 +525,82 @@ class OperationalDecisionEngineTest {
 
         assertFalse(result.getPredictions().get(0).isBlocked());
         assertTrue(result.getPredictions().get(1).isBlocked());
+    }
+
+    @Test
+    void safetyGapServicesExposeRouteImpactAvoidancePirepBriefAndCoordinationContracts() {
+        WeatherProduct product = weatherProduct("WX-SVC", HazardSeverity.SEVERE);
+        RouteWeatherDecisionRequest impactRequest = RouteWeatherDecisionRequest.builder()
+                .route(route())
+                .departureTime(T0)
+                .forecastHorizon(Duration.ZERO)
+                .products(Arrays.asList(product))
+                .build();
+
+        RouteWeatherImpactResult impact = new RouteHazardImpactService().evaluate(impactRequest);
+
+        assertFalse(impact.getPredictions().isEmpty());
+        assertFalse(impact.getPredictions().get(0).getSourceRefs().isEmpty());
+        assertNotNull(impact.getPredictions().get(0).getForecastSliceId());
+
+        OperationalConstraint constraint = OperationalConstraint.builder()
+                .id("WX-SVC-H")
+                .type(OperationalConstraintType.WEATHER_HAZARD)
+                .startTime(T0)
+                .endTime(T0.plusHours(1))
+                .lowerAltitudeFeet(20000)
+                .upperAltitudeFeet(30000)
+                .severity(org.tash.extensions.weather.decision.WeatherDecisionSeverity.CRITICAL)
+                .confidence(0.9)
+                .rationale("Severe weather on route")
+                .geometry(Arrays.asList(
+                        point(29.9, -149.75, 25000),
+                        point(30.1, -149.75, 25000),
+                        point(30.1, -149.25, 25000),
+                        point(29.9, -149.25, 25000)))
+                .sources(Arrays.asList(DecisionSourceRef.builder().type("WEATHER").id("WX-SVC").build()))
+                .build();
+        assertFalse(new RouteAvoidanceService().suggest(route(), Arrays.asList(constraint), T0).getCandidates().isEmpty());
+
+        PirepReport relevant = PirepReport.builder()
+                .id("PIREP-1")
+                .location(point(30.01, -149.9, 25000))
+                .observationTime(T0.minusMinutes(20))
+                .altitudeFeet(25000.0)
+                .phenomenon(PirepPhenomenon.ICING)
+                .intensity(PirepIntensity.SEVERE)
+                .build();
+        PirepReport stale = relevant.toBuilder().id("PIREP-STALE").observationTime(T0.minusHours(3)).build();
+        PirepRelevanceResult relevantPireps = new PirepRelevanceService().filter(PirepRelevanceRequest.builder()
+                .route(route())
+                .decisionTime(T0)
+                .pireps(Arrays.asList(relevant, stale))
+                .build());
+        assertEquals(1, relevantPireps.getRelevant().size());
+        assertTrue(relevantPireps.getDiagnostics().stream().anyMatch(diagnostic -> diagnostic.contains("recency")));
+
+        WeatherCoordinationDraft draft = new WeatherCoordinationDraftService().createDraft(WeatherCoordinationDraftRequest.builder()
+                .missionId("MISSION-1")
+                .hazardOrDecisionId("WX-SVC")
+                .recommendedAction(WeatherRecommendedAction.REROUTE_AROUND_WEATHER)
+                .impactSummary("Severe convection intersects active route")
+                .sourceRefs(Arrays.asList(DecisionSourceRef.builder().type("WEATHER").id("WX-SVC").build()))
+                .build());
+        assertTrue(draft.getBody().contains("MISSION MISSION-1"));
+        assertTrue(draft.getBody().contains("SOURCES WEATHER:WX-SVC"));
+
+        OperationalDecisionResult decision = OperationalDecisionResult.builder()
+                .action(WeatherDecisionAction.REROUTE)
+                .recommendedAction(WeatherRecommendedAction.REROUTE_AROUND_WEATHER)
+                .rationale("Severe convection intersects active route")
+                .confidence(0.82)
+                .routeImpacts(impact.getPredictions())
+                .sourceRefs(Arrays.asList(DecisionSourceRef.builder().type("WEATHER").id("WX-SVC").build()))
+                .build();
+        String brief = new PilotBriefService().generate("MISSION-1", decision, T0);
+        assertTrue(brief.contains("AIRSPACE PILOT BRIEF"));
+        assertTrue(brief.contains("VERDICT: REROUTE"));
+        assertTrue(brief.contains("WEATHER:WX-SVC"));
     }
 
     private WeatherProduct weatherProduct(String id, HazardSeverity severity) {

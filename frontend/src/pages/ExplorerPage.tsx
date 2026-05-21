@@ -8,8 +8,9 @@ import { api } from '../api/client';
 import { DataTable } from '../components/DataTable';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { StatusBadge } from '../components/StatusBadge';
+import { WeatherVerdictPill } from '../components/WeatherVerdict';
 import type { ExplorerRow } from '../lib/viewModels';
-import { compactId, fmtZ, rowFromFeed, rowFromMessage, rowsFromMissionDetail } from '../lib/viewModels';
+import { compactId, fmtZ, missionWeatherVerdict, rowFromFeed, rowFromMessage, rowsFromMissionDetail, sourceRefLabel, sourceRefRoute, weatherChangeFeed } from '../lib/viewModels';
 import {
   actionsForWorkbenchRow,
   DEFAULT_LAYOUT_PREFS,
@@ -21,20 +22,13 @@ import {
   writeWorkbenchJson,
   type WorkbenchLayoutPrefs
 } from '../lib/workbenchState';
-import type { MessageSummary, MissionSummary } from '../types';
+import type { MessageSummary, MissionSummary, MissionWeatherVerdictSummary } from '../types';
 
 type SortMode = 'TIME' | 'CATEGORY';
 type FamilyFilter = ExplorerRow['family'];
 type StatusFilter = string;
 
 const rowColumn = createColumnHelper<ExplorerRow>();
-const rowColumns = [
-  rowColumn.accessor('family', { header: 'Family' }),
-  rowColumn.accessor('title', { header: 'Title' }),
-  rowColumn.accessor('subtitle', { header: 'Context' }),
-  rowColumn.accessor('status', { header: 'Status', cell: (info) => info.getValue() ? <StatusBadge value={info.getValue()} /> : null }),
-  rowColumn.accessor('time', { header: 'Time', cell: (info) => fmtZ(info.getValue()) })
-];
 
 export function ExplorerPage() {
   const navigate = useNavigate();
@@ -54,6 +48,8 @@ export function ExplorerPage() {
   const messages = useQuery({ queryKey: ['messages'], queryFn: api.messages });
   const feed = useQuery({ queryKey: ['feed-artifacts'], queryFn: api.feedArtifacts });
   const metrics = useQuery({ queryKey: ['metrics'], queryFn: api.metrics });
+  const affectedMissions = useQuery({ queryKey: ['weather-affected-missions', 'explorer'], queryFn: () => api.affectedMissions(undefined, 12) });
+  const weatherDeltas = useMemo(() => weatherChangeFeed(messages.data ?? [], 6), [messages.data]);
   const missionDetails = useQueries({
     queries: (missions.data ?? []).slice(0, 12).map((mission) => ({
       queryKey: ['mission', mission.id, 'explorer'],
@@ -61,6 +57,21 @@ export function ExplorerPage() {
       staleTime: 30_000
     }))
   });
+  const missionIdsForVerdicts = useMemo(() => (missions.data ?? []).slice(0, 12).map((mission) => mission.id), [missions.data]);
+  const missionVerdicts = useQueries({
+    queries: missionIdsForVerdicts.map((missionId) => ({
+      queryKey: ['mission-weather-verdict', missionId, 'explorer'],
+      queryFn: () => api.missionWeatherVerdict(missionId),
+      staleTime: 30_000
+    }))
+  });
+  const verdictByMission = useMemo(() => {
+    const map = new Map<string, MissionWeatherVerdictSummary>();
+    missionVerdicts.forEach((result, index) => {
+      if (result.data) map.set(missionIdsForVerdicts[index], result.data);
+    });
+    return map;
+  }, [missionVerdicts, missionIdsForVerdicts]);
 
   const create = useMutation({
     mutationFn: () => api.createMission({ title: 'Operational Mission', actor: 'planner' }),
@@ -106,7 +117,7 @@ export function ExplorerPage() {
     const q = filter.trim().toLowerCase();
     let output = rows;
     if (notamMode) output = output.filter((row) => row.family === 'NOTAM');
-    if (attentionOnly) output = output.filter(isAttentionRow);
+    if (attentionOnly) output = output.filter((row) => isAttentionRow(row) || isWeatherAttentionRow(row, verdictByMission));
     if (familyFilter.size) output = output.filter((row) => familyFilter.has(row.family));
     if (statusFilter.size) output = output.filter((row) => row.status && statusFilter.has(row.status));
     if (missionScope) output = output.filter((row) => row.missionId === missionScope || row.id === missionScope);
@@ -116,7 +127,7 @@ export function ExplorerPage() {
       if (sortMode === 'CATEGORY') return a.family.localeCompare(b.family) || a.title.localeCompare(b.title);
       return String(b.time ?? '').localeCompare(String(a.time ?? '')) || a.family.localeCompare(b.family);
     });
-  }, [rows, filter, familyFilter, statusFilter, attentionOnly, missionScope, messageScope, sortMode, notamMode]);
+  }, [rows, filter, familyFilter, statusFilter, attentionOnly, missionScope, messageScope, sortMode, notamMode, verdictByMission]);
 
   const selected = filtered.find((row) => row.key === selectedKey) ?? filtered[0];
   const missionGroups = useMemo(() => groupMissions(missions.data ?? []), [missions.data]);
@@ -125,6 +136,21 @@ export function ExplorerPage() {
     const values = new Set(rows.map((row) => row.status).filter(Boolean) as string[]);
     return [...values].sort();
   }, [rows]);
+  const rowColumns = useMemo(() => [
+    rowColumn.accessor('family', { header: 'Family' }),
+    rowColumn.accessor('title', { header: 'Title' }),
+    rowColumn.accessor('subtitle', { header: 'Context' }),
+    rowColumn.accessor('status', { header: 'Status', cell: (info) => info.getValue() ? <StatusBadge value={info.getValue()} /> : null }),
+    rowColumn.display({
+      id: 'weatherVerdict',
+      header: 'Wx Verdict',
+      cell: (info) => {
+        const missionId = info.row.original.missionId ?? (info.row.original.family === 'MISSION' ? info.row.original.id : undefined);
+        return missionId ? <WeatherVerdictPill verdict={verdictFromBackend(verdictByMission.get(missionId)) ?? missionWeatherVerdict(missionId, messages.data ?? [])} /> : <span className="muted">—</span>;
+      }
+    }),
+    rowColumn.accessor('time', { header: 'Time', cell: (info) => fmtZ(info.getValue()) })
+  ], [messages.data, verdictByMission]);
 
   useEffect(() => {
     const currentPrefs = readWorkbenchJson('airspace.workbench.layout', DEFAULT_LAYOUT_PREFS);
@@ -278,6 +304,7 @@ export function ExplorerPage() {
           <QueryNotice query={messages} label="Messages" />
           <ErrorNotice error={feed.error} title="Feed artifacts unavailable" />
           <ErrorNotice error={metrics.error} title="Metrics unavailable" />
+          <ErrorNotice error={affectedMissions.error} title="Affected missions unavailable" />
           <MutationNotice mutation={create} label="Create mission" />
           <MutationNotice mutation={ingestWeatherObservation} label="Weather feed ingest" />
         </div>
@@ -328,6 +355,60 @@ export function ExplorerPage() {
         </section>
       </main>
       <aside className="metric-sidebar">
+        <div className="metric-tile attention">
+          <span>Affected missions</span>
+          <strong>{affectedMissions.data?.length ?? 0}</strong>
+        </div>
+        <div className="change-feed compact">
+          {(affectedMissions.data?.length ? affectedMissions.data : []).map((mission) => (
+            <article key={mission.missionId} className="affected-mission-card compact-affected-card">
+              <button className="affected-mission-open" onClick={() => navigate(mission.route ?? `/missions/${mission.missionId}`)}>
+                <StatusBadge value={mission.action} />
+                <span>{mission.missionNumber}</span>
+                <small>
+                  {Math.round(mission.confidence * 100)}% · {mission.sourceCount} source(s) · {freshnessLabel(mission.ageSeconds, mission.stale)}
+                  {' · '}
+                  {mission.guidanceTargetMet ? '<5s target met' : 'guidance delayed'}
+                </small>
+              </button>
+              {!!mission.sourceRefs?.length && (
+                <div className="affected-mission-source-row">
+                  {mission.sourceRefs.slice(0, 4).map((ref) => (
+                    <button
+                      key={ref}
+                      type="button"
+                      className={`route-source route-source-${sourceRefLabel(ref).family.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                      disabled={!sourceRefRoute(ref)}
+                      onClick={() => {
+                        const route = sourceRefRoute(ref);
+                        if (route) navigate(route);
+                      }}
+                    >
+                      <strong>{sourceRefLabel(ref).family}</strong>
+                      {sourceRefLabel(ref).id || ref}
+                    </button>
+                  ))}
+                  <button className="secondary compact-coordinate" type="button" onClick={() => navigate(coordinationHref(mission))}>Coordinate</button>
+                </div>
+              )}
+            </article>
+          ))}
+          {!affectedMissions.data?.length && <p className="muted">No active mission has weather/PIREP attention at the moment.</p>}
+        </div>
+        <div className="metric-tile attention">
+          <span>What changed</span>
+          <strong>{weatherDeltas.length}</strong>
+        </div>
+        <div className="change-feed compact">
+          {(weatherDeltas.length ? weatherDeltas : []).map((item) => (
+            <button key={item.id} className="change-row" onClick={() => navigate(`/messages/${item.id}`)}>
+              <StatusBadge value={item.action} />
+              <span>{item.hazard}</span>
+              <small>{fmtZ(item.createdAt)}</small>
+            </button>
+          ))}
+          {!weatherDeltas.length && <p className="muted">No weather or PIREP deltas since last brief.</p>}
+        </div>
         {Object.entries(metrics.data ?? {})
           .filter(([name]) => name.startsWith('product.'))
           .slice(0, 10)
@@ -371,4 +452,63 @@ function groupMessages(messages: MessageSummary[]) {
     groups.set(key, [...(groups.get(key) ?? []), message]);
   }
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+function verdictFromBackend(verdict?: MissionWeatherVerdictSummary) {
+  if (!verdict) return undefined;
+  return {
+    action: verdict.action as ReturnType<typeof missionWeatherVerdict>['action'],
+    priority: verdict.priority as ReturnType<typeof missionWeatherVerdict>['priority'],
+    confidence: verdict.confidence,
+    count: verdict.sourceCount,
+    summary: verdict.summary,
+    recommendedAction: verdict.recommendedAction,
+    sources: verdict.sources.map((source) => ({
+      id: source.id,
+      hazard: source.family,
+      action: verdict.action as ReturnType<typeof missionWeatherVerdict>['action'],
+      priority: verdict.priority as ReturnType<typeof missionWeatherVerdict>['priority'],
+      coordination: verdict.recommendedAction,
+      rationale: source.rationale ?? verdict.summary,
+      sourceFamily: source.family,
+      sourceLabel: source.label ?? source.id,
+      missionId: verdict.missionId,
+      createdAt: source.observedAt
+    }))
+  };
+}
+
+function isWeatherAttentionRow(row: ExplorerRow, verdictByMission: Map<string, MissionWeatherVerdictSummary>) {
+  const missionId = row.missionId ?? (row.family === 'MISSION' ? row.id : undefined);
+  if (!missionId) return false;
+  const verdict = verdictByMission.get(missionId);
+  if (!verdict) return false;
+  return verdict.priority === 'HIGH'
+    || verdict.stale
+    || ['BLOCKED', 'REROUTE', 'AVOID', 'CAUTION', 'DELAY'].includes(verdict.action);
+}
+
+function freshnessLabel(ageSeconds?: number, stale?: boolean) {
+  if (ageSeconds == null || ageSeconds < 0) return stale ? 'stale' : 'freshness unknown';
+  if (ageSeconds < 60) return `${ageSeconds}s old`;
+  const minutes = Math.round(ageSeconds / 60);
+  return `${minutes}m old${stale ? ' · stale' : ''}`;
+}
+
+function coordinationHref(mission: { missionId: string; missionNumber: string; action: string; rationale?: string; sourceRefs?: string[] }) {
+  const params = new URLSearchParams({
+    missionId: mission.missionId,
+    family: 'USNS',
+    direction: 'OUTBOUND',
+    subject: `WX COORD ${mission.missionNumber} ${mission.action}`,
+    body: [
+      'USNS WEATHER COORDINATION',
+      `MISSION: ${mission.missionNumber}`,
+      `ACTION: ${mission.action}`,
+      `IMPACT: ${mission.rationale ?? 'Review weather impact and route release guidance.'}`,
+      `SOURCES: ${(mission.sourceRefs ?? []).join(', ')}`,
+      'REQUEST: WEATHER DESK / TRAFFIC MANAGER REVIEW.'
+    ].join('\n')
+  });
+  return `/messages?${params.toString()}`;
 }

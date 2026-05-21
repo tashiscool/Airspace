@@ -16,9 +16,17 @@ import org.tash.extensions.engine.OperationalDecisionResult;
 import org.tash.extensions.engine.ReplayVerificationResult;
 import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.dto.ProductDtos;
+import org.tash.extensions.weather.decision.RouteBlockagePrediction;
+import org.tash.extensions.weather.decision.RouteWeatherAdvisory;
+import org.tash.extensions.weather.decision.WeatherDecisionAction;
+import org.tash.extensions.weather.decision.WeatherDecisionSeverity;
+import org.tash.extensions.weather.decision.WeatherRecommendedAction;
 import org.tash.extensions.visualization.AirspaceFeatureCollection;
 import org.tash.extensions.visualization.AirspaceVisualizationService;
 import org.tash.extensions.visualization.VisualizationRequest;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Path("/api/decisions")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -81,7 +89,61 @@ public class DecisionResource {
         request.setReservations(result.getReservations());
         request.setConflicts(result.getConflicts());
         request.setWeatherProducts(result.getWeatherProducts());
-        return visualizationService.combined(request);
+        request.setWeatherAdvisories(weatherAdvisories(result));
+        AirspaceFeatureCollection collection = visualizationService.combined(request);
+        collection.getFeatures().addAll(avoidanceFeatures(result));
+        return collection;
+    }
+
+    private List<RouteWeatherAdvisory> weatherAdvisories(OperationalDecisionResult result) {
+        List<RouteWeatherAdvisory> advisories = new ArrayList<>();
+        for (RouteBlockagePrediction prediction : result.getRouteImpacts()) {
+            advisories.add(RouteWeatherAdvisory.builder()
+                    .action(result.getAction() == null ? WeatherDecisionAction.MONITOR : result.getAction())
+                    .recommendedAction(prediction.getRecommendedAction() == null ? WeatherRecommendedAction.MONITOR : prediction.getRecommendedAction())
+                    .severity(prediction.getSeverity() == null ? WeatherDecisionSeverity.INFO : prediction.getSeverity())
+                    .rationale(prediction.getRationale())
+                    .confidence(prediction.getConfidence())
+                    .primaryHazardId(prediction.getPrimaryHazardId())
+                    .intersections(prediction.getIntersections())
+                    .blockagePredictions(java.util.Collections.singletonList(prediction))
+                    .build());
+        }
+        return advisories;
+    }
+
+    private List<org.tash.extensions.visualization.AirspaceFeature> avoidanceFeatures(OperationalDecisionResult result) {
+        List<org.tash.extensions.visualization.AirspaceFeature> features = new ArrayList<>();
+        result.getAvoidanceCandidates().forEach(candidate -> {
+            java.util.Map<String, Object> properties = new java.util.LinkedHashMap<>();
+            properties.put("featureKind", "route-avoidance-candidate");
+            properties.put("displayLayer", "route-impacts");
+            properties.put("constraintType", "ROUTE_AVOIDANCE");
+            properties.put("sourceFamily", "WEATHER_ROUTE_IMPACT");
+            properties.put("operationalRole", "suggested-deviation-corridor");
+            properties.put("label", candidate.getId());
+            properties.put("rationale", candidate.getRationale());
+            properties.put("routeCost", candidate.getCost());
+            properties.put("avoidedConstraintIds", candidate.getAvoidedConstraintIds());
+            properties.put("remainingConstraintIds", candidate.getRemainingConstraintIds());
+            features.add(org.tash.extensions.visualization.AirspaceFeature.builder()
+                    .id("avoidance-" + candidate.getId())
+                    .geometry(lineGeometry(candidate.getPoints()))
+                    .properties(properties)
+                    .build());
+        });
+        return features;
+    }
+
+    private org.tash.extensions.visualization.AirspaceGeometry lineGeometry(List<org.tash.data.GeoCoordinate> points) {
+        org.tash.extensions.visualization.AirspaceGeometry geometry = new org.tash.extensions.visualization.AirspaceGeometry();
+        geometry.setType("LineString");
+        java.util.List<double[]> coordinates = new java.util.ArrayList<>();
+        for (org.tash.data.GeoCoordinate point : points) {
+            coordinates.add(new double[]{point.getLongitude(), point.getLatitude(), point.getAltitude()});
+        }
+        geometry.setCoordinates(coordinates);
+        return geometry;
     }
 
     private ReplayVerificationResult verifyPersistedReplay(ProductDtos.DecisionSummary decision) {

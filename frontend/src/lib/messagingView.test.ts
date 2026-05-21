@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { messageBodyWithMetadata, normalizeRecipients, recipientPresetSuggestions, relatedMessages } from './messagingView';
+import { messageBodyWithMetadata, messageDraftFromSearchParams, normalizeRecipients, recipientPresetSuggestions, relatedMessages } from './messagingView';
 
 describe('messaging view helpers', () => {
   it('normalizes recipients and composes retained metadata', () => {
@@ -22,5 +22,25 @@ describe('messaging view helpers', () => {
 
   it('suggests known operational recipients', () => {
     expect(recipientPresetSuggestions('kz')).toEqual(expect.arrayContaining(['KZNY', 'KZDC']));
+  });
+
+  it('creates a composer draft from coordination query parameters', () => {
+    const draft = messageDraftFromSearchParams(new URLSearchParams({
+      missionId: 'mission-1',
+      reservationId: 'reservation-1',
+      subject: 'WX COORD M1',
+      body: 'USNS WEATHER COORDINATION',
+      recipients: 'KZNY'
+    }));
+
+    expect(draft).toMatchObject({
+      family: 'USNS',
+      direction: 'OUTBOUND',
+      missionId: 'mission-1',
+      reservationId: 'reservation-1',
+      subject: 'WX COORD M1',
+      rawText: 'USNS WEATHER COORDINATION',
+      recipients: 'KZNY'
+    });
   });
 });

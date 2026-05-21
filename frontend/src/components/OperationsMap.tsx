@@ -1,5 +1,6 @@
 import 'ol/ol.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import OlMap from 'ol/Map';
 import View from 'ol/View';
 import GeoJSON from 'ol/format/GeoJSON';
@@ -7,10 +8,10 @@ import VectorLayer from 'ol/layer/Vector';
 import TileLayer from 'ol/layer/Tile';
 import VectorSource from 'ol/source/Vector';
 import OSM from 'ol/source/OSM';
-import { Fill, Stroke, Style } from 'ol/style';
+import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import type { FeatureCollection } from '../types';
 import { DEFAULT_LAYOUT_PREFS, readWorkbenchJson, writeWorkbenchJson } from '../lib/workbenchState';
-import { featureDisplayLayer, layerDefinition, layersForWorkbenchGroup, mapFeatureSummary, MAP_LAYERS, type MapLayerId } from './mapLayers';
+import { featureDisplayLayer, featurePassesFreshnessFilter, layerDefinition, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, MAP_LAYERS, type MapLayerId } from './mapLayers';
 
 export function OperationsMap({
   features,
@@ -23,6 +24,10 @@ export function OperationsMap({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [forecastHour, setForecastHour] = useState(0);
+  const [altitudeFloor, setAltitudeFloor] = useState('');
+  const [altitudeCeiling, setAltitudeCeiling] = useState('');
+  const [maxFreshnessMinutes, setMaxFreshnessMinutes] = useState('');
+  const [hideStaleWeather, setHideStaleWeather] = useState(false);
   const [internalSelectedFeatureId, setInternalSelectedFeatureId] = useState<string | undefined>();
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [fitRequest, setFitRequest] = useState<{ scope: 'all' | 'selected'; sequence: number }>({ scope: 'all', sequence: 0 });
@@ -42,13 +47,18 @@ export function OperationsMap({
       features: features.features.filter((feature, index) => {
         if (!enabledLayers.has(featureDisplayLayer(feature))) return false;
         if (showSelectedOnly && selectedFeatureId && featureKey(feature, index) !== selectedFeatureId) return false;
+        if (!altitudeOverlaps(feature.properties, altitudeFloor, altitudeCeiling)) return false;
+        if (!featurePassesFreshnessFilter(feature, {
+          maxAgeMinutes: maxFreshnessMinutes.trim() === '' ? undefined : Number(maxFreshnessMinutes),
+          hideStale: hideStaleWeather
+        })) return false;
         const hour = numericProp(feature.properties, 'forecastHour');
         if (hour == null || !forecastRange) return true;
         const duration = numericProp(feature.properties, 'validDurationH') ?? 3;
         return forecastHour >= hour && forecastHour <= hour + duration;
       })
     };
-  }, [features, enabledLayers, forecastHour, forecastRange, selectedFeatureId, showSelectedOnly]);
+  }, [features, enabledLayers, forecastHour, forecastRange, selectedFeatureId, showSelectedOnly, altitudeFloor, altitudeCeiling, maxFreshnessMinutes, hideStaleWeather]);
 
   useEffect(() => {
     const currentPrefs = readWorkbenchJson('airspace.workbench.layout', DEFAULT_LAYOUT_PREFS);
@@ -78,9 +88,25 @@ export function OperationsMap({
           style: (feature) => {
             const layer = layerDefinition(featureDisplayLayer(feature.getProperties()));
             const selected = String(feature.get('_airspaceFeatureKey') ?? '') === selectedFeatureId;
+            const freshness = mapFeatureFreshness({ properties: feature.getProperties() });
+            const confidence = mapFeatureConfidence({ properties: feature.getProperties() });
+            const severity = mapFeatureSeverity({ properties: feature.getProperties() });
+            const opacity = Math.min(freshness?.opacity ?? 1, confidence.opacity);
+            const geometryType = String(feature.getGeometry()?.getType() ?? '').toLowerCase();
             return new Style({
-              stroke: new Stroke({ color: layer.stroke, width: selected ? layer.width + 2 : layer.width }),
-              fill: new Fill({ color: layer.fill })
+              stroke: new Stroke({
+                color: withOpacity(layer.stroke, selected ? 1 : opacity),
+                width: selected ? layer.width + 2 + severity.widthBoost : layer.width + severity.widthBoost,
+                lineDash: freshness?.category === 'stale' || confidence.category === 'low' ? [6, 5] : undefined
+              }),
+              fill: new Fill({ color: withFillOpacity(layer.fill, selected ? 1 : opacity) }),
+              image: geometryType === 'point'
+                ? new CircleStyle({
+                  radius: selected ? 7 : 5,
+                  fill: new Fill({ color: withOpacity(layer.stroke, selected ? 0.95 : Math.max(0.28, opacity)) }),
+                  stroke: new Stroke({ color: freshness?.stale ? '#94a3b8' : '#f8fafc', width: selected ? 2 : 1 })
+                })
+                : undefined
             });
           }
         })
@@ -217,6 +243,26 @@ export function OperationsMap({
           <span>T+{forecastRange.max}H</span>
         </div>
       )}
+      <div className="forecast-slider altitude-filter">
+        <span>Altitude ft</span>
+        <input value={altitudeFloor} onChange={(event) => setAltitudeFloor(event.target.value)} placeholder="floor" inputMode="numeric" />
+        <span>to</span>
+        <input value={altitudeCeiling} onChange={(event) => setAltitudeCeiling(event.target.value)} placeholder="ceiling" inputMode="numeric" />
+        <button className="map-layer" type="button" onClick={() => { setAltitudeFloor(''); setAltitudeCeiling(''); }}>All Altitudes</button>
+      </div>
+      <div className="forecast-slider altitude-filter">
+        <span>Freshness</span>
+        <input value={maxFreshnessMinutes} onChange={(event) => setMaxFreshnessMinutes(event.target.value)} placeholder="max age min" inputMode="numeric" />
+        <button
+          className={hideStaleWeather ? 'map-layer active' : 'map-layer'}
+          type="button"
+          onClick={() => setHideStaleWeather((value) => !value)}
+          aria-pressed={hideStaleWeather}
+        >
+          Hide Stale Wx/PIREPs
+        </button>
+        <button className="map-layer" type="button" onClick={() => { setMaxFreshnessMinutes(''); setHideStaleWeather(false); }}>All Reports</button>
+      </div>
       <div className="map-canvas">
         <div className="map" ref={ref} />
         <svg className="map-vector-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -244,6 +290,7 @@ export function OperationsMap({
         <div><strong>CARF/ALTRV</strong><span>Reservations, protected route volumes, timing metadata, conflicts.</span></div>
         <div><strong>NOTAM</strong><span>Restrictions and advisories stay separate from reservations.</span></div>
         <div><strong>Weather/PIREP</strong><span>Hazards, reports, and route blockage overlays from the decision engine.</span></div>
+        <div><strong>Freshness</strong><span>Weather and PIREP overlays fade/dash as reports age or become stale.</span></div>
       </div>
       <div className="map-feature-browser">
         <div>
@@ -265,6 +312,8 @@ export function OperationsMap({
 function FeatureProperties({ feature }: { feature: FeatureCollection['features'][number] }) {
   const properties = feature.properties ?? {};
   const summary = mapFeatureSummary(feature);
+  const sourceLink = mapFeatureSourceLink(feature);
+  const sourceRefs = mapFeatureSourceRefs(feature);
   const rows = Object.entries(properties)
     .filter(([, value]) => value != null && ['string', 'number', 'boolean'].includes(typeof value))
     .slice(0, 10);
@@ -279,8 +328,29 @@ function FeatureProperties({ feature }: { feature: FeatureCollection['features']
             {summary.timing && <span>{summary.timing}</span>}
             {summary.altitude && <span>{summary.altitude}</span>}
             {summary.confidence && <span>{summary.confidence}</span>}
+            {summary.freshness && <span>{summary.freshness}</span>}
+            {summary.movement && <span>{summary.movement}</span>}
             {summary.action && <span>{summary.action}</span>}
           </div>
+          {summary.risk && <small className="map-risk-readout">{summary.risk}</small>}
+          {sourceLink && <Link className="map-source-link" to={sourceLink.route}>{sourceLink.label}</Link>}
+          {!!sourceRefs.length && (
+            <div className="map-source-ref-row">
+              {sourceRefs.map((ref) => (
+                ref.route ? (
+                  <Link key={`${ref.family}:${ref.id}`} to={ref.route}>
+                    <strong>{ref.family}</strong>
+                    {ref.id}
+                  </Link>
+                ) : (
+                  <span key={`${ref.family}:${ref.id}`}>
+                    <strong>{ref.family}</strong>
+                    {ref.id}
+                  </span>
+                )
+              ))}
+            </div>
+          )}
         </div>
       )}
       <dl className="map-feature-properties">
@@ -293,6 +363,27 @@ function FeatureProperties({ feature }: { feature: FeatureCollection['features']
       </dl>
     </>
   );
+}
+
+function withOpacity(hex: string, opacity: number) {
+  const normalized = hex.trim();
+  if (!normalized.startsWith('#') || (normalized.length !== 7 && normalized.length !== 4)) return normalized;
+  const full = normalized.length === 4
+    ? `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+    : normalized;
+  const r = parseInt(full.slice(1, 3), 16);
+  const g = parseInt(full.slice(3, 5), 16);
+  const b = parseInt(full.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0.15, Math.min(1, opacity))})`;
+}
+
+function withFillOpacity(color: string, opacity: number) {
+  if (!color.startsWith('rgba(')) return color;
+  const parts = color.replace('rgba(', '').replace(')', '').split(',').map((part) => part.trim());
+  if (parts.length !== 4) return color;
+  const baseAlpha = Number(parts[3]);
+  const alpha = Number.isFinite(baseAlpha) ? Math.max(0.06, Math.min(1, baseAlpha * opacity)) : 0.12;
+  return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
 }
 
 function featureLabel(feature: FeatureCollection['features'][number], index: number) {
@@ -317,6 +408,20 @@ function forecastBounds(collection?: FeatureCollection) {
     .filter((value): value is number => value != null);
   if (!hours.length) return undefined;
   return { min: Math.min(0, ...hours), max: Math.max(...hours.map((hour) => hour + 3)) };
+}
+
+function altitudeOverlaps(properties: Record<string, unknown> | undefined, floorText: string, ceilingText: string) {
+  const floor = floorText.trim() === '' ? undefined : Number(floorText);
+  const ceiling = ceilingText.trim() === '' ? undefined : Number(ceilingText);
+  if ((floor == null || Number.isNaN(floor)) && (ceiling == null || Number.isNaN(ceiling))) return true;
+  const min = numericProp(properties, 'lowerAltitudeFeet') ?? numericProp(properties, 'minAltitudeFeet') ?? numericProp(properties, 'minAltitude');
+  const max = numericProp(properties, 'upperAltitudeFeet') ?? numericProp(properties, 'maxAltitudeFeet') ?? numericProp(properties, 'maxAltitude');
+  if (min == null && max == null) return true;
+  const featureMin = min ?? 0;
+  const featureMax = max ?? 60000;
+  const queryMin = floor == null || Number.isNaN(floor) ? 0 : floor;
+  const queryMax = ceiling == null || Number.isNaN(ceiling) ? 60000 : ceiling;
+  return featureMax >= queryMin && featureMin <= queryMax;
 }
 
 function svgPathForFeature(feature: FeatureCollection['features'][number], collection: FeatureCollection): string | undefined {

@@ -210,6 +210,10 @@ public class OperationalDecisionEngine {
                 .weatherProducts(weatherProducts)
                 .pirepResults(pirepResults)
                 .routeBlockages(blockages)
+                .routeImpacts(blockages)
+                .sourceRefs(decisionSourceRefs(usnsResults, carfResults, weatherProducts, pirepResults, notams, blockages))
+                .briefSummary("Action " + action + " / " + recommendedAction + ": " + rationale)
+                .coordinationDrafts(coordinationDraftSummaries(coordination))
                 .coordinationResult(coordination)
                 .fusionResult(fusion)
                 .trace(trace)
@@ -507,6 +511,7 @@ public class OperationalDecisionEngine {
                 source("routeCandidates", String.valueOf(plan.getCandidates().size())));
         return result.toBuilder()
                 .routePlanResult(plan)
+                .avoidanceCandidates(plan.getCandidates())
                 .trace(trace)
                 .build();
     }
@@ -523,6 +528,56 @@ public class OperationalDecisionEngine {
 
     private DecisionSourceRef source(String type, String id) {
         return DecisionSourceRef.builder().type(type).id(id).description(type + ":" + id).build();
+    }
+
+    private List<DecisionSourceRef> decisionSourceRefs(List<UsnsIngestResult> usnsResults,
+                                                       List<CarfAnalysisResult> carfResults,
+                                                       List<WeatherProduct> weatherProducts,
+                                                       List<PirepIngestResult> pirepResults,
+                                                       List<NotamAirspaceRestriction> notams,
+                                                       List<RouteBlockagePrediction> blockages) {
+        Map<String, DecisionSourceRef> refs = new LinkedHashMap<>();
+        for (int i = 0; i < nullSafe(usnsResults).size(); i++) {
+            putRef(refs, source("USNS", String.valueOf(i + 1)));
+        }
+        for (CarfAnalysisResult carf : nullSafe(carfResults)) {
+            putRef(refs, source("CARF_ALTRV", carf.isAccepted() ? "accepted" : "rejected"));
+        }
+        for (WeatherProduct product : nullSafe(weatherProducts)) {
+            putRef(refs, source("WEATHER", product.getId()));
+        }
+        for (PirepIngestResult pirep : nullSafe(pirepResults)) {
+            if (pirep != null && pirep.getReport() != null) {
+                putRef(refs, source("PIREP", pirep.getReport().getId()));
+            }
+        }
+        for (NotamAirspaceRestriction notam : nullSafe(notams)) {
+            putRef(refs, source("NOTAM", notam.getId()));
+        }
+        for (RouteBlockagePrediction blockage : nullSafe(blockages)) {
+            for (String ref : blockage.getSourceRefs()) {
+                String[] parts = ref.split(":", 2);
+                putRef(refs, source(parts.length == 2 ? parts[0] : "ROUTE_IMPACT", parts.length == 2 ? parts[1] : ref));
+            }
+        }
+        return new ArrayList<>(refs.values());
+    }
+
+    private void putRef(Map<String, DecisionSourceRef> refs, DecisionSourceRef ref) {
+        if (ref == null || ref.getId() == null) {
+            return;
+        }
+        refs.putIfAbsent(ref.getType() + ":" + ref.getId(), ref);
+    }
+
+    private List<String> coordinationDraftSummaries(WeatherCoordinationResult coordination) {
+        List<String> summaries = new ArrayList<>();
+        if (coordination == null) {
+            return summaries;
+        }
+        coordination.getHandoffNotes().forEach(note -> summaries.add(note.getRouteId() + ": " + note.getRationale()));
+        coordination.getReviewItems().forEach(item -> summaries.add(item.getPriority() + ": " + item.getSubject()));
+        return summaries;
     }
 
     private List<PirepIngestResult> resolvePirepLocations(List<PirepIngestResult> results,

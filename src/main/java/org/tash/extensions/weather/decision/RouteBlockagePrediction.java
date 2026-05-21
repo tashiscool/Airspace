@@ -26,6 +26,7 @@ public class RouteBlockagePrediction {
     private final double capacityImpact;
     private final double blockedProbability;
     private final String confidenceMath;
+    private final String forecastSliceId;
     private final RouteImpactScoringBreakdown scoringBreakdown;
     private final double ensembleSpread;
     private final double confidenceIntervalLow;
@@ -34,6 +35,8 @@ public class RouteBlockagePrediction {
     private final List<Integer> blockedSegmentIndexes = new ArrayList<>();
     @Builder.Default
     private final List<String> ruleIds = new ArrayList<>();
+    @Builder.Default
+    private final List<String> sourceRefs = new ArrayList<>();
     @Builder.Default
     private final List<DecisionRuleApplication> ruleApplications = new ArrayList<>();
     @Builder.Default
@@ -53,6 +56,10 @@ public class RouteBlockagePrediction {
 
     public List<String> getRuleIds() {
         return Collections.unmodifiableList(ruleIds);
+    }
+
+    public List<String> getSourceRefs() {
+        return Collections.unmodifiableList(sourceRefs == null ? Collections.emptyList() : sourceRefs);
     }
 
     public List<DecisionRuleApplication> getRuleApplications() {

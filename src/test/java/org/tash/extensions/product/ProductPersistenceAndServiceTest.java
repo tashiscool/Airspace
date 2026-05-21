@@ -258,6 +258,9 @@ class ProductPersistenceAndServiceTest {
         assertTrue(metrics.get("product.feedArtifacts") >= 1.0);
         assertTrue(metrics.get("product.referencePoints") >= 4.0);
         assertTrue(metrics.get("product.supplements") >= 1.0);
+        assertTrue(metrics.containsKey("product.weather.affectedMissions"));
+        assertTrue(metrics.containsKey("product.weather.averageGuidanceLatencySeconds"));
+        assertTrue(metrics.containsKey("product.weather.guidanceTargetRate"));
     }
 
     @Test
@@ -488,6 +491,99 @@ class ProductPersistenceAndServiceTest {
         assertTrue(v2.contains("ops_message_recipient"));
         assertTrue(v2.contains("ops_group_separation"));
         assertTrue(v2.contains("ops_preferred_navaid"));
+    }
+
+    @Test
+    void productGuidanceApisTurnWeatherAndPirepsIntoMissionBriefingArtifacts() {
+        AirspaceProductService service = new AirspaceProductService(new ReservationWorkflowService(new InMemoryReservationWorkflowRepository()));
+        ProductDtos.MissionRequest missionRequest = new ProductDtos.MissionRequest();
+        missionRequest.setMissionNumber("WX-MISSION");
+        missionRequest.setTitle("Weather mission");
+        ProductDtos.MissionSummary mission = service.createMission(missionRequest);
+
+        ProductDtos.ReservationRequest reservationRequest = new ProductDtos.ReservationRequest();
+        reservationRequest.setActor("planner");
+        reservationRequest.setRawText("A. WX01\nB. 1F22/I\nC. KZNY\nD. FL240B260 3000N15000W 0000 3000N14900W 0100\nE. WX01\nF. ETD WX01 200000 MAY 2026\nG. TAS 300");
+        String reservationId = service.createReservation(mission.getId(), reservationRequest).getRecord().getId();
+
+        ProductDtos.MessageRequest sigmet = new ProductDtos.MessageRequest();
+        sigmet.setMissionId(mission.getId());
+        sigmet.setReservationId(reservationId);
+        sigmet.setFamily("SIGMET");
+        sigmet.setDirection("INBOUND");
+        sigmet.setSubject("SIGMET ECHO");
+        sigmet.setRawText("SIGMET CONV SEV 3000N15000W 3000N14900W 3100N14900W FL240-260 CONF 90");
+        service.sendMessage(sigmet);
+
+        ProductDtos.MessageRequest pirep = new ProductDtos.MessageRequest();
+        pirep.setMissionId(mission.getId());
+        pirep.setReservationId(reservationId);
+        pirep.setFamily("PIREP");
+        pirep.setDirection("INBOUND");
+        pirep.setSubject("Urgent turbulence");
+        pirep.setRawText("UA /OV 3000N15000W/TM 0000/FL240/TP C17/TB SEV/RM TEST");
+        service.sendMessage(pirep);
+
+        ProductDtos.MessageRequest notam = new ProductDtos.MessageRequest();
+        notam.setMissionId(mission.getId());
+        notam.setReservationId(reservationId);
+        notam.setFamily("FDC");
+        notam.setDirection("INBOUND");
+        notam.setSubject("FDC NOTAM route restriction");
+        notam.setRawText("!FDC TEST NOTAM AIRSPACE CLSD WI AN AREA 3000N15000W-3000N14900W SFC-FL260");
+        service.sendMessage(notam);
+
+        ProductDtos.MissionWeatherVerdictSummary verdict = service.missionWeatherVerdict(mission.getId());
+        List<ProductDtos.WeatherSourceSummary> changes = service.weatherChanges(mission.getId(), null, 10);
+        List<ProductDtos.AffectedMissionSummary> affected = service.affectedMissions(null, 10);
+        ProductDtos.RouteImpactSummary impact = service.routeImpact(mission.getId(), reservationId);
+        ProductDtos.PirepRelevanceRequest relevanceRequest = new ProductDtos.PirepRelevanceRequest();
+        relevanceRequest.setReservationId(reservationId);
+        relevanceRequest.setLowerAltitudeFeet(22000.0);
+        relevanceRequest.setUpperAltitudeFeet(28000.0);
+        relevanceRequest.setAltitudeToleranceFeet(1500.0);
+        relevanceRequest.setRecencyMinutes(60);
+        relevanceRequest.setCorridorNauticalMiles(40.0);
+        ProductDtos.PirepRelevanceResult relevant = service.relevantPireps(mission.getId(), relevanceRequest);
+        ProductDtos.CoordinationDraftSummary draft = service.coordinationDraft(mission.getId(), null);
+        ProductDtos.PilotBriefSummary brief = service.pilotBrief(mission.getId(), null);
+
+        assertEquals(mission.getId(), verdict.getMissionId());
+        assertTrue(verdict.getSourceCount() >= 2);
+        assertTrue(verdict.getConfidence() > 0.0);
+        assertTrue(changes.stream().anyMatch(change -> "SIGMET".equals(change.getFamily())));
+        assertTrue(changes.stream().anyMatch(change -> "FDC".equals(change.getFamily())));
+        assertTrue(verdict.getSources().stream().anyMatch(source -> "FDC".equals(source.getFamily())
+                && source.getRationale().contains("NOTAM constraint")));
+        assertTrue(affected.stream().anyMatch(item -> mission.getId().equals(item.getMissionId())));
+        assertTrue(affected.stream().filter(item -> mission.getId().equals(item.getMissionId())).findFirst().orElseThrow().getAgeSeconds() >= 0);
+        assertTrue(affected.stream().filter(item -> mission.getId().equals(item.getMissionId())).findFirst().orElseThrow().getGuidanceLatencySeconds() >= 0);
+        java.util.Map<String, Double> metrics = service.metrics();
+        assertTrue(metrics.get("product.weather.affectedMissions") >= 1.0);
+        assertTrue(metrics.get("product.weather.guidanceTargetMet") >= 1.0);
+        assertTrue(metrics.get("product.weather.averageGuidanceLatencySeconds") >= 0.0);
+        assertTrue(metrics.get("product.weather.guidanceTargetRate") > 0.0);
+        assertEquals(mission.getId(), impact.getMissionId());
+        assertNotNull(impact.getAction());
+        assertTrue(impact.getSourceRefs().stream().anyMatch(ref -> ref.startsWith("FDC:")));
+        assertTrue(impact.getImpactedSegments().stream().anyMatch(segment -> segment.contains("NOTAM constraint")));
+        assertTrue(impact.getRationale().contains("NOTAM constraint source"));
+        assertTrue(relevant.getTotalPireps() >= 1);
+        assertEquals(1500.0, relevant.getAltitudeToleranceFeet());
+        assertEquals(60, relevant.getRecencyMinutes());
+        assertEquals(40.0, relevant.getCorridorNauticalMiles());
+        assertTrue(relevant.getAverageRelevanceScore() > 0.0);
+        List<ProductDtos.WeatherSourceSummary> allPireps = new java.util.ArrayList<>(relevant.getRelevant());
+        allPireps.addAll(relevant.getExcluded());
+        assertTrue(allPireps.stream().anyMatch(source -> source.getRelevanceScore() > 0.0));
+        assertTrue(allPireps.stream().anyMatch(source -> source.getAgeMinutes() >= 0));
+        assertTrue(allPireps.stream().anyMatch(source -> source.getAgingCategory() != null));
+        assertEquals("USNS", draft.getFamily());
+        assertTrue(draft.getRawText().contains("WEATHER COORDINATION"));
+        assertTrue(brief.getPrintableText().contains("AIRSPACE PILOT BRIEF"));
+        assertTrue(brief.getPrintableText().contains("SOURCE DRIVERS"));
+        assertTrue(brief.getSourceSummaryLines().stream().anyMatch(line -> line.contains("NOTAM")));
+        assertNotNull(brief.getDecisionTraceSummary());
     }
 
     private AuthDtos.LoginRequest login(String username, String password) {

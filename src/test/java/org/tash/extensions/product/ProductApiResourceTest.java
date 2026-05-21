@@ -159,6 +159,78 @@ class ProductApiResourceTest {
                 .statusCode(200)
                 .body("subject", equalTo("FWD: Coordination"));
 
+        given()
+                .contentType("application/json")
+                .body("{\"missionId\":\"" + missionId + "\",\"family\":\"SIGMET\",\"direction\":\"INBOUND\",\"subject\":\"SIGMET ECHO\",\"rawText\":\"SIGMET CONV SEV 3000N15000W 3000N14900W 3100N14900W FL240-260 CONF 90\",\"actor\":\"planner\"}")
+                .when()
+                .post("/api/messages/send")
+                .then()
+                .statusCode(200)
+                .body("family", equalTo("SIGMET"));
+
+        given()
+                .when()
+                .get("/api/missions/" + missionId + "/weather-verdict")
+                .then()
+                .statusCode(200)
+                .body("missionId", equalTo(missionId))
+                .body("sourceCount", greaterThanOrEqualTo(1))
+                .body("sources[0].family", equalTo("SIGMET"));
+
+        given()
+                .when()
+                .get("/api/missions/" + missionId + "/weather-changes?limit=5")
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThanOrEqualTo(1))
+                .body("[0].family", equalTo("SIGMET"));
+
+        given()
+                .when()
+                .get("/api/weather/affected-missions?limit=5")
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThanOrEqualTo(1))
+                .body("[0].missionId", equalTo(missionId))
+                .body("[0].ageSeconds", greaterThanOrEqualTo(0))
+                .body("[0].guidanceLatencySeconds", greaterThanOrEqualTo(0));
+
+        given()
+                .when()
+                .get("/api/missions/" + missionId + "/route-impact?reservationId=" + reservationId)
+                .then()
+                .statusCode(200)
+                .body("missionId", equalTo(missionId))
+                .body("action", notNullValue())
+                .body("sourceRefs.size()", greaterThanOrEqualTo(1));
+
+        given()
+                .contentType("application/json")
+                .body("{\"recencyMinutes\":60,\"corridorNauticalMiles\":50}")
+                .when()
+                .post("/api/missions/" + missionId + "/pireps/relevant")
+                .then()
+                .statusCode(200)
+                .body("missionId", equalTo(missionId));
+
+        given()
+                .contentType("application/json")
+                .body("{\"reservationId\":\"" + reservationId + "\",\"actor\":\"planner\"}")
+                .when()
+                .post("/api/missions/" + missionId + "/coordinate-weather")
+                .then()
+                .statusCode(200)
+                .body("family", equalTo("USNS"))
+                .body("rawText", org.hamcrest.Matchers.containsString("WEATHER COORDINATION"));
+
+        given()
+                .when()
+                .get("/api/missions/" + missionId + "/pilot-brief")
+                .then()
+                .statusCode(200)
+                .body("missionId", equalTo(missionId))
+                .body("printableText", org.hamcrest.Matchers.containsString("AIRSPACE PILOT BRIEF"));
+
         String feedArtifactId = given()
                 .contentType("application/json")
                 .body("{\"sourceId\":\"test\",\"type\":\"WEATHER\",\"rawPayload\":\"METAR KJFK 200000Z 18012KT 1/2SM TSRA BKN004\"}")
