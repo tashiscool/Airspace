@@ -4,6 +4,33 @@ Airspace is a Java 17 framework for modeling airspace reservations, legacy FAA-s
 
 The project started as a general airspace-modeling sandbox, but the current codebase is now centered on an engine that can turn CARF/ALTRV reservations, USNS traffic, NOTAMs, weather products, and aircraft reports into structured constraints, conflict checks, route blockage predictions, and auditable recommendations.
 
+## FAA Weather Safety Problem This Addresses
+
+The product is built around this operational gap:
+
+> The FAA still has unresolved flight-safety gaps around weather: real-time cockpit weather, turbulence and icing prediction, route avoidance, PIREPs, ATC/weather coordination, and pilot decision support. The problem is not that pilots lack weather apps; it is that the system still does not reliably turn live weather, aircraft reports, forecasts, and ATC constraints into clear operational guidance fast enough.
+
+Airspace tackles that as an end-to-end safety loop:
+
+1. **Ingest live-style operational traffic:** USNS/NADIN/WMSCR-shaped messages, CARF/ALTRV reservations, NOTAM constraints, METAR/TAF/SIGMET/AIRMET/CWAP-style weather, and PIREPs.
+2. **Normalize everything into constraints:** source refs, retained raw text, validity windows, altitude bands, geometry, freshness, confidence, provenance, route/reservation IDs, and diagnostics.
+3. **Evaluate route and reservation impact:** route corridor vs. weather/PIREP/NOTAM/CARF constraints, including altitude overlap, timing overlap, affected segments, blockage probability, capacity-impact seams, and deterministic avoidance candidates.
+4. **Produce clear guidance:** CLEAR, MONITOR, CAUTION, DELAY, ALTITUDE CHANGE, AVOID, REROUTE, or BLOCKED with rationale, confidence, source IDs, and coordination recommendations.
+5. **Expose it in an operator workbench:** Mission Explorer verdict badges, affected-mission queue, Weather/PIREP page, route-impact panels, map overlays, source chips, coordinate-from-hazard messaging, pilot brief, decision trace, audit envelope, and replay.
+
+### Current Coverage Of The FAA Weather Gaps
+
+| Safety gap | What Airspace ships today | Remaining boundary |
+|---|---|---|
+| Real-time cockpit/weather awareness | Weather and PIREP traffic appears in Mission Explorer, Weather, Mission, Decision, and Pilot Brief surfaces. Operators get weather deltas, freshness, affected missions, source chips, time-to-guidance metrics, and map overlays for coordinate-bearing products. | Local prototype only; no certified cockpit display or live avionics integration. |
+| Turbulence and icing prediction | Weather models and parsers represent turbulence, icing, convection, ceiling/visibility, SIGMET/AIRMET, METAR/TAF, CWAP/CWAF-like products, forecast slices, confidence, validity, movement, and PIREP-derived hazards. The UI highlights turbulence/icing observations and route/altitude guidance. | Deterministic prototype scoring; needs historical calibration against authoritative outcomes. |
+| Route avoidance | Route-impact APIs and UI panels expose impacted segments, blocking constraints, weather/PIREP/NOTAM/CARF source refs, action, confidence, and suggested avoidance candidates. The map keeps route impacts separate from reservations and NOTAMs. | Avoidance is a prototype suggestion path, not a certified NAS-scale routing solver. |
+| PIREPs | PIREPs are parsed and modeled separately from forecast products, with stale/duplicate/incomplete diagnostics, urgency, route/altitude relevance, aging/decay, and dedicated map/table behavior. | Needs operational calibration and live dissemination feedback from authoritative networks. |
+| ATC/weather coordination | Severe, urgent, stale, or low-confidence hazards produce coordination recommendations. Mission and Weather pages can open prefilled USNS/message drafts with mission, action, impact, and source refs. | Needs real recipient/position directory, live delivery confirmations, and operational staffing integration. |
+| Pilot decision support | The decision engine fuses USNS, CARF/ALTRV, NOTAM, weather, PIREP, and route inputs into one explainable action. Decision and Pilot Brief pages show rationale, trace, blocking constraints, source refs, map features, audit, and replay. | Not FAA-certified; needs larger real-world corpus and validated confidence models. |
+
+The acceptance target for the prototype is: a new SIGMET/PIREP/feed artifact should identify affected active missions locally in under 5 seconds, show a per-mission verdict badge, expose route impacts and source artifacts, support a coordination draft, and generate a printable pilot handoff brief.
+
 ## What Is Implemented
 
 ### CARF / ALTRV / Reservation Engine
@@ -50,6 +77,8 @@ UsnsIngestResult result = ingest.parse(rawUsnsMessage);
 - Route blockage prediction with severity, echo tops, growth/decay, storm phase, lead-time confidence, stale-product diagnostics, ensemble uncertainty, and capacity-impact seams.
 - PIREP ingestion, duplicate detection, quality diagnostics, automated draft capture, and dissemination status modeling.
 - ATC/weather coordination models for review items, operational constraints, controller handoff notes, and meteorologist review priority.
+- Mission-scoped weather verdicts, affected-mission summaries, relevant-PIREP filtering, route-impact summaries, coordination drafts, and pilot-brief summaries in the product service layer.
+- Weather visualization metadata for hazard type, severity, confidence, forecast hour, validity, movement, source product, stale state, blocked route segments, and recommended action.
 
 Key entry point:
 
@@ -63,6 +92,9 @@ RouteWeatherAdvisory advisory = weather.adviseRoute(request);
 - Top-level fusion facade under `org.tash.extensions.engine`.
 - Fuses raw USNS messages, raw CARF/ALTRV text, structured weather products, PIREPs, NOTAM restrictions, route candidates, reference data, and decision time.
 - Produces reservations, conflicts, weather products, PIREP results, route blockage predictions, coordination advisories, recommended actions, and a structured decision trace.
+- Normalizes CARF reservations, NOTAM restrictions, weather hazards, PIREPs, route blockage, and conflicts into common operational constraints.
+- Keeps source refs attached through parse, classify, map, fuse, index, route-impact, rule-evaluation, action, audit, replay, and visualization surfaces.
+- Supports route-impact scoring breakdowns, rule-catalog IDs, confidence math, stale-data warnings, calibration seams, ensemble uncertainty fields, storm lifecycle seams, sector capacity impact seams, and deterministic replay bundles.
 - Includes deterministic audit/replay support:
   - canonical JSON,
   - HMAC signing,
@@ -106,6 +138,10 @@ The first product API path is intentionally local/test-friendly: the engine rema
 - A React + TypeScript + Vite frontend lives in `frontend/`.
 - It provides the initial operations shell for login, a four-pane CARF-style Mission Explorer, mission/reservation workspace, reservation save/lock/parse/submit/approve/reject/cancel/complete actions, deconfliction review, messaging, decision review, search, history, and config.
 - The map stack is OpenLayers and consumes the backend’s GeoJSON-compatible feature collections.
+- Mission Explorer is the time-to-guidance board: per-mission weather verdicts, affected active missions, weather/PIREP/NOTAM deltas, attention filters, source-family chips, and coordinate actions.
+- Weather and PIREP pages expose real-time-style product intake, route blockage counts, PIREP workflow, coordination queue, freshness, no-geometry notices for METAR/TAF, and map/table coupling for coordinate-bearing hazards.
+- Mission, Reservation, Decision, and Pilot Brief pages show route impacts, blocking constraints, avoidance candidates, exact source refs, trace/audit/replay, and a readable handoff summary.
+- The map keeps CARF/ALTRV reservations, route impacts, conflicts, NOTAMs, weather, PIREPs, and reference points distinct, with forecast/freshness/altitude filtering and visible risk counts.
 
 Frontend commands:
 
@@ -147,6 +183,15 @@ The safety loop this product is trying to close is explicit in the workbench:
 - **Pilot/operator decision support:** the decision engine returns a single recommended action with confidence, rationale, blocking constraints, map features, trace steps, audit envelope, and replay bundle.
 
 This is not a certified cockpit system or live FAA feed integration. It is a local, auditable operations prototype showing the engine and workbench path for turning weather, reports, forecasts, reservations, NOTAMs, and ATC constraints into clear guidance quickly.
+
+The screenshots below are organized around that safety loop:
+
+- **Mission Explorer and Mission Workspace:** show the operational queue, affected missions, weather verdicts, what changed since last brief, source-family chips, and route impact summaries.
+- **Pilot Brief:** converts the same fused decision into a read-only handoff with verdict, route impact, coordination guidance, source artifacts, and printable trace summary.
+- **Reservation and Deconfliction:** keep CARF/ALTRV parsing, protected volumes, conflicts, NOTAM/APREQ/approval supplements, and force-action diagnostics visible to the operator.
+- **Messaging and Feed:** show retained USNS/weather/PIREP traffic, parsed transaction details, diagnostics, and downstream artifact IDs.
+- **Decision Summary, Trace, and Map:** show the recommended action, confidence, blocking constraints, route predictions, rule trace, source refs, audit/replay, and geospatial overlays.
+- **NOTAM and Weather/PIREP:** keep NOTAM constraints separate from reservations while weather products and PIREPs drive route-blockage, altitude-change, delay, and coordination guidance.
 
 ![Login](/docs/screenshots/01-login.png)
 
