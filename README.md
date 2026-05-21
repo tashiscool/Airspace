@@ -154,31 +154,33 @@ This is not a certified cockpit system or live FAA feed integration. It is a loc
 | --- | --- |
 | ![Mission Explorer](/docs/screenshots/02-mission-explorer.png) | ![Mission Workspace](/docs/screenshots/03-mission-workspace.png) |
 
-| Reservation Sections | Reservation Supplements |
+| Pilot Brief | Reservation Sections |
 | --- | --- |
-| ![Reservation Sections](/docs/screenshots/04-reservation-sections.png) | ![Reservation Supplements](/docs/screenshots/05-reservation-supplements.png) |
+| ![Pilot Brief](/docs/screenshots/04-pilot-brief.png) | ![Reservation Sections](/docs/screenshots/05-reservation-sections.png) |
 
-| Deconfliction Review | Messaging |
+| Reservation Supplements | Deconfliction Review |
 | --- | --- |
-| ![Deconfliction Review](/docs/screenshots/06-deconfliction-review.png) | ![Messaging](/docs/screenshots/07-messaging.png) |
+| ![Reservation Supplements](/docs/screenshots/06-reservation-supplements.png) | ![Deconfliction Review](/docs/screenshots/07-deconfliction-review.png) |
 
-| USNS Feed | Decision Summary |
+| Messaging | USNS Feed |
 | --- | --- |
-| ![USNS Feed](/docs/screenshots/08-usns-feed.png) | ![Decision Summary](/docs/screenshots/09-decision-summary.png) |
+| ![Messaging](/docs/screenshots/08-messaging.png) | ![USNS Feed](/docs/screenshots/09-usns-feed.png) |
 
-| Decision Trace | Decision Map |
+| Decision Summary | Decision Trace |
 | --- | --- |
-| ![Decision Trace](/docs/screenshots/10-decision-trace.png) | ![Decision Map](/docs/screenshots/11-decision-map.png) |
+| ![Decision Summary](/docs/screenshots/10-decision-summary.png) | ![Decision Trace](/docs/screenshots/11-decision-trace.png) |
 
-| NOTAM Constraints | Weather And PIREPs |
+| Decision Map | NOTAM Constraints |
 | --- | --- |
-| ![NOTAM Constraints](/docs/screenshots/12-notam-constraints.png) | ![Weather And PIREPs](/docs/screenshots/13-weather-pirep.png) |
+| ![Decision Map](/docs/screenshots/12-decision-map.png) | ![NOTAM Constraints](/docs/screenshots/13-notam-constraints.png) |
 
-| Config / Reference Data | Search |
+| Weather And PIREPs | Config / Reference Data |
 | --- | --- |
-| ![Config Reference](/docs/screenshots/14-config-reference.png) | ![Search](/docs/screenshots/15-search.png) |
+| ![Weather And PIREPs](/docs/screenshots/14-weather-pirep.png) | ![Config Reference](/docs/screenshots/15-config-reference.png) |
 
-![History And Audit](/docs/screenshots/16-history-audit.png)
+| Search | History And Audit |
+| --- | --- |
+| ![Search](/docs/screenshots/16-search.png) | ![History And Audit](/docs/screenshots/17-history-audit.png) |
 
 Local product dev:
 

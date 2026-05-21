@@ -186,13 +186,18 @@ async function screenshot(page, name) {
 
 async function clickIfVisible(page, text) {
   const locator = page.getByRole('button', { name: text }).first();
-  if (await locator.isVisible().catch(() => false)) {
+  if (await locator.isVisible().catch(() => false) && await locator.isEnabled().catch(() => false)) {
     await locator.click();
     await page.waitForLoadState('networkidle').catch(() => undefined);
   }
 }
 
 await fs.mkdir(screenshotDir, { recursive: true });
+for (const entry of await fs.readdir(screenshotDir)) {
+  if (entry.endsWith('.png')) {
+    await fs.unlink(path.join(screenshotDir, entry));
+  }
+}
 const seeded = await seedProductDemo();
 
 const browser = await chromium.launch();
@@ -209,43 +214,50 @@ await screenshot(page, '02-mission-explorer.png');
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}`);
 await screenshot(page, '03-mission-workspace.png');
 
+await page.goto(`${frontendUrl}/missions/${seeded.missionId}/brief`);
+await screenshot(page, '04-pilot-brief.png');
+
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}/reservations/${seeded.reservationId}`);
-await screenshot(page, '04-reservation-sections.png');
+await screenshot(page, '05-reservation-sections.png');
 await clickIfVisible(page, 'NOTAM');
-await screenshot(page, '05-reservation-supplements.png');
+await screenshot(page, '06-reservation-supplements.png');
 
 await page.goto(`${frontendUrl}/deconfliction/${seeded.reservationId}`);
-await screenshot(page, '06-deconfliction-review.png');
+await screenshot(page, '07-deconfliction-review.png');
 
 await page.goto(`${frontendUrl}/messages/${seeded.messageId}`);
-await screenshot(page, '07-messaging.png');
+await screenshot(page, '08-messaging.png');
 
 await page.goto(`${frontendUrl}/feed/${seeded.feedId ?? ''}`);
-await screenshot(page, '08-usns-feed.png');
+await screenshot(page, '09-usns-feed.png');
 
 await page.goto(`${frontendUrl}/decisions/${seeded.decisionId}`);
-await screenshot(page, '09-decision-summary.png');
+await screenshot(page, '10-decision-summary.png');
 await clickIfVisible(page, 'TRACE');
-await screenshot(page, '10-decision-trace.png');
+await screenshot(page, '11-decision-trace.png');
 await clickIfVisible(page, 'MAP');
-await screenshot(page, '11-decision-map.png');
+await screenshot(page, '12-decision-map.png');
 
 await page.goto(`${frontendUrl}/notams`);
-await screenshot(page, '12-notam-constraints.png');
+await screenshot(page, '13-notam-constraints.png');
 
 await page.goto(`${frontendUrl}/weather`);
-await screenshot(page, '13-weather-pirep.png');
+await page.locator('.map-layer-group').first().getByRole('button', { name: 'Weather', exact: true }).click().catch(() => undefined);
+await page.locator('.guidance-card', { hasText: 'Convective SIGMET' }).first().click().catch(() => undefined);
+await page.waitForTimeout(500);
+await clickIfVisible(page, 'Fit Selected');
+await screenshot(page, '14-weather-pirep.png');
 
 await page.goto(`${frontendUrl}/config`);
-await screenshot(page, '14-config-reference.png');
+await screenshot(page, '15-config-reference.png');
 
 await page.goto(`${frontendUrl}/search`);
 await page.locator('input[placeholder^="Mission"]').fill('decision');
 await page.waitForTimeout(500);
-await screenshot(page, '15-search.png');
+await screenshot(page, '16-search.png');
 
 await page.goto(`${frontendUrl}/history`);
-await screenshot(page, '16-history-audit.png');
+await screenshot(page, '17-history-audit.png');
 
 await browser.close();
 console.log(JSON.stringify({ screenshotDir, ...seeded }, null, 2));

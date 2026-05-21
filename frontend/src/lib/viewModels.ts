@@ -456,8 +456,13 @@ export function weatherFeaturesFromMessages(messages: MessageSummary[] = []): Ai
     const altitude = extractWeatherAltitudeBand(raw);
     const timing = extractWeatherTiming(raw);
     const movement = extractWeatherMovement(raw);
-    const geometry = coordinates.length === 1
-      ? { type: 'Point', coordinates: coordinates[0] }
+    const radius = extractWeatherRadius(raw);
+    const corridor = extractWeatherCorridor(raw);
+    const geometryMetadata = weatherGeometryMetadata(raw, coordinates, radius, corridor);
+    const geometry = radius.radiusNauticalMiles && coordinates.length === 1
+      ? { type: 'Polygon', coordinates: [circleRing(coordinates[0], radius.radiusNauticalMiles)] }
+      : coordinates.length === 1
+        ? { type: 'Point', coordinates: coordinates[0] }
       : coordinates.length === 2
         ? { type: 'LineString', coordinates }
         : { type: 'Polygon', coordinates: [closedRing(coordinates)] };
@@ -485,12 +490,20 @@ export function weatherFeaturesFromMessages(messages: MessageSummary[] = []): Ai
         movementDirection: movement.direction,
         movementSpeedKt: movement.speedKt,
         movementVector: movement.label,
+        radiusNauticalMiles: radius.radiusNauticalMiles,
+        corridorWidthNauticalMiles: corridor.corridorWidthNauticalMiles,
+        geometryIntent: geometryMetadata.intent,
+        geometryLabel: geometryMetadata.label,
         observedAt: message.createdAt,
         createdAt: message.createdAt,
         rawText: message.rawText
       }
     }];
   });
+}
+
+export function weatherFeatureIdForMessageId(messageId?: string) {
+  return messageId ? `weather-message-${messageId}` : undefined;
 }
 
 export function sourceRefFamily(ref: string) {
@@ -576,6 +589,58 @@ function closedRing(coordinates: number[][]) {
   const last = ring[ring.length - 1];
   if (first && last && (first[0] !== last[0] || first[1] !== last[1])) ring.push(first);
   return ring;
+}
+
+function circleRing(center: number[], radiusNauticalMiles: number) {
+  const [lon, lat] = center;
+  const latRadius = radiusNauticalMiles / 60;
+  const lonRadius = latRadius / Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+  const points: number[][] = [];
+  for (let degrees = 0; degrees < 360; degrees += 30) {
+    const radians = (degrees * Math.PI) / 180;
+    points.push([
+      Number((lon + Math.cos(radians) * lonRadius).toFixed(5)),
+      Number((lat + Math.sin(radians) * latRadius).toFixed(5))
+    ]);
+  }
+  points.push(points[0]);
+  return points;
+}
+
+function extractWeatherRadius(raw: string) {
+  const match = /\b(?:WI|WITHIN)\s+(\d{1,3})\s*NM\s+(?:OF|CENTERED\s+ON)\b/i.exec(raw);
+  if (!match) return {};
+  return {
+    radiusNauticalMiles: Number(match[1]),
+    label: `WITHIN ${match[1]}NM`
+  };
+}
+
+function extractWeatherCorridor(raw: string) {
+  const match = /\b(?:WI|WITHIN)?\s*(\d{1,3})\s*NM\s+(?:EITHER\s+SIDE|EITHER\s+SIDE\s+OF|OF\s+LINE)\b/i.exec(raw);
+  if (!match) return {};
+  return {
+    corridorWidthNauticalMiles: Number(match[1]),
+    label: `${match[1]}NM EITHER SIDE`
+  };
+}
+
+function weatherGeometryMetadata(
+  raw: string,
+  coordinates: number[][],
+  radius: { radiusNauticalMiles?: number; label?: string },
+  corridor: { corridorWidthNauticalMiles?: number; label?: string }
+) {
+  const text = raw.toUpperCase();
+  if (radius.radiusNauticalMiles) return { intent: 'POINT_RADIUS', label: radius.label };
+  if (corridor.corridorWidthNauticalMiles) return { intent: 'LINE_CORRIDOR', label: corridor.label };
+  if (coordinates.length > 2) {
+    if (/\bBOUNDED\s+BY\b|\bBNDD\s+BY\b/.test(text)) return { intent: 'POLYGON', label: 'BOUNDED BY' };
+    if (/\bFROM\b[\s\S]+\bTO\b/.test(text)) return { intent: 'POLYGON', label: 'FROM/TO POLYGON' };
+    return { intent: 'POLYGON', label: 'POLYGON' };
+  }
+  if (coordinates.length === 2) return { intent: 'LINE_CORRIDOR', label: 'LINE' };
+  return { intent: 'POINT', label: 'POINT' };
 }
 
 function extractWeatherAltitudeBand(raw: string) {

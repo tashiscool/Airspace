@@ -11,6 +11,7 @@ import {
   missionWeatherVerdict,
   weatherGuidanceFromMessage,
   weatherFeaturesFromMessages,
+  weatherFeatureIdForMessageId,
   weatherRowsFromMessages
 } from './viewModels';
 
@@ -150,7 +151,108 @@ G. TAS: 300 KTAS`;
         validDurationH: 4,
         movementDirection: 'NE',
         movementSpeedKt: 25,
-        movementVector: 'NE 25KT'
+        movementVector: 'NE 25KT',
+        geometryIntent: 'POLYGON',
+        geometryLabel: 'FROM/TO POLYGON'
+      }
+    });
+    expect((features[0].geometry?.coordinates as number[][][])[0][0]).toEqual([-73.75, 40.5]);
+    expect(weatherFeatureIdForMessageId('sigmet-1')).toBe('weather-message-sigmet-1');
+  });
+
+  it('preserves point-radius and line-corridor weather geometry intent', () => {
+    const features = weatherFeaturesFromMessages([
+      {
+        id: 'airmet-radius',
+        family: 'AIRMET',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'AIRMET ICE',
+        rawText: 'AIRMET ICE WITHIN 40NM OF 4030N07345W BLW FL180'
+      },
+      {
+        id: 'cwap-line',
+        family: 'WEATHER_ADVISORY',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'CWAP LINE',
+        rawText: 'CWAP WI 30 NM EITHER SIDE OF LINE FROM 4030N07345W TO 4100N07430W TOP FL390'
+      }
+    ]);
+
+    expect(features[0]).toMatchObject({
+      id: 'weather-message-airmet-radius',
+      geometry: { type: 'Polygon' },
+      properties: {
+        radiusNauticalMiles: 40,
+        geometryIntent: 'POINT_RADIUS',
+        geometryLabel: 'WITHIN 40NM',
+        maxAltitudeFeet: 18000
+      }
+    });
+    expect((features[0].geometry?.coordinates as number[][][])[0]).toHaveLength(13);
+    expect(features[1]).toMatchObject({
+      id: 'weather-message-cwap-line',
+      geometry: { type: 'LineString' },
+      properties: {
+        corridorWidthNauticalMiles: 30,
+        geometryIntent: 'LINE_CORRIDOR',
+        geometryLabel: '30NM EITHER SIDE'
+      }
+    });
+  });
+
+  it('recognizes bounded-by weather polygons as polygon geometry intent', () => {
+    const features = weatherFeaturesFromMessages([
+      {
+        id: 'sigmet-bounded',
+        family: 'SIGMET',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'BOUNDED SIGMET',
+        rawText: 'SIGMET BOUNDED BY 4030N07345W 4100N07430W 4000N07500W TOP FL410'
+      }
+    ]);
+
+    expect(features[0]).toMatchObject({
+      geometry: { type: 'Polygon' },
+      properties: {
+        geometryIntent: 'POLYGON',
+        geometryLabel: 'BOUNDED BY',
+        maxAltitudeFeet: 41000
+      }
+    });
+  });
+
+  it('supports decimal latitude/longitude weather geometry and keeps non-geometric METAR/TAF table-only', () => {
+    const features = weatherFeaturesFromMessages([
+      {
+        id: 'decimal-cwap',
+        family: 'WEATHER_ADVISORY',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'CWAP DECIMAL',
+        rawText: 'CWAP FROM 40.50,-73.75 TO 41.00,-74.50 TO 40.00,-75.00 TOP FL390 T+3'
+      },
+      {
+        id: 'taf-table-only',
+        family: 'TAF',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'TAF KJFK',
+        rawText: 'TAF KJFK 211130Z 2112/2218 18012KT P6SM BKN020 TEMPO 2112/2116 2SM RA BKN008'
+      }
+    ]);
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      id: 'weather-message-decimal-cwap',
+      geometry: { type: 'Polygon' },
+      properties: {
+        geometryIntent: 'POLYGON',
+        geometryLabel: 'FROM/TO POLYGON',
+        forecastHour: 3,
+        maxAltitudeFeet: 39000
       }
     });
     expect((features[0].geometry?.coordinates as number[][][])[0][0]).toEqual([-73.75, 40.5]);

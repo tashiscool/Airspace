@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { featureDisplayLayer, featurePassesFreshnessFilter, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureRiskLabel, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary } from './mapLayers';
+import { featureDisplayLayer, featurePassesFreshnessFilter, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureRiskLabel, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, mapVisibleRiskCounts } from './mapLayers';
 
 describe('map layer classification', () => {
   it('keeps NOTAM restrictions separate from CARF/ALTRV reservations', () => {
@@ -60,7 +60,10 @@ describe('map layer classification', () => {
         maxAltitudeFeet: 45000,
         confidence: 0.82,
         recommendedAction: 'REROUTE',
-        movementVector: 'NE 25KT'
+        movementVector: 'NE 25KT',
+        corridorWidthNauticalMiles: 30,
+        geometryIntent: 'LINE_CORRIDOR',
+        geometryLabel: '30NM EITHER SIDE'
       }
     });
 
@@ -71,6 +74,7 @@ describe('map layer classification', () => {
       altitude: '18000 - 45000',
       confidence: '82% confidence',
       action: 'REROUTE',
+      geometry: '30NM EITHER SIDE · corridor 30NM',
       movement: 'NE 25KT · severe'
     });
     expect(summary?.risk).toContain('severe · 82% confidence');
@@ -194,5 +198,48 @@ describe('map layer classification', () => {
     expect(featurePassesFreshnessFilter(stalePirep, { maxAgeMinutes: 60, now })).toBe(false);
     expect(featurePassesFreshnessFilter(freshPirep, { maxAgeMinutes: 60, now })).toBe(true);
     expect(featurePassesFreshnessFilter(reservation, { hideStale: true, maxAgeMinutes: 1, now })).toBe(true);
+  });
+
+  it('counts only caller-visible map risks with shared styling semantics', () => {
+    const visibleFeatures = [
+      {
+        properties: {
+          featureKind: 'weather-intersection',
+          constraintType: 'ROUTE_BLOCKAGE',
+          recommendedAction: 'BLOCKED',
+          confidence: 0.91,
+          sourceRefs: ['WEATHER:SIGMET-1']
+        }
+      },
+      {
+        properties: {
+          sourceFamily: 'PIREP',
+          rationale: 'SEV TURB urgent pilot report',
+          confidence: 0.82,
+          observedAt: '2026-05-21T10:00:00Z'
+        }
+      },
+      {
+        properties: {
+          sourceFamily: 'WEATHER',
+          hazardType: 'ICING',
+          confidence: 0.32
+        }
+      },
+      {
+        properties: {
+          featureKind: 'reservation',
+          sourceFamily: 'CARF_ALTRV',
+          recommendedAction: 'CLEAR'
+        }
+      }
+    ];
+
+    expect(mapVisibleRiskCounts(visibleFeatures)).toEqual({
+      blocked: 1,
+      severe: 2,
+      lowConfidence: 1,
+      stale: 1
+    });
   });
 });

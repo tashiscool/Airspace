@@ -33,7 +33,10 @@ This maps the FAA safety problem to the current Airspace product:
 - A weather delta feed, affected-mission queue, time-to-guidance metrics, and weather guidance table on the Weather page.
 - Source-family drilldown chips in affected-mission guidance on Weather and Mission Explorer so operators can jump from mission verdict to the NOTAM, PIREP, weather, USNS, or CARF/ALTRV source.
 - Clickable route-impact source chips on Mission, Reservation, and Pilot Brief surfaces so route guidance can be traced directly back to its driving artifact.
-- Weather-map extraction for common aviation coordinate, validity, altitude, and movement tokens in SIGMET/AIRMET/CWAP-style text, with selected map features linking back to their source artifact; non-geometric METAR/TAF products remain table/guidance artifacts instead of fake shapes.
+- Weather-map extraction for common compact aviation coordinates, decimal lat/lon pairs, bounded-by/from-to polygons, validity, altitude, radius, line-corridor, and movement tokens in SIGMET/AIRMET/CWAP-style text, with stable geometry intent metadata and selected map features linking back to their source artifact; non-geometric METAR/TAF products remain table/guidance artifacts instead of fake shapes.
+- Selected map feature summaries now expose geometry intent such as point radius or line-corridor width, so operators can distinguish a polygon, route corridor, and radius hazard without reading raw properties.
+- The map now includes an active-layer risk readout for visible blocking, severe, low-confidence, and stale overlays, making filter state and current operational risk easier to scan.
+- The active-layer risk readout is driven by the same tested frontend helper used for map severity, confidence, and freshness semantics, so counts reflect only currently visible/filter-passing overlays.
 - Map feature detail also exposes backend-emitted `sourceRefs` as clickable chips, so route-impact/intersection overlays can trace to weather, PIREP, NOTAM, USNS, or CARF/ALTRV sources even when the source was not a frontend-derived weather message.
 - Decision source-ref visibility so operators can answer “why this action?” without reading raw JSON first.
 - Coordinate-from-hazard deep links into the real Airspace messaging page.

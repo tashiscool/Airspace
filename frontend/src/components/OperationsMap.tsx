@@ -11,7 +11,7 @@ import OSM from 'ol/source/OSM';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import type { FeatureCollection } from '../types';
 import { DEFAULT_LAYOUT_PREFS, readWorkbenchJson, writeWorkbenchJson } from '../lib/workbenchState';
-import { featureDisplayLayer, featurePassesFreshnessFilter, layerDefinition, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, MAP_LAYERS, type MapLayerId } from './mapLayers';
+import { featureDisplayLayer, featurePassesFreshnessFilter, layerDefinition, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, mapVisibleRiskCounts, MAP_LAYERS, type MapLayerId } from './mapLayers';
 
 export function OperationsMap({
   features,
@@ -166,6 +166,7 @@ export function OperationsMap({
     }
     return [...groups.entries()];
   }, [counts]);
+  const visibleRiskCounts = useMemo(() => mapVisibleRiskCounts(visibleFeatures?.features ?? []), [visibleFeatures]);
 
   function toggle(layerId: MapLayerId) {
     setEnabledLayers((current) => {
@@ -291,6 +292,7 @@ export function OperationsMap({
         <div><strong>NOTAM</strong><span>Restrictions and advisories stay separate from reservations.</span></div>
         <div><strong>Weather/PIREP</strong><span>Hazards, reports, and route blockage overlays from the decision engine.</span></div>
         <div><strong>Freshness</strong><span>Weather and PIREP overlays fade/dash as reports age or become stale.</span></div>
+        <div><strong>Risk Readout</strong><span>{visibleRiskCounts.blocked} blocking, {visibleRiskCounts.severe} severe, {visibleRiskCounts.lowConfidence} low confidence, {visibleRiskCounts.stale} stale visible.</span></div>
       </div>
       <div className="map-feature-browser">
         <div>
@@ -325,6 +327,7 @@ function FeatureProperties({ feature }: { feature: FeatureCollection['features']
           <p>{summary.subtitle}</p>
           <div>
             <span>{summary.source}</span>
+            {summary.geometry && <span>{summary.geometry}</span>}
             {summary.timing && <span>{summary.timing}</span>}
             {summary.altitude && <span>{summary.altitude}</span>}
             {summary.confidence && <span>{summary.confidence}</span>}

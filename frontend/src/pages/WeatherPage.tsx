@@ -10,7 +10,7 @@ import { QueryNotice } from '../components/Notices';
 import { OperationsMap } from '../components/OperationsMap';
 import { StatusBadge } from '../components/StatusBadge';
 import type { MessageSummary } from '../types';
-import { fmtZ, referencePointToFeature, sourceRefLabel, sourceRefRoute, weatherChangeFeed, weatherFeaturesFromMessages, weatherGuidanceFromMessage, weatherRowsFromMessages, type WeatherGuidanceItem } from '../lib/viewModels';
+import { fmtZ, referencePointToFeature, sourceRefLabel, sourceRefRoute, weatherChangeFeed, weatherFeatureIdForMessageId, weatherFeaturesFromMessages, weatherGuidanceFromMessage, weatherRowsFromMessages, type WeatherGuidanceItem } from '../lib/viewModels';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
 
 export function WeatherPage() {
@@ -40,7 +40,7 @@ export function WeatherPage() {
   }, [weatherMessages.length]);
   const weatherFeatures = useMemo(() => weatherFeaturesFromMessages(messages.data ?? []), [messages.data]);
   const selectedWeatherHasFeature = selectedWeatherMessageId
-    ? weatherFeatures.some((feature) => feature.id === `weather-message-${selectedWeatherMessageId}`)
+    ? weatherFeatures.some((feature) => feature.id === weatherFeatureIdForMessageId(selectedWeatherMessageId))
     : false;
   const selectedWeatherMessage = selectedWeatherMessageId
     ? weatherMessages.find((message) => message.id === selectedWeatherMessageId)
@@ -52,7 +52,7 @@ export function WeatherPage() {
       ...(reference.data ?? []).slice(0, 100).map(referencePointToFeature)
     ]
   };
-  const selectedMapFeatureId = selectedWeatherMessageId ? `weather-message-${selectedWeatherMessageId}` : undefined;
+  const selectedMapFeatureId = weatherFeatureIdForMessageId(selectedWeatherMessageId);
   const column = createColumnHelper<MessageSummary>();
   const columns = [
     column.accessor('family', { header: 'Product' }),

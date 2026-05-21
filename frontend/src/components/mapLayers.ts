@@ -93,6 +93,7 @@ export type MapFeatureSummary = {
   subtitle: string;
   source: string;
   risk?: string;
+  geometry?: string;
   timing?: string;
   altitude?: string;
   confidence?: string;
@@ -134,6 +135,13 @@ export type MapFeatureSeverity = {
   widthBoost: number;
 };
 
+export type MapVisibleRiskCounts = {
+  blocked: number;
+  severe: number;
+  lowConfidence: number;
+  stale: number;
+};
+
 export function mapFeatureSummary(feature?: AirspaceFeature): MapFeatureSummary | undefined {
   if (!feature) return undefined;
   const properties = feature.properties ?? {};
@@ -151,6 +159,7 @@ export function mapFeatureSummary(feature?: AirspaceFeature): MapFeatureSummary 
     subtitle: stringProp(properties, 'rationale') ?? stringProp(properties, 'explanation') ?? stringProp(properties, 'hazardType') ?? layer.label,
     source: stringProp(properties, 'sourceFamily') ?? stringProp(properties, 'sourceProduct') ?? layer.label,
     risk: mapFeatureRiskLabel(feature),
+    geometry: geometryIntentLabel(properties, feature),
     timing: validStart || validEnd ? `${validStart ?? 'start ?'} - ${validEnd ?? 'end ?'}` : undefined,
     altitude: minAlt || maxAlt ? `${minAlt ?? 'floor ?'} - ${maxAlt ?? 'ceiling ?'}` : undefined,
     confidence: confidence.label,
@@ -293,6 +302,19 @@ export function featurePassesFreshnessFilter(
   return true;
 }
 
+export function mapVisibleRiskCounts(features: AirspaceFeature[] = []): MapVisibleRiskCounts {
+  return features.reduce<MapVisibleRiskCounts>((counts, feature) => {
+    const severity = mapFeatureSeverity(feature);
+    const freshness = mapFeatureFreshness(feature);
+    const confidence = mapFeatureConfidence(feature);
+    if (isBlockingFeature(feature)) counts.blocked += 1;
+    if (severity.category === 'severe' || severity.category === 'extreme') counts.severe += 1;
+    if (confidence.category === 'low') counts.lowConfidence += 1;
+    if (freshness?.stale) counts.stale += 1;
+    return counts;
+  }, { blocked: 0, severe: 0, lowConfidence: 0, stale: 0 });
+}
+
 function isMapLayerId(value: string): value is MapLayerId {
   return MAP_LAYERS.some((layer) => layer.id === value);
 }
@@ -315,6 +337,18 @@ function booleanProp(properties: Record<string, unknown>, key: string) {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') return value.toLowerCase() === 'true';
   return false;
+}
+
+function isBlockingFeature(feature: AirspaceFeature) {
+  const properties = feature.properties ?? {};
+  const text = [
+    stringProp(properties, 'recommendedAction'),
+    stringProp(properties, 'action'),
+    stringProp(properties, 'constraintType'),
+    stringProp(properties, 'featureKind'),
+    stringProp(properties, 'rationale')
+  ].join(' ').toUpperCase();
+  return /\b(BLOCKED|REROUTE|AVOID|ROUTE_BLOCKAGE|ROUTE_AVOIDANCE)\b/.test(text);
 }
 
 function sourceRefValues(value: unknown): string[] {
@@ -349,4 +383,22 @@ function movementLabel(properties: Record<string, unknown>) {
   const speed = stringProp(properties, 'movementSpeedKt') ?? stringProp(properties, 'speedKt');
   if (!direction && !speed) return undefined;
   return `${direction ?? 'MOV'} ${speed ? `${speed}KT` : ''}`.trim();
+}
+
+function geometryIntentLabel(properties: Record<string, unknown>, feature?: AirspaceFeature) {
+  const explicit = stringProp(properties, 'geometryIntent');
+  const label = stringProp(properties, 'geometryLabel');
+  const radius = stringProp(properties, 'radiusNauticalMiles');
+  const corridor = stringProp(properties, 'corridorWidthNauticalMiles');
+  if (explicit === 'POINT_RADIUS') return `${label ?? 'POINT RADIUS'} · radius ${radius ?? '?'}NM`;
+  if (explicit === 'LINE_CORRIDOR') return `${label ?? 'LINE CORRIDOR'}${corridor ? ` · corridor ${corridor}NM` : ''}`;
+  if (explicit === 'POLYGON') return label ?? 'POLYGON';
+  if (explicit === 'POINT') return label ?? 'POINT';
+  if (explicit && radius) return `${explicit} · radius ${radius}NM`;
+  if (explicit && corridor) return `${explicit} · corridor ${corridor}NM`;
+  if (explicit) return explicit;
+  if (radius) return `radius ${radius}NM`;
+  if (corridor) return `corridor ${corridor}NM`;
+  const type = String(feature?.geometry?.type ?? '').toUpperCase();
+  return type || undefined;
 }
