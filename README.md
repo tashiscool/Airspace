@@ -116,10 +116,64 @@ npm test -- --run
 npm run build
 ```
 
+Screenshot walkthrough commands:
+
+```bash
+# Terminal 1: local API with H2/PostgreSQL-mode dev storage
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn quarkus:dev -Dquarkus.enforceBuildGoal=false -Dquarkus.http.port=8090 -Dquarkus.test.continuous-testing=disabled
+
+# Terminal 2: browser console
+cd frontend
+npm run dev -- --host 127.0.0.1
+
+# Terminal 3: seed demo data through the real APIs and capture product screenshots
+cd frontend
+npx playwright install chromium
+npm run screenshots
+```
+
+The screenshot script uses the real local product APIs to create a mission, reservation, NOTAM/APREQ/approval supplements, USNS/feed traffic, weather/PIREP messages, reference points, and a replayable operational decision. It then drives the React workbench with Playwright and writes PNGs to `docs/screenshots/`.
+
+### Product Walkthrough
+
+The current operator-facing product path is working locally as an integrated prototype. These screenshots are generated from the checked-in app, not mockups.
+
+![Login](/docs/screenshots/01-login.png)
+
+| Mission Explorer | Mission Workspace |
+| --- | --- |
+| ![Mission Explorer](/docs/screenshots/02-mission-explorer.png) | ![Mission Workspace](/docs/screenshots/03-mission-workspace.png) |
+
+| Reservation Sections | Reservation Supplements |
+| --- | --- |
+| ![Reservation Sections](/docs/screenshots/04-reservation-sections.png) | ![Reservation Supplements](/docs/screenshots/05-reservation-supplements.png) |
+
+| Deconfliction Review | Messaging |
+| --- | --- |
+| ![Deconfliction Review](/docs/screenshots/06-deconfliction-review.png) | ![Messaging](/docs/screenshots/07-messaging.png) |
+
+| USNS Feed | Decision Summary |
+| --- | --- |
+| ![USNS Feed](/docs/screenshots/08-usns-feed.png) | ![Decision Summary](/docs/screenshots/09-decision-summary.png) |
+
+| Decision Trace | Decision Map |
+| --- | --- |
+| ![Decision Trace](/docs/screenshots/10-decision-trace.png) | ![Decision Map](/docs/screenshots/11-decision-map.png) |
+
+| NOTAM Constraints | Weather And PIREPs |
+| --- | --- |
+| ![NOTAM Constraints](/docs/screenshots/12-notam-constraints.png) | ![Weather And PIREPs](/docs/screenshots/13-weather-pirep.png) |
+
+| Config / Reference Data | Search |
+| --- | --- |
+| ![Config Reference](/docs/screenshots/14-config-reference.png) | ![Search](/docs/screenshots/15-search.png) |
+
+![History And Audit](/docs/screenshots/16-history-audit.png)
+
 Local product dev:
 
 ```bash
-JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn quarkus:dev -Dquarkus.http.port=8090 -Dquarkus.test.continuous-testing=disabled
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn quarkus:dev -Dquarkus.enforceBuildGoal=false -Dquarkus.http.port=8090 -Dquarkus.test.continuous-testing=disabled
 cd frontend
 npm run dev -- --host 127.0.0.1
 ```

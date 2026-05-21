@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "screenshots": "cd .. && node scripts/capture-product-screenshots.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.16",
@@ -23,6 +24,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "typescript": "^5.6.2",
