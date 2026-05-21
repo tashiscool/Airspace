@@ -42,15 +42,19 @@ public class CarfEventReservationMapper {
         for (int i = 0; i < points.size() - 1; i++) {
             GeoCoordinate start = points.get(i);
             GeoCoordinate end = points.get(i + 1);
+            List<String> segmentFixes = segmentFixes(event.getSourceFixes(), i);
             double routeWidth = event.getRouteWidthNauticalMiles() > 0
                     ? event.getRouteWidthNauticalMiles()
                     : event.getProtectedRadiusNauticalMiles() * 2.0;
             reservations.add(baseBuilder(idPrefix + "-E" + i, event)
                     .routeStart(start)
                     .routeEnd(end)
-                    .routeStartFix("P" + i)
-                    .routeEndFix("P" + (i + 1))
-                    .sourceFixes(event.getSourceFixes() == null ? asFixes(i, i + 1) : event.getSourceFixes())
+                    .routeStartFix(segmentFixes.get(0))
+                    .routeEndFix(segmentFixes.get(1))
+                    .sourceFixes(segmentFixes)
+                    .sourceRatioStart(segmentRatio(i, points.size()))
+                    .sourceRatioEnd(segmentRatio(i + 1, points.size()))
+                    .routeSegmentDistanceNauticalMiles(start.distanceTo(end))
                     .protectedVolume(geometryFactory.routeSegmentVolume(
                             idPrefix + "-E" + i,
                             start,
@@ -106,6 +110,23 @@ public class CarfEventReservationMapper {
         fixes.add("P" + first);
         fixes.add("P" + second);
         return fixes;
+    }
+
+    private List<String> segmentFixes(List<String> sourceFixes, int first) {
+        if (sourceFixes != null && sourceFixes.size() > first + 1) {
+            List<String> fixes = new ArrayList<>();
+            fixes.add(sourceFixes.get(first));
+            fixes.add(sourceFixes.get(first + 1));
+            return fixes;
+        }
+        return asFixes(first, first + 1);
+    }
+
+    private double segmentRatio(int pointIndex, int pointCount) {
+        if (pointCount <= 1) {
+            return 0.0;
+        }
+        return (double) pointIndex / (double) (pointCount - 1);
     }
 
     private List<String> allFixes(int count) {

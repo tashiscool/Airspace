@@ -155,14 +155,54 @@ public class AirspaceVisualizationService {
         properties.put("routeEndFix", reservation.getRouteEndFix());
         properties.put("sourceFixes", reservation.getSourceFixes());
         properties.put("routeGraphNodeIds", reservation.getRouteGraphNodeIds());
+        properties.put("sourceRatioStart", reservation.getSourceRatioStart());
+        properties.put("sourceRatioEnd", reservation.getSourceRatioEnd());
         properties.put("routeWidthNauticalMiles", reservation.getRouteWidthNauticalMiles());
         properties.put("routeSegmentDistanceNauticalMiles", reservation.getRouteSegmentDistanceNauticalMiles());
+        properties.put("polylineMergeKey", polylineMergeKey(reservation));
+        properties.put("polylineSegmentKey", reservation.getRouteStartFix() + "->" + reservation.getRouteEndFix());
+        properties.put("polylineSegmentIndex", polylineSegmentIndex(reservation.getId()));
         properties.put("style", style("#0891b2", "#0891b2", 3.0, 0.0));
         return AirspaceFeature.builder()
                 .id(id)
                 .geometry(lineGeometry(reservation.getRouteStart(), reservation.getRouteEnd()))
                 .properties(properties)
                 .build();
+    }
+
+    private String polylineMergeKey(AirspaceReservation reservation) {
+        if (reservation.getRouteGraphNodeIds() != null && !reservation.getRouteGraphNodeIds().isEmpty()) {
+            return String.join("|", reservation.getRouteGraphNodeIds());
+        }
+        String id = reservation.getId();
+        int splitMarker = id == null ? -1 : id.lastIndexOf("-E");
+        if (splitMarker > 0 && splitMarker + 2 < id.length() && allDigits(id.substring(splitMarker + 2))) {
+            return id.substring(0, splitMarker);
+        }
+        return id;
+    }
+
+    private int polylineSegmentIndex(String id) {
+        int splitMarker = id == null ? -1 : id.lastIndexOf("-E");
+        if (splitMarker > 0 && splitMarker + 2 < id.length()) {
+            String segment = id.substring(splitMarker + 2);
+            if (allDigits(segment)) {
+                return Integer.parseInt(segment);
+            }
+        }
+        return 0;
+    }
+
+    private boolean allDigits(String value) {
+        if (value == null || value.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (!Character.isDigit(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private AirspaceFeature featureForWeather(WeatherHazardSnapshot snapshot) {
