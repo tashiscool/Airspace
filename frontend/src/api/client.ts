@@ -28,12 +28,28 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   });
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw new Error(await responseErrorMessage(response));
   }
   if (response.status === 204) {
     return undefined as T;
   }
   return response.json() as Promise<T>;
+}
+
+async function responseErrorMessage(response: Response) {
+  const prefix = `${response.status} ${response.statusText}`;
+  const contentType = response.headers.get('content-type') ?? '';
+  try {
+    if (contentType.includes('application/json')) {
+      const body = await response.json() as { message?: string; error?: string; errors?: string[]; diagnostics?: string[] };
+      const detail = body.message ?? body.error ?? body.errors?.join(', ') ?? body.diagnostics?.join(', ');
+      return detail ? `${prefix}: ${detail}` : prefix;
+    }
+    const text = await response.text();
+    return text ? `${prefix}: ${text.slice(0, 500)}` : prefix;
+  } catch {
+    return prefix;
+  }
 }
 
 export const api = {

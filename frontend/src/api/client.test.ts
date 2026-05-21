@@ -51,4 +51,21 @@ describe('product API client', () => {
       '/api/feed/artifacts/artifact-1/transactions'
     ]);
   });
+
+  it('surfaces JSON diagnostics from failed API responses', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return {
+        ok: false,
+        status: 409,
+        statusText: 'Conflict',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ diagnostics: ['lock required before mutation'] })
+      };
+    }));
+
+    await expect(api.lockMission('mission-1', 'planner')).rejects.toThrow(
+      '409 Conflict: lock required before mutation'
+    );
+  });
 });

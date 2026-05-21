@@ -12,10 +12,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Simple deviation strategy that goes around circular hazards
+ * Route deviation strategy that builds avoidance waypoints around circular weather hazards.
  */
 @Data
-public class SimpleDeviationStrategy implements WeatherAvoidanceStrategy {
+public class CircularHazardDeviationStrategy implements WeatherAvoidanceStrategy {
     /**
      * Default buffer distance in nautical miles
      */
@@ -32,19 +32,19 @@ public class SimpleDeviationStrategy implements WeatherAvoidanceStrategy {
     private final int maxWaypoints;
 
     /**
-     * Create a simple deviation strategy with default settings
+     * Create a circular-hazard deviation strategy with default settings.
      */
-    public SimpleDeviationStrategy() {
+    public CircularHazardDeviationStrategy() {
         this(DEFAULT_BUFFER, 3);
     }
 
     /**
-     * Create a simple deviation strategy with custom settings
+     * Create a circular-hazard deviation strategy with custom settings.
      *
      * @param bufferDistance Buffer distance in nautical miles
      * @param maxWaypoints   Maximum number of intermediate waypoints
      */
-    public SimpleDeviationStrategy(double bufferDistance, int maxWaypoints) {
+    public CircularHazardDeviationStrategy(double bufferDistance, int maxWaypoints) {
         this.bufferDistance = bufferDistance;
         this.maxWaypoints = maxWaypoints;
     }

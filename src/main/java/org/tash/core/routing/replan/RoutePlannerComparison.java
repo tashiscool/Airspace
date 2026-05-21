@@ -12,22 +12,21 @@ import org.tash.trajectory.TrajectorySegment;
 import java.util.*;
 
 /**
- * Demonstration of the route planning algorithms
+ * Executable comparison of the route planning algorithms.
  */
-public class RoutePlanningDemo {
+public class RoutePlannerComparison {
     
     public static void main(String[] args) {
-        // Demo for route planning capabilities
-        astarPlanningDemo();
-        rrtPlanningDemo();
-        dynamicReroutingDemo();
+        compareAStarPlanning();
+        compareRrtPlanning();
+        compareDynamicRerouting();
     }
     
     /**
-     * Demonstrate A* pathfinding with custom heuristics
+     * Compare A* pathfinding with custom heuristics.
      */
-    private static void astarPlanningDemo() {
-        System.out.println("===== A* Route Planning Demo =====");
+    private static void compareAStarPlanning() {
+        System.out.println("===== A* Route Planning Comparison =====");
         
         // Create waypoints
         SpatialPoint start = SpatialPoint.builder()
@@ -89,7 +88,7 @@ public class RoutePlanningDemo {
         // Create some constraints
         List<SpatialPoint> l2o = new ArrayList<>();
         List<SpatialPoint> l1o  = new ArrayList<>();
-        Set<RoutingConstraint> constraints = createSampleConstraints(
+        Set<RoutingConstraint> constraints = emptyRoutingConstraints(
                 start, end,
                 SpatialPolygon.builder()
                    .id("AREA1")
@@ -182,7 +181,7 @@ public class RoutePlanningDemo {
         System.out.println("\nTrajectory segments created: " + trajectorySegments.size());
     }
 
-    private static Set<RoutingConstraint> createSampleConstraints(SpatialPoint start, SpatialPoint end, SpatialPolygon area1, SpatialPolygon area2)
+    private static Set<RoutingConstraint> emptyRoutingConstraints(SpatialPoint start, SpatialPoint end, SpatialPolygon area1, SpatialPolygon area2)
     {
         Set<RoutingConstraint> constraints = new HashSet<>();
 
@@ -211,7 +210,7 @@ public class RoutePlanningDemo {
         return constraints;
     }
 
-    private static Set<RoutingConstraint> createSampleConstraints() {
+    private static Set<RoutingConstraint> emptyRoutingConstraints() {
         Set<RoutingConstraint> constraints = new HashSet<>();
 
 //        // Example: Max speed constraint
@@ -230,10 +229,10 @@ public class RoutePlanningDemo {
     }
 
     /**
-     * Demonstrate RRT pathfinding
+     * Compare RRT pathfinding.
      */
-    private static void rrtPlanningDemo() {
-        System.out.println("\n===== RRT Route Planning Demo =====");
+    private static void compareRrtPlanning() {
+        System.out.println("\n===== RRT Route Planning Comparison =====");
         
         // Create waypoints
         SpatialPoint start = SpatialPoint.builder()
@@ -255,7 +254,7 @@ public class RoutePlanningDemo {
             .build();
         
         // Create some constraints
-        Set<RoutingConstraint> constraints = createSampleConstraints();
+        Set<RoutingConstraint> constraints = emptyRoutingConstraints();
         
         // Test different RRT configurations
         System.out.println("\n--- Testing Different RRT Configurations ---");
@@ -311,10 +310,10 @@ public class RoutePlanningDemo {
     }
     
     /**
-     * Demonstrate dynamic rerouting
+     * Compare dynamic rerouting.
      */
-    private static void dynamicReroutingDemo() {
-        System.out.println("\n===== Dynamic Rerouting Demo =====");
+    private static void compareDynamicRerouting() {
+        System.out.println("\n===== Dynamic Rerouting Comparison =====");
         
         // Create waypoints
         SpatialPoint start = SpatialPoint.builder()
@@ -336,7 +335,7 @@ public class RoutePlanningDemo {
             .build();
         
         // Create some static constraints
-        Set<RoutingConstraint> staticConstraints = createSampleConstraints();
+        Set<RoutingConstraint> staticConstraints = emptyRoutingConstraints();
         
         // Create a dynamic route planner
         AStarRoutePlanner basePlanner = new AStarRoutePlanner();

@@ -109,7 +109,7 @@ import static org.tash.AirspaceModel.MIN_VERTICAL_SEPARATION_FT;
         return closestPoint;
     }
 
-    // Placeholder methods for distance calculations
+    // Distance calculations used by closest-point-of-approach scoring.
     private double calculateHorizontalDistance(SpatialPoint pos1, SpatialPoint pos2) {
             return pos1.getCoordinate().distanceTo(pos2.getCoordinate());
     }

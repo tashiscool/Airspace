@@ -104,7 +104,7 @@ The first product API path is intentionally local/test-friendly: the engine rema
 ### React Operations Console
 
 - A React + TypeScript + Vite frontend lives in `frontend/`.
-- It provides the initial operations shell for login, a four-pane CARF-style Mission Explorer, mission/reservation workspace, reservation save/lock/parse/submit/approve/reject/cancel/complete actions, deconfliction placeholder, messaging, decision review, search, history, and config.
+- It provides the initial operations shell for login, a four-pane CARF-style Mission Explorer, mission/reservation workspace, reservation save/lock/parse/submit/approve/reject/cancel/complete actions, deconfliction review, messaging, decision review, search, history, and config.
 - The map stack is OpenLayers and consumes the backend’s GeoJSON-compatible feature collections.
 
 Frontend commands:
@@ -126,15 +126,15 @@ npm run dev -- --host 127.0.0.1
 
 The Vite dev proxy defaults to `http://localhost:8090` and can be overridden with `VITE_API_PROXY_TARGET`.
 
-### Product Demo Corpus
+### Product Replay Corpus
 
-A self-contained demo corpus lives under:
+A self-contained product replay corpus lives under:
 
 ```text
-src/test/resources/scenarios/product-demo/
+src/test/resources/scenarios/product-replay/
 ```
 
-It includes mixed USNS/weather traffic, a CARF/ALTRV reservation, and an expected summary. `ProductDemoCorpusTest` verifies the local feed adapter, transaction inspection, operational decision evaluation, audit/replay payloads, and metrics without external files or live FAA/NWS/SWIM feeds.
+It includes mixed USNS/weather traffic, a CARF/ALTRV reservation, and an expected summary. `ProductReplayCorpusTest` verifies the local feed adapter, transaction inspection, operational decision evaluation, audit/replay payloads, and metrics without external files or live FAA/NWS/SWIM feeds.
 
 ### Spatial / Geometry / Visualization
 
@@ -207,7 +207,7 @@ Coverage report:
 target/site/jacoco/index.html
 ```
 
-The coverage gate excludes demo/experimental prototype surfaces that are not part of the current engine commitment, including demo classes, experimental routing search/replan packages, the old RRT planner prototype, and large Kalman/probabilistic estimator prototypes.
+The coverage gate excludes walkthrough and experimental prototype surfaces that are not part of the current engine commitment, including executable walkthrough classes, experimental routing search/replan packages, the old RRT planner prototype, and large Kalman/probabilistic estimator prototypes.
 
 ## Test Fixtures
 
@@ -276,7 +276,7 @@ The last 24 hours of commits moved the repo substantially:
 
 - Completed the modern CARF/ALTRV, USNS/NOTAM, weather, PIREP, workflow, visualization, and operational decision engine layers.
 - Removed final-product legacy evaluation utilities that referenced external artifact locations.
-- Renamed the old polymorphic demo to `AirspaceMultiModelDemo`.
+- Renamed the old polymorphic model runner to `AirspaceModelWalkthrough`.
 - Added pluggable spatial backends for JTS/H3/S2.
 - Added JaCoCo coverage enforcement and raised enforced line coverage above 75%.
 - Added regression fixtures under `src/test/resources` so the project is testable from the repository alone.

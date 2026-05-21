@@ -114,7 +114,7 @@ public class TrajectoryKalmanFilter {
         initialCovariance.setEntry(7, 7, Math.pow(accelerationUncertainty, 2));
         initialCovariance.setEntry(8, 8, Math.pow(accelerationUncertainty, 2));
 
-        // Initial state transition matrix (placeholder, will be updated before predictions)
+        // Initial state transition matrix; prediction updates this with the actual time step.
         double dt = 1.0;
         RealMatrix stateTransition = createStateTransition(dt);
 
@@ -403,4 +403,3 @@ public class TrajectoryKalmanFilter {
                 .build();
     }
 }
-

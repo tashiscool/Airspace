@@ -7,7 +7,7 @@ import org.tash.extensions.engine.DecisionRuleApplication;
 import org.tash.extensions.engine.DecisionRuleCatalog;
 import org.tash.extensions.engine.DecisionRuleRef;
 import org.tash.extensions.engine.DecisionThreshold;
-import org.tash.extensions.weather.avoid.SimpleDeviationStrategy;
+import org.tash.extensions.weather.avoid.CircularHazardDeviationStrategy;
 import org.tash.extensions.weather.avoid.WeatherAvoidanceStrategy;
 import org.tash.extensions.weather.avoid.WeatherCell;
 import org.tash.extensions.weather.product.WeatherDiagnosticType;
@@ -35,11 +35,11 @@ public class WeatherDecisionSupportService {
     private final CapacityImpactModel capacityImpactModel = new CapacityImpactModel();
 
     public WeatherDecisionSupportService() {
-        this(new SimpleDeviationStrategy(), DEFAULT_STALE_AFTER);
+        this(new CircularHazardDeviationStrategy(), DEFAULT_STALE_AFTER);
     }
 
     public WeatherDecisionSupportService(WeatherAvoidanceStrategy avoidanceStrategy, Duration staleAfter) {
-        this.avoidanceStrategy = avoidanceStrategy == null ? new SimpleDeviationStrategy() : avoidanceStrategy;
+        this.avoidanceStrategy = avoidanceStrategy == null ? new CircularHazardDeviationStrategy() : avoidanceStrategy;
         this.staleAfter = staleAfter == null ? DEFAULT_STALE_AFTER : staleAfter;
     }
 

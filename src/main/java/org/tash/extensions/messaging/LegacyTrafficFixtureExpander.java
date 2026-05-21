@@ -8,20 +8,20 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class LegacySampleFixtureExpander {
+public class LegacyTrafficFixtureExpander {
     private static final Pattern OFFSET = Pattern.compile("%\\?([+-]\\d+)");
     private final Clock clock;
 
-    public LegacySampleFixtureExpander() {
+    public LegacyTrafficFixtureExpander() {
         this(Clock.systemUTC());
     }
 
-    public LegacySampleFixtureExpander(Clock clock) {
+    public LegacyTrafficFixtureExpander(Clock clock) {
         this.clock = clock;
     }
 
-    public List<LegacySampleFixture> expand(String source) {
-        List<LegacySampleFixture> fixtures = new ArrayList<>();
+    public List<LegacyTrafficFixture> expand(String source) {
+        List<LegacyTrafficFixture> fixtures = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         int index = 1;
         for (String line : MessageControlCharacters.normalizeLineEndings(source).split("\n", -1)) {
@@ -41,9 +41,9 @@ public class LegacySampleFixtureExpander {
         return fixtures;
     }
 
-    private LegacySampleFixture fixture(int index, StringBuilder current) {
-        return LegacySampleFixture.builder()
-                .name("sample-" + index)
+    private LegacyTrafficFixture fixture(int index, StringBuilder current) {
+        return LegacyTrafficFixture.builder()
+                .name("legacy-traffic-record-" + index)
                 .text(substitute(current.toString()).trim())
                 .build();
     }

@@ -1,8 +1,8 @@
 package org.tash;
 
 import org.junit.jupiter.api.Test;
-import org.tash.extensions.messaging.LegacySampleFixture;
-import org.tash.extensions.messaging.LegacySampleFixtureExpander;
+import org.tash.extensions.messaging.LegacyTrafficFixture;
+import org.tash.extensions.messaging.LegacyTrafficFixtureExpander;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -11,13 +11,13 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class LegacySampleFixtureExpanderTest {
+class LegacyTrafficFixtureExpanderTest {
     @Test
-    void expandsLegacySampleFilesDeterministically() {
-        LegacySampleFixtureExpander expander = new LegacySampleFixtureExpander(
+    void expandsLegacyTrafficFilesDeterministically() {
+        LegacyTrafficFixtureExpander expander = new LegacyTrafficFixtureExpander(
                 Clock.fixed(Instant.parse("2010-03-02T13:04:05Z"), ZoneOffset.UTC));
 
-        List<LegacySampleFixture> fixtures = expander.expand("* ignored\n"
+        List<LegacyTrafficFixture> fixtures = expander.expand("* ignored\n"
                 + "!ABC %Y%M%D%h%m %C %s %J %L %O %?+20 %%\n"
                 + "/\n"
                 + "# ignored\n"

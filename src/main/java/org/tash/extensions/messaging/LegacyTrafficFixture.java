@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class LegacySampleFixture {
+public class LegacyTrafficFixture {
     private String name;
     private String text;
 }

@@ -2,6 +2,7 @@ package org.tash.extensions.visualization;
 
 import org.junit.jupiter.api.Test;
 import org.tash.data.GeoCoordinate;
+import org.tash.extensions.notam.NotamAirspaceRestriction;
 import org.tash.extensions.reservation.AirspaceReservation;
 import org.tash.extensions.reservation.ReservationConflict;
 import org.tash.spatial.SpatialPoint;
@@ -37,9 +38,43 @@ class AirspaceVisualizationServiceTest {
         assertEquals("Feature", feature.getType());
         assertEquals("Polygon", feature.getGeometry().getType());
         assertEquals("reservation", feature.getProperties().get("featureKind"));
+        assertEquals("CARF_ALTRV", feature.getProperties().get("sourceFamily"));
+        assertEquals("reservations", feature.getProperties().get("displayLayer"));
+        assertEquals("CARF_RESERVATION", feature.getProperties().get("constraintType"));
+        assertEquals(false, feature.getProperties().get("isNotam"));
+        assertEquals(true, feature.getProperties().get("isAltrv"));
         assertEquals("TIMING_TRIANGLE", feature.getProperties().get("reservationType"));
         assertNotNull(feature.getProperties().get("style"));
         assertTrue(new GeoJsonAirspaceExporter().toGeoJson(collection).contains("\"FeatureCollection\""));
+    }
+
+    @Test
+    void exportsFlightPathSeparatelyFromReservationVolumeWhenRouteIsKnown() {
+        AirspaceReservation reservation = AirspaceReservation.builder()
+                .id("R2")
+                .startTime(ZonedDateTime.parse("2010-01-01T00:00:00Z"))
+                .endTime(ZonedDateTime.parse("2010-01-01T01:00:00Z"))
+                .lowerAltitudeFeet(24000)
+                .upperAltitudeFeet(26000)
+                .protectedVolume(volume("V2"))
+                .routeStart(point(30, -150, 24000))
+                .routeEnd(point(31, -149, 26000))
+                .routeStartFix("AAA")
+                .routeEndFix("BBB")
+                .build();
+
+        AirspaceFeatureCollection collection =
+                new AirspaceVisualizationService().featuresForReservations(Arrays.asList(reservation));
+
+        assertEquals(2, collection.getFeatures().size());
+        AirspaceFeature route = collection.getFeatures().stream()
+                .filter(feature -> "flight-path".equals(feature.getProperties().get("featureKind")))
+                .findFirst()
+                .orElseThrow(AssertionError::new);
+        assertEquals("LineString", route.getGeometry().getType());
+        assertEquals("flight-paths", route.getProperties().get("displayLayer"));
+        assertEquals("CARF_ROUTE", route.getProperties().get("constraintType"));
+        assertEquals("R2", route.getProperties().get("reservationId"));
     }
 
     @Test
@@ -69,8 +104,39 @@ class AirspaceVisualizationServiceTest {
 
         assertEquals("LineString", feature.getGeometry().getType());
         assertEquals("conflict", feature.getProperties().get("featureKind"));
+        assertEquals("conflicts", feature.getProperties().get("displayLayer"));
+        assertEquals("CARF_CONFLICT", feature.getProperties().get("constraintType"));
         assertEquals(10.0, (Double) feature.getProperties().get("minimumLateralDistanceNauticalMiles"), 0.0001);
         assertEquals("lateralDistance=10 verticalGap=0", feature.getProperties().get("explanation"));
+    }
+
+    @Test
+    void exportsNotamRestrictionAsNotamNotAltrv() {
+        NotamAirspaceRestriction restriction = NotamAirspaceRestriction.builder()
+                .id("N1")
+                .notamType("NOTAMN")
+                .accountability("KZNY")
+                .affectedLocation("KZNY")
+                .qCode("QWALW")
+                .effectiveStart(ZonedDateTime.parse("2010-01-01T00:00:00Z"))
+                .effectiveEnd(ZonedDateTime.parse("2010-01-01T02:00:00Z"))
+                .lowerAltitudeFeet(0)
+                .upperAltitudeFeet(18000)
+                .radiusNauticalMiles(10)
+                .description("AIRSPACE RESERVATION")
+                .volume(volume("NOTAM-V"))
+                .build();
+
+        AirspaceFeature feature = new AirspaceVisualizationService()
+                .featuresForNotams(Arrays.asList(restriction))
+                .getFeatures().get(0);
+
+        assertEquals("notam", feature.getProperties().get("featureKind"));
+        assertEquals("NOTAM", feature.getProperties().get("sourceFamily"));
+        assertEquals("notams", feature.getProperties().get("displayLayer"));
+        assertEquals("NOTAM_RESTRICTION", feature.getProperties().get("constraintType"));
+        assertEquals(true, feature.getProperties().get("isNotam"));
+        assertEquals(false, feature.getProperties().get("isAltrv"));
     }
 
     private SpatialVolume volume(String id) {

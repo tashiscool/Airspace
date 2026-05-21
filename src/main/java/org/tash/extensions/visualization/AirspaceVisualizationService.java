@@ -30,6 +30,10 @@ public class AirspaceVisualizationService {
         if (reservations != null) {
             for (AirspaceReservation reservation : reservations) {
                 features.add(featureForReservation(reservation));
+                AirspaceFeature routeFeature = featureForReservationRoute(reservation);
+                if (routeFeature != null) {
+                    features.add(routeFeature);
+                }
             }
         }
         return AirspaceFeatureCollection.builder().features(features).build();
@@ -119,11 +123,44 @@ public class AirspaceVisualizationService {
         properties.put("longitudinalSeparationMinutes", reservation.getLongitudinalSeparationMinutes());
         properties.put("displayShapeIntent", reservation.getDisplayShapeIntent());
         properties.put("deconflictionShapeIntent", reservation.getDeconflictionShapeIntent());
+        properties.put("sourceFamily", "CARF_ALTRV");
+        properties.put("displayLayer", "reservations");
+        properties.put("constraintType", "CARF_RESERVATION");
+        properties.put("operationalRole", "protected-volume");
+        properties.put("isNotam", false);
+        properties.put("isAltrv", true);
         properties.put("style", style("#1f78b4", "#1f78b4", 2.0, 0.18));
 
         return AirspaceFeature.builder()
                 .id(reservation.getId())
                 .geometry(geometryForReservation(reservation))
+                .properties(properties)
+                .build();
+    }
+
+    private AirspaceFeature featureForReservationRoute(AirspaceReservation reservation) {
+        if (reservation == null || reservation.getRouteStart() == null || reservation.getRouteEnd() == null) {
+            return null;
+        }
+        String id = reservation.getId() + "-route";
+        Map<String, Object> properties = baseProperties("flight-path", id,
+                reservation.getStartTime(), reservation.getEffectiveDeconflictionEndTime(),
+                reservation.getLowerAltitudeFeet(), reservation.getUpperAltitudeFeet());
+        properties.put("sourceFamily", "CARF_ALTRV");
+        properties.put("displayLayer", "flight-paths");
+        properties.put("constraintType", "CARF_ROUTE");
+        properties.put("operationalRole", "route-centerline");
+        properties.put("reservationId", reservation.getId());
+        properties.put("routeStartFix", reservation.getRouteStartFix());
+        properties.put("routeEndFix", reservation.getRouteEndFix());
+        properties.put("sourceFixes", reservation.getSourceFixes());
+        properties.put("routeGraphNodeIds", reservation.getRouteGraphNodeIds());
+        properties.put("routeWidthNauticalMiles", reservation.getRouteWidthNauticalMiles());
+        properties.put("routeSegmentDistanceNauticalMiles", reservation.getRouteSegmentDistanceNauticalMiles());
+        properties.put("style", style("#0891b2", "#0891b2", 3.0, 0.0));
+        return AirspaceFeature.builder()
+                .id(id)
+                .geometry(lineGeometry(reservation.getRouteStart(), reservation.getRouteEnd()))
                 .properties(properties)
                 .build();
     }
@@ -150,6 +187,10 @@ public class AirspaceVisualizationService {
             properties.put("confidence", snapshot.getConfidence());
             properties.put("provenance", snapshot.getProvenance());
         }
+        properties.put("sourceFamily", "WEATHER");
+        properties.put("displayLayer", "weather");
+        properties.put("constraintType", "WEATHER_HAZARD");
+        properties.put("operationalRole", "weather-hazard");
         properties.put("style", style("#6a3d9a", "#6a3d9a", 2.0, 0.22));
         return AirspaceFeature.builder()
                 .id(id)
@@ -165,6 +206,9 @@ public class AirspaceVisualizationService {
         AirspaceFeature feature = featureForWeather(snapshot);
         Map<String, Object> properties = feature.getProperties();
         properties.put("featureKind", "weather-product");
+        properties.put("displayLayer", "weather");
+        properties.put("sourceFamily", "WEATHER");
+        properties.put("constraintType", "WEATHER_PRODUCT");
         if (product != null) {
             properties.put("productType", product.getType());
             properties.put("productSource", product.getSource());
@@ -207,6 +251,10 @@ public class AirspaceVisualizationService {
                 ? null : intersection.getMovement().getSpeedNauticalMilesPerHour());
         properties.put("movementBearingDegrees", intersection.getMovement() == null
                 ? null : intersection.getMovement().getBearingDegrees());
+        properties.put("sourceFamily", "WEATHER_ROUTE_IMPACT");
+        properties.put("displayLayer", "route-impacts");
+        properties.put("constraintType", "ROUTE_BLOCKAGE");
+        properties.put("operationalRole", "impacted-route-segment");
         properties.put("style", style("#b15928", "#b15928", 3.0, 0.26));
         return AirspaceFeature.builder()
                 .id(id)
@@ -245,6 +293,10 @@ public class AirspaceVisualizationService {
         properties.put("longitudinalSeparationMet", conflict.isLongitudinalSeparationMet());
         properties.put("belowMinimumDuration", conflict.isBelowMinimumDuration());
         properties.put("explanation", conflict.getExplanation());
+        properties.put("sourceFamily", "CARF_ALTRV");
+        properties.put("displayLayer", "conflicts");
+        properties.put("constraintType", "CARF_CONFLICT");
+        properties.put("operationalRole", "deconfliction-warning");
         properties.put("style", style("#e31a1c", "#e31a1c", 3.0, 0.28));
 
         return AirspaceFeature.builder()
@@ -263,6 +315,12 @@ public class AirspaceVisualizationService {
         properties.put("qCode", restriction.getQCode());
         properties.put("radiusNauticalMiles", restriction.getRadiusNauticalMiles());
         properties.put("description", restriction.getDescription());
+        properties.put("sourceFamily", "NOTAM");
+        properties.put("displayLayer", "notams");
+        properties.put("constraintType", "NOTAM_RESTRICTION");
+        properties.put("operationalRole", "airspace-restriction");
+        properties.put("isNotam", true);
+        properties.put("isAltrv", false);
         properties.put("style", style("#ff7f00", "#ff7f00", 2.0, 0.16));
         return AirspaceFeature.builder()
                 .id(restriction.getId())

@@ -17,8 +17,8 @@ CREATE TABLE IF NOT EXISTS ops_role (
 
 CREATE TABLE IF NOT EXISTS ops_user_role (
   user_id UUID NOT NULL REFERENCES ops_user(id) ON DELETE CASCADE,
-  role_id UUID NOT NULL REFERENCES ops_role(id) ON DELETE CASCADE,
-  PRIMARY KEY (user_id, role_id)
+  role_name VARCHAR(128) NOT NULL,
+  PRIMARY KEY (user_id, role_name)
 );
 
 CREATE TABLE IF NOT EXISTS ops_mission (

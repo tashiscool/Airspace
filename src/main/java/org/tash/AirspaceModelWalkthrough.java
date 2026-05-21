@@ -18,9 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Demonstration of the airspace model across routes, reservations, conflicts, and visitors.
+ * Executable walkthrough of the airspace model across routes, reservations, conflicts, and visitors.
  */
-public class AirspaceMultiModelDemo {
+public class AirspaceModelWalkthrough {
 
     public static void main(String[] args) {
         // Create the model
@@ -145,8 +145,8 @@ public class AirspaceMultiModelDemo {
             boundaryPoints, 15000, 25000, 
             baseTime.plusMinutes(15), baseTime.plusMinutes(45), "RESERVED1");
         
-        // Demonstrate spatial indexing
-        System.out.println("\nDemonstrating spatial indexing:");
+        // Exercise spatial indexing
+        System.out.println("\nSpatial indexing walkthrough:");
         BoundingBox queryBox = BoundingBox.builder()
             .minLat(51.6)
             .maxLat(51.7)
@@ -164,7 +164,7 @@ public class AirspaceMultiModelDemo {
             System.out.println("  " + element.getElementType() + ": " + element.getId());
         }
         
-        // Demonstrate intersections between different airspace element types
+        // Exercise intersections between different airspace element types
         System.out.println("\nChecking intersections between airspace elements:");
         
         boolean curveSeg_holdingSeg = altSeg1.intersects(holdingSegment);
@@ -176,22 +176,22 @@ public class AirspaceMultiModelDemo {
         boolean holdingSeg_volume = holdingSegment.intersects(reservedVolume);
         System.out.println("Holding pattern intersects reserved volume: " + holdingSeg_volume);
         
-        // Demonstrate conflict detection
+        // Exercise conflict detection
         System.out.println("\nChecking for trajectory conflicts (standard rules):");
         List<SeparationConflict> conflicts = model.checkTrajectoryConflicts("standard");
         System.out.println("Found " + conflicts.size() + " conflicts");
         
-        // Demonstrate conflict detection with different strategy
+        // Exercise conflict detection with different strategy
         System.out.println("\nChecking for trajectory conflicts (emergency rules):");
         conflicts = model.checkTrajectoryConflicts("emergency");
         System.out.println("Found " + conflicts.size() + " conflicts with emergency rules");
         
-        // Demonstrate airspace infringement detection
+        // Exercise airspace infringement detection
         System.out.println("\nChecking for airspace infringements:");
         List<AirspaceInfringementEvent> infringements = model.checkAirspaceInfringements();
         System.out.println("Found " + infringements.size() + " airspace infringements");
         
-        // Demonstrate finding shortest path
+        // Exercise shortest path search
         System.out.println("\nFinding shortest path from WP4 to WP7:");
         List<TrajectorySegment> shortestPath = model.findShortestPath(wp4, wp7);
         if (shortestPath != null && !shortestPath.isEmpty()) {
@@ -204,7 +204,7 @@ public class AirspaceMultiModelDemo {
             System.out.println("No path found");
         }
         
-        // Demonstrate model traversal
+        // Exercise model traversal
         System.out.println("\nTraversing model elements:");
         
         // Custom visitor that counts elements by type

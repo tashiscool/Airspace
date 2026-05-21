@@ -12,16 +12,16 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class ProductDemoCorpusTest {
+class ProductReplayCorpusTest {
     @Test
-    void productDemoCorpusFlowsThroughFeedAndDecisionWithoutExternalDependencies() throws Exception {
+    void productReplayCorpusFlowsThroughFeedAndDecisionWithoutExternalDependencies() throws Exception {
         AirspaceProductService service = new AirspaceProductService(
                 new ReservationWorkflowService(new InMemoryReservationWorkflowRepository()));
-        String usns = resource("/scenarios/product-demo/usns-mixed-weather.txt");
-        String carf = resource("/scenarios/product-demo/carf-altrv.txt");
+        String usns = resource("/scenarios/product-replay/usns-mixed-weather.txt");
+        String carf = resource("/scenarios/product-replay/carf-altrv.txt");
 
         ProductDtos.FeedIngestRequest feed = new ProductDtos.FeedIngestRequest();
-        feed.setSourceId("product-demo");
+        feed.setSourceId("product-replay");
         feed.setType("USNS");
         feed.setRawPayload(usns);
         OperationalFeedBatchResult batch = service.ingestFeed(feed);

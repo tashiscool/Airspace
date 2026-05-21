@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.notNullValue;
 
 @QuarkusTest
@@ -52,7 +53,8 @@ class ReservationWorkflowResourceTest {
                 .then()
                 .statusCode(200)
                 .body("type", equalTo("FeatureCollection"))
-                .body("features.size()", equalTo(1));
+                .body("features.size()", equalTo(2))
+                .body("features.properties.displayLayer", hasItems("reservations", "flight-paths"));
     }
 
     @Test
