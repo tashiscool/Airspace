@@ -253,37 +253,41 @@ The screenshots below are organized around that safety loop:
 
 ![Login](/docs/screenshots/01-login.png)
 
-| Mission Explorer | Mission Workspace |
+| Mission Explorer | Agentic Ops |
 | --- | --- |
-| ![Mission Explorer](/docs/screenshots/02-mission-explorer.png) | ![Mission Workspace](/docs/screenshots/03-mission-workspace.png) |
+| ![Mission Explorer](/docs/screenshots/02-mission-explorer.png) | ![Agentic Ops](/docs/screenshots/03-agentic-ops.png) |
 
-| Pilot Brief | Reservation Sections |
+| Mission Workspace | Pilot Brief |
 | --- | --- |
-| ![Pilot Brief](/docs/screenshots/04-pilot-brief.png) | ![Reservation Sections](/docs/screenshots/05-reservation-sections.png) |
+| ![Mission Workspace](/docs/screenshots/04-mission-workspace.png) | ![Pilot Brief](/docs/screenshots/05-pilot-brief.png) |
 
-| Reservation Supplements | Deconfliction Review |
+| Reservation Sections | Reservation Supplements |
 | --- | --- |
-| ![Reservation Supplements](/docs/screenshots/06-reservation-supplements.png) | ![Deconfliction Review](/docs/screenshots/07-deconfliction-review.png) |
+| ![Reservation Sections](/docs/screenshots/06-reservation-sections.png) | ![Reservation Supplements](/docs/screenshots/07-reservation-supplements.png) |
 
-| Messaging | USNS Feed |
+| Deconfliction Review | Messaging |
 | --- | --- |
-| ![Messaging](/docs/screenshots/08-messaging.png) | ![USNS Feed](/docs/screenshots/09-usns-feed.png) |
+| ![Deconfliction Review](/docs/screenshots/08-deconfliction-review.png) | ![Messaging](/docs/screenshots/09-messaging.png) |
 
-| Decision Summary | Decision Trace |
+| USNS Feed | Decision Summary |
 | --- | --- |
-| ![Decision Summary](/docs/screenshots/10-decision-summary.png) | ![Decision Trace](/docs/screenshots/11-decision-trace.png) |
+| ![USNS Feed](/docs/screenshots/10-usns-feed.png) | ![Decision Summary](/docs/screenshots/11-decision-summary.png) |
 
-| Decision Map | NOTAM Constraints |
+| Decision Trace | Decision Map |
 | --- | --- |
-| ![Decision Map](/docs/screenshots/12-decision-map.png) | ![NOTAM Constraints](/docs/screenshots/13-notam-constraints.png) |
+| ![Decision Trace](/docs/screenshots/12-decision-trace.png) | ![Decision Map](/docs/screenshots/13-decision-map.png) |
 
-| Weather And PIREPs | Config / Reference Data |
+| NOTAM Constraints | Weather And PIREPs |
 | --- | --- |
-| ![Weather And PIREPs](/docs/screenshots/14-weather-pirep.png) | ![Config Reference](/docs/screenshots/15-config-reference.png) |
+| ![NOTAM Constraints](/docs/screenshots/14-notam-constraints.png) | ![Weather And PIREPs](/docs/screenshots/15-weather-pirep.png) |
+
+| Config / Reference Data | Agentic System Observability |
+| --- | --- |
+| ![Config Reference](/docs/screenshots/16-config-reference.png) | ![Agentic System Observability](/docs/screenshots/17-agentic-system.png) |
 
 | Search | History And Audit |
 | --- | --- |
-| ![Search](/docs/screenshots/16-search.png) | ![History And Audit](/docs/screenshots/17-history-audit.png) |
+| ![Search](/docs/screenshots/18-search.png) | ![History And Audit](/docs/screenshots/19-history-audit.png) |
 
 Local product dev:
 

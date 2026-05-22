@@ -213,39 +213,47 @@ await page.goto(`${frontendUrl}/explorer`);
 await page.locator('.board-title', { hasText: 'Mission Explorer' }).waitFor({ timeout: 10_000 });
 await screenshot(page, '02-mission-explorer.png');
 
+await page.getByRole('button', { name: /Agentic Ops/i }).click();
+await page.getByRole('button', { name: /Run all agents/i }).click();
+await page.getByRole('heading', { name: 'Findings' }).waitFor({ timeout: 10_000 });
+await page.getByPlaceholder(/Ask against decision trace/i).fill('Why this reroute?');
+await page.getByRole('button', { name: 'Ask trace' }).click();
+await page.getByText('Trace Answer').waitFor({ timeout: 10_000 });
+await screenshot(page, '03-agentic-ops.png');
+
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}`);
 await clickIfVisible(page, 'Show On Map');
-await screenshot(page, '03-mission-workspace.png');
+await screenshot(page, '04-mission-workspace.png');
 
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}/brief`);
-await screenshot(page, '04-pilot-brief.png');
+await screenshot(page, '05-pilot-brief.png');
 
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}/reservations/${seeded.reservationId}`);
 await clickIfVisible(page, 'Show On Map');
-await screenshot(page, '05-reservation-sections.png');
+await screenshot(page, '06-reservation-sections.png');
 await clickIfVisible(page, 'NOTAM');
-await screenshot(page, '06-reservation-supplements.png');
+await screenshot(page, '07-reservation-supplements.png');
 
 await page.goto(`${frontendUrl}/deconfliction/${seeded.reservationId}`);
-await screenshot(page, '07-deconfliction-review.png');
+await screenshot(page, '08-deconfliction-review.png');
 
 await page.goto(`${frontendUrl}/messages/${seeded.messageId}`);
-await screenshot(page, '08-messaging.png');
+await screenshot(page, '09-messaging.png');
 
 await page.goto(`${frontendUrl}/feed/${seeded.feedId ?? ''}`);
-await screenshot(page, '09-usns-feed.png');
+await screenshot(page, '10-usns-feed.png');
 
 await page.goto(`${frontendUrl}/decisions/${seeded.decisionId}`);
-await screenshot(page, '10-decision-summary.png');
+await screenshot(page, '11-decision-summary.png');
 await clickIfVisible(page, 'TRACE');
-await screenshot(page, '11-decision-trace.png');
+await screenshot(page, '12-decision-trace.png');
 await clickIfVisible(page, 'SUMMARY');
 await clickIfVisible(page, 'Show On Map');
 await clickIfVisible(page, 'MAP');
-await screenshot(page, '12-decision-map.png');
+await screenshot(page, '13-decision-map.png');
 
 await page.goto(`${frontendUrl}/notams`);
-await screenshot(page, '13-notam-constraints.png');
+await screenshot(page, '14-notam-constraints.png');
 
 await page.goto(`${frontendUrl}/weather`);
 await page.locator('.map-layer-group').first().getByRole('button', { name: 'Weather', exact: true }).click().catch(() => undefined);
@@ -254,18 +262,21 @@ await clickIfVisible(page, 'Affected Missions');
 await page.locator('.guidance-card', { hasText: 'Convective SIGMET' }).first().click().catch(() => undefined);
 await page.waitForTimeout(500);
 await clickIfVisible(page, 'Fit Selected');
-await screenshot(page, '14-weather-pirep.png');
+await screenshot(page, '15-weather-pirep.png');
 
 await page.goto(`${frontendUrl}/config`);
-await screenshot(page, '15-config-reference.png');
+await screenshot(page, '16-config-reference.png');
+await page.getByRole('button', { name: 'System Configuration' }).click();
+await page.getByText('Agentic Store').waitFor({ timeout: 10_000 });
+await screenshot(page, '17-agentic-system.png');
 
 await page.goto(`${frontendUrl}/search`);
 await page.locator('input[placeholder^="Mission"]').fill('decision');
 await page.waitForTimeout(500);
-await screenshot(page, '16-search.png');
+await screenshot(page, '18-search.png');
 
 await page.goto(`${frontendUrl}/history`);
-await screenshot(page, '17-history-audit.png');
+await screenshot(page, '19-history-audit.png');
 
 await browser.close();
 console.log(JSON.stringify({ screenshotDir, ...seeded }, null, 2));
