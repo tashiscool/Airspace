@@ -50,6 +50,9 @@ export function ConfigPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<ConfigNode>('navaids');
   const config = useQuery({ queryKey: ['config'], queryFn: api.config });
+  const metrics = useQuery({ queryKey: ['metrics'], queryFn: api.metrics });
+  const agentStatus = useQuery({ queryKey: ['agentic', 'status'], queryFn: api.agentStatus });
+  const agentMetrics = useQuery({ queryKey: ['agentic', 'metrics'], queryFn: api.agentMetrics });
   const points = useQuery({ queryKey: ['reference-points'], queryFn: () => api.referencePoints() });
   const [referenceImport, setReferenceImport] = useState('type,identifier,latitude,longitude,altitudeFeet,source,version\nFIX,DEMOFIX,39.0,-76.0,0,local,v1');
   const previewImport = useMutation({ mutationFn: () => api.previewReferenceImport(referenceImport) });
@@ -95,6 +98,9 @@ export function ConfigPage() {
       <main className="panel">
         <div className="notice-stack">
           <ErrorNotice error={config.error} title="Config unavailable" />
+          <ErrorNotice error={metrics.error} title="Metrics unavailable" />
+          <ErrorNotice error={agentStatus.error} title="Agentic status unavailable" />
+          <ErrorNotice error={agentMetrics.error} title="Agentic metrics unavailable" />
           <QueryNotice query={points} label="Reference points" />
           <MutationNotice mutation={previewImport} label="Preview import" />
           <MutationNotice mutation={applyImport} label="Apply import" />
@@ -117,10 +123,82 @@ export function ConfigPage() {
             {(previewImport.data || applyImport.data) && <pre className="raw-panel">{JSON.stringify(previewImport.data ?? applyImport.data, null, 2)}</pre>}
           </>
         )}
-        {selected === 'system' && <pre className="raw-panel">{JSON.stringify(config.data ?? {}, null, 2)}</pre>}
+        {selected === 'system' && (
+          <SystemConfigurationPanel
+            config={config.data}
+            metrics={metrics.data}
+            agentStatus={agentStatus.data}
+            agentMetrics={agentMetrics.data}
+          />
+        )}
       </main>
     </section>
   );
+}
+
+function SystemConfigurationPanel({
+  config,
+  metrics,
+  agentStatus,
+  agentMetrics
+}: {
+  config?: Record<string, unknown>;
+  metrics?: Record<string, number>;
+  agentStatus?: { mode?: string; durable?: boolean; path?: string; runCount?: number; taskCount?: number; latestRunAt?: string };
+  agentMetrics?: Record<string, number>;
+}) {
+  const agentStoreDurable = agentStatus?.durable ?? config?.agenticStoreDurable === true;
+  const productMetricRows = Object.entries(metrics ?? {})
+    .filter(([key]) => key.startsWith('product.') || key.startsWith('agentic.'))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => [key, formatNumber(value)]);
+  const agentMetricRows = Object.entries(agentMetrics ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => [key, formatNumber(value)]);
+  return (
+    <section>
+      <div className="panel-heading"><h3>System Configuration</h3><span>runtime + observability</span></div>
+      <div className="config-system-grid">
+        <div className="metric-card">
+          <span>Agentic Store</span>
+          <strong>{agentStatus?.mode ?? String(config?.agenticStore ?? 'UNKNOWN')}</strong>
+          <small>{agentStoreDurable ? 'Restart-safe history' : 'Memory-only history'}</small>
+          {agentStatus?.path && <small>{agentStatus.path}</small>}
+        </div>
+        <div className="metric-card">
+          <span>Agent Runs</span>
+          <strong>{agentStatus?.runCount ?? agentMetrics?.['agentic.runs'] ?? 0}</strong>
+          <small>{agentMetrics?.['agentic.runs.accepted'] ?? 0} accepted · {agentMetrics?.['agentic.runs.rejected'] ?? 0} rejected</small>
+        </div>
+        <div className="metric-card">
+          <span>Agent Tasks</span>
+          <strong>{agentStatus?.taskCount ?? agentMetrics?.['agentic.tasks'] ?? 0}</strong>
+          <small>{agentMetrics?.['agentic.tasks.status.acknowledged'] ?? 0} acknowledged · {agentMetrics?.['agentic.tasks.status.open'] ?? 0} open</small>
+        </div>
+        <div className="metric-card">
+          <span>Guidance Quality</span>
+          <strong>{formatNumber(metrics?.['product.weather.guidanceTargetRate'] ?? 0)}</strong>
+          <small>{formatNumber(metrics?.['product.weather.averageGuidanceLatencySeconds'] ?? 0)} sec avg latency</small>
+        </div>
+      </div>
+      {!agentStoreDurable && (
+        <p className="warning-text">Agent history is memory-only. Configure <code>airspace.agentic.store.path</code> for restart-safe local/demo agent audit history.</p>
+      )}
+      <div className="config-split">
+        <ConfigTable title="Product + Agent Metrics" head={['Metric', 'Value']} rows={productMetricRows} />
+        <ConfigTable title="Agent Metrics" head={['Metric', 'Value']} rows={agentMetricRows} />
+      </div>
+      <details>
+        <summary>Raw runtime config</summary>
+        <pre className="raw-panel">{JSON.stringify(config ?? {}, null, 2)}</pre>
+      </details>
+    </section>
+  );
+}
+
+function formatNumber(value: number) {
+  if (!Number.isFinite(value)) return '0';
+  return Math.abs(value) >= 100 || Number.isInteger(value) ? String(Math.round(value)) : value.toFixed(2);
 }
 
 function AirspaceGroupsPanel() {

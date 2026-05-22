@@ -288,6 +288,183 @@ export type ReplayVerificationResult = {
   result?: unknown;
 };
 
+export type AgentSourceCitation = {
+  sourceFamily?: string;
+  sourceId?: string;
+  label?: string;
+  route?: string;
+  ruleId?: string;
+  sourceSpan?: string;
+};
+
+export type AgentFinding = {
+  id: string;
+  category?: string;
+  severity?: string;
+  message?: string;
+  confidence?: number;
+  citations?: AgentSourceCitation[];
+};
+
+export type AgentRecommendation = {
+  id: string;
+  action?: string;
+  summary?: string;
+  rationale?: string;
+  confidence?: number;
+  humanApprovalRequired?: boolean;
+  citations?: AgentSourceCitation[];
+};
+
+export type AgentTask = {
+  id: string;
+  title?: string;
+  status?: string;
+  priority?: string;
+  assignedRole?: string;
+  route?: string;
+  rationale?: string;
+  citations?: AgentSourceCitation[];
+};
+
+export type AgentAuditEnvelope = {
+  id?: string;
+  agentType?: string;
+  agentVersion?: string;
+  policyVersion?: string;
+  generatedAt?: string;
+  inputHash?: string;
+  outputHash?: string;
+  citations?: AgentSourceCitation[];
+  diagnostics?: string[];
+};
+
+export type AgentEvaluationSummary = {
+  accepted?: boolean;
+  findingCount?: number;
+  recommendationCount?: number;
+  taskCount?: number;
+  deltaCount?: number;
+  citedClaimCount?: number;
+  uncitedClaimCount?: number;
+  policyViolationCount?: number;
+  citationCoverage?: number;
+  sourceFamilyCounts?: Record<string, number>;
+  warnings?: string[];
+  errors?: string[];
+};
+
+export type AgentReasoningEnvelope = {
+  id?: string;
+  promptVersion?: string;
+  modelId?: string;
+  reasoningMode?: string;
+  inputSummary?: string;
+  draftHash?: string;
+  generatedAt?: string;
+  allowedFacts?: string[];
+  requiredOutputRules?: string[];
+  prohibitedActions?: string[];
+  citations?: AgentSourceCitation[];
+};
+
+export type AgentTraceAnswer = {
+  question?: string;
+  answer?: string;
+  confidence?: number;
+  ruleIds?: string[];
+  sourceRefs?: string[];
+  unsupportedClaims?: string[];
+  citations?: AgentSourceCitation[];
+};
+
+export type AgentOperatingLoopStep = {
+  stage?: string;
+  status?: string;
+  summary?: string;
+  citations?: AgentSourceCitation[];
+};
+
+export type AgentOperationalDelta = {
+  id: string;
+  changeType?: string;
+  sourceFamily?: string;
+  sourceId?: string;
+  previousValue?: string;
+  currentValue?: string;
+  severity?: string;
+  observedAt?: string;
+  citations?: AgentSourceCitation[];
+};
+
+export type AgentRunRequest = {
+  agentType?: string;
+  missionId?: string;
+  reservationId?: string;
+  decisionId?: string;
+  previousDecisionId?: string;
+  hazardOrDecisionId?: string;
+  question?: string;
+  actor?: string;
+};
+
+export type ScenarioFixtureRequest = {
+  scenarioType?: string;
+  missionNumber?: string;
+  includeMalformedInputs?: boolean;
+};
+
+export type ScenarioFixtureBundle = {
+  id: string;
+  scenarioType?: string;
+  missionNumber?: string;
+  carfAltrv?: string;
+  usnsMessages?: string[];
+  weatherMessages?: string[];
+  pireps?: string[];
+  notams?: string[];
+  route?: number[][];
+  expectedSummary?: Record<string, string>;
+};
+
+export type AgentTaskTransitionRequest = {
+  status?: string;
+  actor?: string;
+  note?: string;
+};
+
+export type AgentRunResult = {
+  id: string;
+  agentType: string;
+  missionId?: string;
+  reservationId?: string;
+  decisionId?: string;
+  summary?: string;
+  confidence?: number;
+  accepted: boolean;
+  generatedAt?: string;
+  auditEnvelope?: AgentAuditEnvelope;
+  evaluation?: AgentEvaluationSummary;
+  reasoningEnvelope?: AgentReasoningEnvelope;
+  traceAnswer?: AgentTraceAnswer;
+  findings: AgentFinding[];
+  recommendations: AgentRecommendation[];
+  tasks: AgentTask[];
+  citations: AgentSourceCitation[];
+  deltas?: AgentOperationalDelta[];
+  operatingLoop?: AgentOperatingLoopStep[];
+  diagnostics: string[];
+};
+
+export type AgentStoreStatus = {
+  mode?: string;
+  durable?: boolean;
+  path?: string;
+  runCount?: number;
+  taskCount?: number;
+  latestRunAt?: string;
+};
+
 export type FeedArtifactSummary = {
   id: string;
   sourceId: string;

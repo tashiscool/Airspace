@@ -66,6 +66,9 @@ public class ProductAuthFilter implements ContainerRequestFilter {
         if (safePath.startsWith("api/config") || safePath.startsWith("api/reference")) {
             return new String[]{"ADMIN"};
         }
+        if (safePath.startsWith("api/agents")) {
+            return new String[]{"PLANNER", "SUPERVISOR", "ADMIN"};
+        }
         if (safePath.startsWith("api/reservations") || safePath.startsWith("api/missions")
                 || safePath.startsWith("api/messages") || safePath.startsWith("api/feed")
                 || safePath.startsWith("api/decisions")) {

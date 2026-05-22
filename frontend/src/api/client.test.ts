@@ -57,6 +57,23 @@ describe('product API client', () => {
     });
     await api.coordinateWeather('mission-1', { reservationId: 'reservation-1' });
     await api.pilotBrief('mission-1');
+    await api.runAgent({ agentType: 'ALL', missionId: 'mission-1' });
+    await api.weatherImpactAgent({ missionId: 'mission-1' });
+    await api.missionRiskAgent({ missionId: 'mission-1' });
+    await api.rerouteAnalysisAgent({ missionId: 'mission-1', reservationId: 'reservation-1' });
+    await api.coordinationDraftAgent({ missionId: 'mission-1' });
+    await api.pilotBriefAgent({ missionId: 'mission-1' });
+    await api.dataIntegrityAgent({ missionId: 'mission-1' });
+    await api.replayAuditAgent({ decisionId: 'decision-1' });
+    await api.agentDelta({ previousDecisionId: 'decision-0', decisionId: 'decision-1', missionId: 'mission-1' });
+    await api.generateAgentScenario({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
+    await api.agentStatus();
+    await api.agentMetrics();
+    await api.agentRuns(5, { agentType: 'ALL', missionId: 'mission-1', accepted: true, sourceFamily: 'WEATHER' });
+    await api.agentRun('run-1');
+    await api.agentTasks('OPEN', 8, { priority: 'HIGH', assignedRole: 'planner', sourceFamily: 'WEATHER', routeContains: 'mission-1' });
+    await api.agentTask('task-1');
+    await api.transitionAgentTask('task-1', { status: 'ACKNOWLEDGED', actor: 'planner', note: 'reviewed' });
 
     expect(calls.map((call) => call.url)).toEqual([
       '/api/reservations/reservation-2/force-parse',
@@ -69,13 +86,35 @@ describe('product API client', () => {
       '/api/missions/mission-1/route-impact?reservationId=reservation-1',
       '/api/missions/mission-1/pireps/relevant',
       '/api/missions/mission-1/coordinate-weather',
-      '/api/missions/mission-1/pilot-brief'
+      '/api/missions/mission-1/pilot-brief',
+      '/api/agents/run',
+      '/api/agents/weather-impact',
+      '/api/agents/mission-risk',
+      '/api/agents/reroute-analysis',
+      '/api/agents/coordination-draft',
+      '/api/agents/pilot-brief',
+      '/api/agents/data-integrity',
+      '/api/agents/replay-audit',
+      '/api/agents/delta',
+      '/api/agents/scenario/generate',
+      '/api/agents/status',
+      '/api/agents/metrics',
+      '/api/agents/runs?limit=5&agentType=ALL&missionId=mission-1&accepted=true&sourceFamily=WEATHER',
+      '/api/agents/runs/run-1',
+      '/api/agents/tasks?status=OPEN&limit=8&priority=HIGH&assignedRole=planner&sourceFamily=WEATHER&routeContains=mission-1',
+      '/api/agents/tasks/task-1',
+      '/api/agents/tasks/task-1/transition'
     ]);
     expect(JSON.parse(String(calls[8].init.body))).toMatchObject({
       reservationId: 'reservation-1',
       altitudeToleranceFeet: 2000,
       corridorNauticalMiles: 40
     });
+    expect(JSON.parse(String(calls[11].init.body))).toMatchObject({ agentType: 'ALL', missionId: 'mission-1' });
+    expect(JSON.parse(String(calls[14].init.body))).toMatchObject({ missionId: 'mission-1', reservationId: 'reservation-1' });
+    expect(JSON.parse(String(calls[19].init.body))).toMatchObject({ previousDecisionId: 'decision-0', decisionId: 'decision-1' });
+    expect(JSON.parse(String(calls[20].init.body))).toMatchObject({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
+    expect(JSON.parse(String(calls[27].init.body))).toMatchObject({ status: 'ACKNOWLEDGED', actor: 'planner' });
   });
 
   it('surfaces JSON diagnostics from failed API responses', async () => {

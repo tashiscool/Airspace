@@ -141,6 +141,8 @@ class ProductPersistenceAndServiceTest {
                 (String[]) requiredRoles.invoke(filter, "POST", "api/reference/points"));
         assertArrayEquals(new String[]{"PLANNER", "SUPERVISOR", "ADMIN"},
                 (String[]) requiredRoles.invoke(filter, "POST", "api/feed/ingest"));
+        assertArrayEquals(new String[]{"PLANNER", "SUPERVISOR", "ADMIN"},
+                (String[]) requiredRoles.invoke(filter, "POST", "api/agents/run"));
         assertArrayEquals(new String[]{"OPERATOR", "PLANNER", "SUPERVISOR", "ADMIN"},
                 (String[]) requiredRoles.invoke(filter, "GET", "api/missions"));
     }

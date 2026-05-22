@@ -302,6 +302,109 @@ class ProductApiResourceTest {
         assertEquals(200, replayResponse.statusCode(), replayResponse.asString());
         assertTrue(replayResponse.jsonPath().getBoolean("accepted"), replayResponse.asString());
 
+        String agentRunId = given()
+                .contentType("application/json")
+                .body("{\"agentType\":\"ALL\",\"missionId\":\"" + missionId + "\",\"reservationId\":\"" + reservationId + "\",\"decisionId\":\"" + decisionId + "\",\"actor\":\"planner\"}")
+                .when()
+                .post("/api/agents/run")
+                .then()
+                .statusCode(200)
+                .body("accepted", equalTo(true))
+                .body("operatingLoop.find { it.stage == 'OBSERVE' }.status", equalTo("COMPLETE"))
+                .body("auditEnvelope.inputHash", notNullValue())
+                .body("findings.size()", greaterThanOrEqualTo(1))
+                .body("recommendations.find { it.humanApprovalRequired == true }.id", notNullValue())
+                .extract()
+                .path("id");
+
+        given()
+                .when()
+                .get("/api/agents/runs/" + agentRunId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(agentRunId))
+                .body("reasoningEnvelope.draftHash", notNullValue());
+
+        given()
+                .when()
+                .get("/api/agents/status")
+                .then()
+                .statusCode(200)
+                .body("mode", notNullValue())
+                .body("runCount", greaterThanOrEqualTo(1));
+
+        Map<String, Number> agentMetrics = given()
+                .when()
+                .get("/api/agents/metrics")
+                .then()
+                .statusCode(200)
+                .extract()
+                .as(Map.class);
+        assertTrue(agentMetrics.get("agentic.runs").doubleValue() >= 1.0, agentMetrics.toString());
+
+        given()
+                .contentType("application/json")
+                .body("{\"missionId\":\"" + missionId + "\",\"actor\":\"planner\"}")
+                .when()
+                .post("/api/agents/coordination-draft")
+                .then()
+                .statusCode(200)
+                .body("accepted", equalTo(true))
+                .body("summary", org.hamcrest.Matchers.containsString("send is blocked"));
+
+        given()
+                .contentType("application/json")
+                .body("{\"previousDecisionId\":\"" + decisionId + "\",\"decisionId\":\"" + decisionId + "\",\"missionId\":\"" + missionId + "\"}")
+                .when()
+                .post("/api/agents/delta")
+                .then()
+                .statusCode(200);
+
+        given()
+                .contentType("application/json")
+                .body("{\"scenarioType\":\"VIABLE_REROUTE\",\"missionNumber\":\"API-NXGEN\",\"includeMalformedInputs\":true}")
+                .when()
+                .post("/api/agents/scenario/generate")
+                .then()
+                .statusCode(200)
+                .body("scenarioType", equalTo("VIABLE_REROUTE"))
+                .body("missionNumber", equalTo("API-NXGEN"))
+                .body("expectedSummary.malformedRetained", equalTo("true"));
+
+        String agentTaskId = given()
+                .when()
+                .get("/api/agents/tasks?limit=5&routeContains=" + missionId)
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThanOrEqualTo(1))
+                .extract()
+                .path("[0].id");
+
+        given()
+                .contentType("application/json")
+                .body("{\"status\":\"ACKNOWLEDGED\",\"actor\":\"planner\",\"note\":\"reviewed from API test\"}")
+                .when()
+                .post("/api/agents/tasks/" + agentTaskId + "/transition")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("ACKNOWLEDGED"));
+
+        given()
+                .when()
+                .get("/api/agents/tasks/" + agentTaskId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(agentTaskId))
+                .body("status", equalTo("ACKNOWLEDGED"));
+
+        given()
+                .when()
+                .get("/api/agents/runs?limit=5&missionId=" + missionId + "&agentType=ALL&accepted=true")
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThanOrEqualTo(1))
+                .body("[0].missionId", equalTo(missionId));
+
         given().when().get("/api/reference/navaids").then().statusCode(200).body("JFK.latitude", notNullValue());
         given().when().get("/api/reference/points").then().statusCode(200).body("find { it.identifier == 'JFK' }.pointType", equalTo("NAVAID"));
         given()
@@ -331,9 +434,12 @@ class ProductApiResourceTest {
                 .statusCode(200)
                 .body("accepted", equalTo(true))
                 .body("appliedCount", equalTo(1));
-        given().when().get("/api/config").then().statusCode(200).body("mapStack", equalTo("OpenLayers"));
+        given().when().get("/api/config").then().statusCode(200)
+                .body("mapStack", equalTo("OpenLayers"))
+                .body("agenticStore", notNullValue());
         Map<String, Number> metrics = given().when().get("/api/metrics").then().statusCode(200).extract().as(Map.class);
         assertTrue(metrics.get("product.missions").doubleValue() >= 1.0);
+        assertTrue(metrics.get("agentic.runs").doubleValue() >= 1.0);
         given().when().get("/api/history").then().statusCode(200).body("size()", greaterThanOrEqualTo(1));
     }
 

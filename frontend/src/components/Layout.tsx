@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight, Clock, LogOut, PanelLeftClose, RadioTower, Search } from 'lucide-react';
 import { api } from '../api/client';
+import { AgenticOpsPanel } from './AgenticOpsPanel';
 import { useSession } from '../state/session';
 import {
   buildWorkbenchCommands,
@@ -98,6 +99,7 @@ export function Layout() {
         </div>
       </header>
       <ContextStrip selection={selection} />
+      <AgenticOpsPanel selection={selection} />
       <div className="ops-body">
         <nav className={prefs.railCollapsed ? 'ops-rail collapsed' : 'ops-rail'} aria-label="Primary">
           {WORKBENCH_NAV_LINKS.map((link) => (

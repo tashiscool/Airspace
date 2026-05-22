@@ -10,13 +10,16 @@ The product is built around this operational gap:
 
 > The FAA still has unresolved flight-safety gaps around weather: real-time cockpit weather, turbulence and icing prediction, route avoidance, PIREPs, ATC/weather coordination, and pilot decision support. The problem is not that pilots lack weather apps; it is that the system still does not reliably turn live weather, aircraft reports, forecasts, and ATC constraints into clear operational guidance fast enough.
 
-Airspace tackles that as an end-to-end safety loop:
+Airspace tackles that as a cooperative aviation decision loop:
 
-1. **Ingest live-style operational traffic:** USNS/NADIN/WMSCR-shaped messages, CARF/ALTRV reservations, NOTAM constraints, METAR/TAF/SIGMET/AIRMET/CWAP-style weather, and PIREPs.
-2. **Normalize everything into constraints:** source refs, retained raw text, validity windows, altitude bands, geometry, freshness, confidence, provenance, route/reservation IDs, and diagnostics.
-3. **Evaluate route and reservation impact:** route corridor vs. weather/PIREP/NOTAM/CARF constraints, including altitude overlap, timing overlap, affected segments, blockage probability, capacity-impact seams, and deterministic avoidance candidates.
-4. **Produce clear guidance:** CLEAR, MONITOR, CAUTION, DELAY, ALTITUDE CHANGE, AVOID, REROUTE, or BLOCKED with rationale, confidence, source IDs, and coordination recommendations.
-5. **Expose it in an operator workbench:** Mission Explorer verdict badges, affected-mission queue, Weather/PIREP page, route-impact panels, map overlays, source chips, coordinate-from-hazard messaging, pilot brief, decision trace, audit envelope, and replay.
+1. **Observe:** ingest USNS/NADIN/WMSCR-shaped messages, CARF/ALTRV reservations, NOTAM constraints, METAR/TAF/SIGMET/AIRMET/CWAP-style weather, PIREPs, reference data, and route candidates.
+2. **Normalize:** convert every input into typed artifacts with source refs, retained raw text, validity windows, altitude bands, geometry, freshness, confidence, provenance, route/reservation IDs, and diagnostics.
+3. **Fuse:** combine weather, PIREPs, NOTAMs, CARF/ALTRV reservations, deconfliction, route geometry, and workflow state into common operational constraints.
+4. **Predict:** evaluate affected missions, route segment impacts, altitude/time overlap, blockage probability, candidate alternatives, capacity/cost impact seams, and residual risk.
+5. **Guide:** produce CLEAR, MONITOR, CAUTION, DELAY, ALTITUDE CHANGE, AVOID, REROUTE, or BLOCKED with rationale, confidence, source IDs, and coordination recommendations.
+6. **Coordinate:** draft weather-desk, ATC, USNS, mission-owner, and pilot-handoff communications from exact source artifacts, with human approval before official send.
+7. **Explain:** answer what changed, why a mission is affected, why one route is preferred, which sources mattered, and what remains uncertain.
+8. **Audit:** retain request hashes, result hashes, rule-catalog versions, agent policy versions, source refs, replay bundles, and operator actions.
 
 ### Current Coverage Of The FAA Weather Gaps
 
@@ -36,6 +39,8 @@ The acceptance target for the prototype is: a new SIGMET/PIREP/feed artifact sho
 The European-style benchmark is a live weather rerouting console: affected flights turn red, operators compare the original route against alternatives, and the system estimates extra distance, delay, fuel, and cost. Airspace now includes that prototype-grade reroute comparison surface, but the product goal is broader: **weather rerouting plus FAA-style operational fusion**.
 
 Airspace combines reroute candidates with USNS/NADIN/WMSCR-style messaging, NOTAM constraints, CARF/ALTRV reservations, PIREPs, protected-volume deconfliction, source traceability, audit/replay, and pilot handoff. The route-impact API returns structured candidate comparisons with original-route estimates, added distance, delay, fuel, cost, avoided hazards, residual constraints, and “Why this reroute?” trace rule IDs/source refs. The deterministic cost seam exposes its assumptions directly in the UI: cruise speed, fuel burn per nautical mile, fuel price, and delay cost per minute, so prototype economics stay inspectable rather than magic. The workbench exposes affected mission map mode, route-candidate map overlays, selected-feature reroute cost readouts, weather event drilldowns, and source-family chips so controllers can move from hazard to affected mission to reroute review to coordination draft without losing provenance.
+
+Airspace now also includes an agentic operations layer. Unlike a black-box AI recommender, the agent layer operates over typed engine artifacts and cited tool outputs: weather impact, mission risk, reroute comparison, coordination draft, pilot brief, data-integrity scan, and replay audit. Agent output is labeled as assistant analysis or draft material, includes source refs/input-output hashes/policy version, and cannot mutate official workflow state or send external messages without a human operator.
 
 ## What Is Implemented
 
@@ -115,6 +120,42 @@ OperationalDecisionEngine engine = new OperationalDecisionEngine();
 OperationalDecisionResult result = engine.evaluate(request);
 ```
 
+### Agentic NextGen Operations Layer
+
+- Additive semi-autonomous agent layer under `org.tash.extensions.agentic`.
+- Deterministic implementations work without external LLM keys. `ConfigurableLlmReasoningProvider` is present but disabled by default; `airspace.agentic.llm.mode=local-test` enables a no-network cited test provider, and `airspace.agentic.llm.mode=http` can call a local/model gateway endpoint while still passing citation and policy validation before output is accepted.
+- Agents currently provided:
+  - Weather Impact Watch Agent,
+  - Mission Risk Analyst Agent,
+  - Reroute Analyst Agent,
+  - Coordination Draft Agent,
+  - Pilot Brief Agent,
+  - Data Integrity Agent,
+  - Replay Audit Agent.
+- Every agent result includes source citations, confidence, diagnostics, generated time, policy version, input hash, output hash, audit envelope, and an explicit NextGen operating-loop snapshot from observe through audit.
+- Mission-risk and replay-audit output use `OperationalDeltaService` for typed “what changed” deltas, including action changes, confidence changes, new source refs, route candidate changes, blocking-constraint changes, and fallback mission weather/PIREP/NOTAM deltas.
+- Data-integrity scans flag malformed or unsupported inputs, stale products, missing geometry, contradictory severe weather vs smooth/negative PIREPs, off-route/off-altitude PIREP relevance mismatches, missing source refs, and route candidates with residual NOTAM/CARF/ALTRV risk.
+- Agent policy enforcement blocks future autonomous external-send or official workflow-mutation recommendations unless policy explicitly permits them.
+- Agent evaluation summaries score citation coverage, policy violations, source-family coverage, claim counts, and delta counts so future model-backed reasoning can be gated before display.
+- Each run also carries a model-ready reasoning envelope with prompt version, draft hash, deterministic/model mode, input summary, allowed facts, required output rules, prohibited actions, and citations. The default mode is `DETERMINISTIC_DRAFT_ONLY`, so no external LLM key is required and future model providers must reason from the cited draft context.
+- Replay/trace questions return a structured `AgentTraceAnswer` with the operator question, evidence-grounded answer, confidence, source refs, rule IDs, unsupported-claim diagnostics, and citations.
+- Run/task history is behind an `AgentRunStore` seam with in-memory and JSON-file implementations plus searchable detail/list API endpoints for audit drilldown. Runs can be filtered by agent type, mission, reservation, decision, acceptance state, and source family; tasks can be filtered by status, priority, role, source family, and workspace route. The JSON store keeps local/demo agent findings, trace answers, reasoning envelopes, and task acknowledgments restart-safe without adding a database dependency.
+- Set `airspace.agentic.store.path=/path/to/agent-runs.json` to enable the JSON-backed store; leave it blank for default in-memory behavior.
+- `/api/agents/status` and the Agentic Ops audit card expose the active store mode, durability, configured path, retained run count, retained task count, and latest run timestamp.
+- `/api/agents/metrics` summarizes retained agent runs, accepted/rejected counts, task status/priority counts, policy violations, uncited claims, and store durability for local observability.
+- `/api/metrics` includes the same `agentic.*` counters alongside product/feed/weather metrics, and `/api/config` reports the active agentic store mode/durability.
+- Citation validation blocks unsupported operational claims from being accepted as guidance.
+- Product endpoints are available under `/api/agents/*`, including `/api/agents/run`, `/api/agents/weather-impact`, `/api/agents/mission-risk`, `/api/agents/reroute-analysis`, `/api/agents/coordination-draft`, `/api/agents/pilot-brief`, `/api/agents/data-integrity`, `/api/agents/replay-audit`, `/api/agents/delta`, `/api/agents/scenario/generate`, `/api/agents/runs`, `/api/agents/runs/{id}`, `/api/agents/tasks`, `/api/agents/tasks/{id}`, and `/api/agents/tasks/{id}/transition`.
+- The React workbench shell includes an **Agentic Ops** panel that shows active findings, review tasks, recommendations, typed “what changed” deltas, trace answers, citations, evaluation coverage, policy issues, reasoning-envelope prompt/draft hashes, the observe/normalize/fuse/predict/guide/coordinate/explain/audit loop, audit hashes, retained run count, and task acknowledgment controls.
+- `ScenarioFixtureGenerator` creates deterministic, human-reviewable scenario bundles for severe convection, altitude-separated icing/turbulence, PIREP clusters, NOTAM/weather compound constraints, viable reroutes, blocked routes, and malformed retained inputs. Calibration/live-feed readiness is represented by fixture-backed weather outcome, storm lifecycle, sector demand, and local replay validation seams; these are not live operational calibration claims.
+
+Key entry point:
+
+```java
+AgenticOperationsService agents = new AgenticOperationsService();
+AgentRunResult result = agents.run(request);
+```
+
 ### Operations Product Layer
 
 - Quarkus product API resources under `org.tash.extensions.product.api` for auth, missions, messages, feed ingest, decisions, reference data, config, history, and metrics.
@@ -162,6 +203,7 @@ cd frontend
 npm install
 npm test -- --run
 npm run build
+npm run test:e2e
 ```
 
 Screenshot walkthrough commands:
@@ -196,6 +238,7 @@ The safety loop this product is trying to close is explicit in the workbench:
 - **PIREP handling:** aircraft reports are modeled separately from forecasts so turbulence/icing observations can drive review priority and route/altitude guidance.
 - **ATC/weather coordination:** severe, urgent, stale, or low-confidence products become review/coordination items instead of disappearing into raw text.
 - **Pilot/operator decision support:** the decision engine returns a single recommended action with confidence, rationale, blocking constraints, map features, trace steps, audit envelope, and replay bundle.
+- **Agentic review:** cited assistant findings, review tasks, reroute recommendations, coordination drafts, pilot briefs, data-quality warnings, and replay explanations sit on top of the deterministic engine without becoming an autonomous clearance authority.
 
 This is not a certified cockpit system or live FAA feed integration. It is a local, auditable operations prototype showing the engine and workbench path for turning weather, reports, forecasts, reservations, NOTAMs, and ATC constraints into clear guidance quickly.
 

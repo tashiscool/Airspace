@@ -1,5 +1,11 @@
 import type {
   AffectedMissionSummary,
+  AgentRunRequest,
+  AgentRunResult,
+  AgentStoreStatus,
+  AgentTask,
+  AgentTaskTransitionRequest,
+  AgentOperationalDelta,
   DecisionSummary,
   FeedArtifactSummary,
   FeedTransactionSummary,
@@ -18,6 +24,8 @@ import type {
   ReplayVerificationResult,
   RouteImpactSummary,
   SearchResultSummary,
+  ScenarioFixtureBundle,
+  ScenarioFixtureRequest,
   CoordinationDraftSummary,
   UserSummary,
   WeatherSourceSummary
@@ -164,5 +172,54 @@ export const api = {
   applyReferenceImport: (payload: string, actor = 'admin') =>
     request<ReferenceDataImportResult>('/api/reference/import/apply', { method: 'POST', body: JSON.stringify({ payload, actor, apply: true }) }),
   metrics: () => request<Record<string, number>>('/api/metrics'),
-  config: () => request<Record<string, unknown>>('/api/config')
+  config: () => request<Record<string, unknown>>('/api/config'),
+  runAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/run', { method: 'POST', body: JSON.stringify(body) }),
+  weatherImpactAgent: (body: AgentRunRequest = {}) =>
+    request<AgentRunResult>('/api/agents/weather-impact', { method: 'POST', body: JSON.stringify(body) }),
+  missionRiskAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/mission-risk', { method: 'POST', body: JSON.stringify(body) }),
+  rerouteAnalysisAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/reroute-analysis', { method: 'POST', body: JSON.stringify(body) }),
+  coordinationDraftAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/coordination-draft', { method: 'POST', body: JSON.stringify(body) }),
+  pilotBriefAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/pilot-brief', { method: 'POST', body: JSON.stringify(body) }),
+  dataIntegrityAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/data-integrity', { method: 'POST', body: JSON.stringify(body) }),
+  replayAuditAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/replay-audit', { method: 'POST', body: JSON.stringify(body) }),
+  agentDelta: (body: AgentRunRequest) =>
+    request<AgentOperationalDelta[]>('/api/agents/delta', { method: 'POST', body: JSON.stringify(body) }),
+  generateAgentScenario: (body: ScenarioFixtureRequest) =>
+    request<ScenarioFixtureBundle>('/api/agents/scenario/generate', { method: 'POST', body: JSON.stringify(body) }),
+  agentStatus: () => request<AgentStoreStatus>('/api/agents/status'),
+  agentMetrics: () => request<Record<string, number>>('/api/agents/metrics'),
+  agentRuns: (limit?: number, filters?: { agentType?: string; missionId?: string; reservationId?: string; decisionId?: string; accepted?: boolean; sourceFamily?: string }) => {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    if (filters?.agentType) params.set('agentType', filters.agentType);
+    if (filters?.missionId) params.set('missionId', filters.missionId);
+    if (filters?.reservationId) params.set('reservationId', filters.reservationId);
+    if (filters?.decisionId) params.set('decisionId', filters.decisionId);
+    if (filters?.accepted !== undefined) params.set('accepted', String(filters.accepted));
+    if (filters?.sourceFamily) params.set('sourceFamily', filters.sourceFamily);
+    const query = params.toString();
+    return request<AgentRunResult[]>(`/api/agents/runs${query ? `?${query}` : ''}`);
+  },
+  agentRun: (id: string) => request<AgentRunResult>(`/api/agents/runs/${id}`),
+  agentTasks: (status?: string, limit?: number, filters?: { priority?: string; assignedRole?: string; sourceFamily?: string; routeContains?: string }) => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (limit) params.set('limit', String(limit));
+    if (filters?.priority) params.set('priority', filters.priority);
+    if (filters?.assignedRole) params.set('assignedRole', filters.assignedRole);
+    if (filters?.sourceFamily) params.set('sourceFamily', filters.sourceFamily);
+    if (filters?.routeContains) params.set('routeContains', filters.routeContains);
+    const query = params.toString();
+    return request<AgentTask[]>(`/api/agents/tasks${query ? `?${query}` : ''}`);
+  },
+  agentTask: (id: string) => request<AgentTask>(`/api/agents/tasks/${id}`),
+  transitionAgentTask: (id: string, body: AgentTaskTransitionRequest) =>
+    request<AgentTask>(`/api/agents/tasks/${id}/transition`, { method: 'POST', body: JSON.stringify(body) })
 };

@@ -1506,6 +1506,12 @@ details summary span { float: right; }
   grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
   gap: 12px;
 }
+.config-system-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
 .policy-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1517,6 +1523,28 @@ details summary span { float: right; }
   gap: 6px;
   color: var(--muted);
   font-weight: 800;
+}
+.metric-card {
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.metric-card span {
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+.metric-card strong {
+  color: var(--text);
+  font-size: 18px;
+}
+.metric-card small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .workbench-toolbar {
@@ -1819,12 +1847,150 @@ details summary span { float: right; }
   color: var(--primary) !important;
 }
 
+.agentic-panel {
+  border-bottom: 1px solid var(--border);
+  background: rgba(7, 13, 24, 0.92);
+}
+
+.agentic-panel-summary {
+  width: 100%;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 0;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+}
+
+.agentic-panel-summary span {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentic-panel-summary small {
+  color: var(--primary);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+
+.agentic-panel-body {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.agentic-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.agentic-question {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.agentic-question input {
+  min-width: 0;
+}
+
+.agent-card {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.agent-card h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.agent-item {
+  display: grid;
+  gap: 5px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.loop-step {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.loop-step:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.loop-step p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.agent-item:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.agent-item p,
+.audit-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.agent-item a {
+  color: var(--primary);
+}
+
+.mini-action {
+  width: fit-content;
+  min-height: 24px;
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.source-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.source-chip {
+  max-width: 180px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--primary);
+  font: 10px var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.warning-text {
+  color: var(--warning) !important;
+}
+
 @media (max-width: 1100px) {
   .explorer-workspace, .reservation-layout, .message-grid, .workspace-grid-main, .feed-workspace, .decision-workspace, .config-workspace {
     grid-template-columns: 1fr;
   }
   .metric-sidebar, .split-tree, .feed-list, .decision-queue, .config-tree { display: none; }
-  .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .policy-grid, .weather-event-drilldown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .agentic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .command-button { display: none; }
 }
 
@@ -1833,7 +1999,9 @@ details summary span { float: right; }
   .breadcrumb, .ops-footer > span:last-child, .operator-block small { display: none; }
   .ops-rail { width: 58px; }
   .ops-rail span, .ops-rail small, .rail-collapse { display: none; }
-  .form-grid, .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .policy-grid, .weather-event-drilldown, .route-baseline-grid, .route-cost-grid { grid-template-columns: 1fr; }
+  .form-grid, .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .route-baseline-grid, .route-cost-grid, .agentic-grid { grid-template-columns: 1fr; }
+  .agentic-panel-summary { grid-template-columns: auto auto minmax(0, 1fr); }
+  .agentic-panel-summary small { display: none; }
 }
 
 @media print {

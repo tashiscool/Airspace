@@ -9,6 +9,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import org.tash.data.GeoCoordinate;
+import org.tash.extensions.agentic.AgenticOperationsService;
 import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.dto.ProductDtos;
 
@@ -23,6 +24,8 @@ import java.util.Map;
 public class ReferenceConfigHistoryResource {
     @Inject
     AirspaceProductService productService;
+    @Inject
+    AgenticOperationsService agenticOperationsService;
 
     @GET
     @Path("/reference/navaids")
@@ -67,6 +70,8 @@ public class ReferenceConfigHistoryResource {
         values.put("mapStack", "OpenLayers");
         values.put("backendRuntime", "Quarkus");
         values.put("authModel", "local-rbac");
+        values.put("agenticStore", agenticOperationsService.status().getMode());
+        values.put("agenticStoreDurable", agenticOperationsService.status().isDurable());
         values.put("enabledPillars", Arrays.asList("operations", "decision-engine", "weather-safety"));
         return values;
     }
@@ -86,6 +91,8 @@ public class ReferenceConfigHistoryResource {
     @GET
     @Path("/metrics")
     public Map<String, Double> metrics() {
-        return productService.metrics();
+        Map<String, Double> metrics = new LinkedHashMap<>(productService.metrics());
+        metrics.putAll(agenticOperationsService.metrics());
+        return metrics;
     }
 }

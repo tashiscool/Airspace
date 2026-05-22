@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "screenshots": "cd .. && node scripts/capture-product-screenshots.mjs"
   },
   "dependencies": {
