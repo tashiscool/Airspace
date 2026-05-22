@@ -73,6 +73,12 @@ class ProductReplayCorpusTest {
 
         ProductDtos.MissionWeatherVerdictSummary verdict = service.missionWeatherVerdict(mission.getId());
         ProductDtos.RouteImpactSummary impact = service.routeImpact(mission.getId(), reservationId);
+        ProductDtos.DecisionEvaluateRequest contextualDecision = new ProductDtos.DecisionEvaluateRequest();
+        contextualDecision.setDecisionTime("2026-05-20T00:00:00Z");
+        contextualDecision.setRawCarfMessages(Collections.singletonList(resource("/scenarios/product-replay/carf-altrv.txt")));
+        contextualDecision.setMissionId(mission.getId());
+        contextualDecision.setReservationId(reservationId);
+        ProductDtos.DecisionSummary contextualSummary = service.evaluateDecision(contextualDecision);
         ProductDtos.PirepRelevanceRequest relevanceRequest = new ProductDtos.PirepRelevanceRequest();
         relevanceRequest.setReservationId(reservationId);
         relevanceRequest.setLowerAltitudeFeet(22000.0);
@@ -103,6 +109,13 @@ class ProductReplayCorpusTest {
         assertFalse(impact.getSourceRefs().isEmpty(), "Route impact should retain source refs for audit");
         assertTrue(impact.getSourceRefs().stream().anyMatch(ref -> ref.startsWith("FDC:")));
         assertTrue(impact.getImpactedSegments().stream().anyMatch(segment -> segment.contains("NOTAM constraint")));
+        assertTrue(impact.getOriginalRouteDistanceNm() > 0.0);
+        assertFalse(impact.getWhyRerouteTrace().isEmpty());
+        assertFalse(impact.getAvoidanceCandidates().isEmpty());
+        assertFalse(impact.getCandidateComparisons().isEmpty());
+        assertNotNull(contextualSummary.getRouteImpact());
+        assertEquals(mission.getId(), contextualSummary.getRouteImpact().getMissionId());
+        assertFalse(contextualSummary.getRouteImpact().getCandidateComparisons().isEmpty());
         assertTrue(pireps.getTotalPireps() >= 1);
         assertTrue(pireps.getAverageRelevanceScore() > 0.0);
         assertTrue(verdict.getSources().stream().anyMatch(source -> "FDC".equals(source.getFamily())
@@ -115,6 +128,9 @@ class ProductReplayCorpusTest {
         assertTrue(brief.getPrintableText().contains("TRACE:"));
         assertTrue(affected.getGuidanceLatencySeconds() >= 0);
         assertFalse(affected.getSourceRefs().isEmpty());
+        assertFalse(affected.getRouteCoordinates().isEmpty());
+        assertTrue(affected.getRerouteCandidateCount() >= 1);
+        assertTrue(affected.getRerouteAdditionalCostUsd() > 0.0);
         assertTrue(service.metrics().get("product.weather.affectedMissions") >= 1.0);
     }
 

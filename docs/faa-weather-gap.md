@@ -33,6 +33,8 @@ This maps the FAA safety problem to the current Airspace product:
 - A weather delta feed, affected-mission queue, time-to-guidance metrics, and weather guidance table on the Weather page.
 - Source-family drilldown chips in affected-mission guidance on Weather and Mission Explorer so operators can jump from mission verdict to the NOTAM, PIREP, weather, USNS, or CARF/ALTRV source.
 - Clickable route-impact source chips on Mission, Reservation, and Pilot Brief surfaces so route guidance can be traced directly back to its driving artifact.
+- Structured route candidate comparison with original-vs-alternate distance, delay, fuel, cost, avoided hazards, residual constraints, and visible cost-model assumptions.
+- Selected route-impact map features expose the same reroute cost deltas used by the candidate panel, so table, map, and pilot-brief economics stay aligned.
 - Weather-map extraction for common compact aviation coordinates, decimal lat/lon pairs, bounded-by/from-to polygons, validity, altitude, radius, line-corridor, and movement tokens in SIGMET/AIRMET/CWAP-style text, with stable geometry intent metadata and selected map features linking back to their source artifact; non-geometric METAR/TAF products remain table/guidance artifacts instead of fake shapes.
 - Selected map feature summaries now expose geometry intent such as point radius or line-corridor width, so operators can distinguish a polygon, route corridor, and radius hazard without reading raw properties.
 - The map now includes an active-layer risk readout for visible blocking, severe, low-confidence, and stale overlays, making filter state and current operational risk easier to scan.

@@ -52,6 +52,7 @@ public class AirspaceProductService {
     private final OperationalFeedIngestService feedIngestService = new OperationalFeedIngestService();
     private final OperationalDecisionEngine decisionEngine = new OperationalDecisionEngine();
     private final WeatherProductParser weatherProductParser = new WeatherProductParser();
+    private final OperationalCostModel operationalCostModel = new OperationalCostModel();
 
     @Inject
     public AirspaceProductService(ReservationWorkflowService workflowService,
@@ -426,6 +427,10 @@ public class AirspaceProductService {
                 .route(route(safe.getRoute()))
                 .build();
         OperationalDecisionResult result = decisionEngine.evaluate(engineRequest);
+        ProductDtos.RouteImpactSummary routeImpact = null;
+        if (!blank(safe.getMissionId())) {
+            routeImpact = routeImpact(safe.getMissionId(), safe.getReservationId());
+        }
         String decisionId = UUID.randomUUID().toString();
         if (usePersistence()) {
             decisionId = persistenceService.saveDecision(result).toString();
@@ -436,6 +441,7 @@ public class AirspaceProductService {
                 .recommendedAction(result.getRecommendedAction() == null ? null : result.getRecommendedAction().name())
                 .confidence(result.getConfidence())
                 .rationale(result.getRationale())
+                .routeImpact(routeImpact)
                 .resultJson(org.tash.extensions.engine.CanonicalJson.write(result))
                 .auditJson(result.getAuditEnvelope() == null ? null : org.tash.extensions.engine.CanonicalJson.write(result.getAuditEnvelope()))
                 .replayJson(result.getReplayBundle() == null ? null : org.tash.extensions.engine.CanonicalJson.write(result.getReplayBundle()))
@@ -510,13 +516,23 @@ public class AirspaceProductService {
                 .pireps(inputs.pireps)
                 .route(route)
                 .build());
+        OperationalCostModel.RouteCostEstimate originalCost = operationalCostModel.estimateOriginal(route);
         List<String> impacted = new ArrayList<>();
         List<String> sourceRefs = new ArrayList<>();
+        Map<String, ProductDtos.ConstraintImpactSummary> constraintSummaries = new LinkedHashMap<>();
         int segments = 0;
         int notamConstraints = 0;
         for (RouteBlockagePrediction blockage : decision.getRouteBlockages()) {
             if (blockage.getPrimaryHazardId() != null) {
                 sourceRefs.add(blockage.getPrimaryHazardId());
+                constraintSummaries.putIfAbsent(blockage.getPrimaryHazardId(), ProductDtos.ConstraintImpactSummary.builder()
+                        .id(blockage.getPrimaryHazardId())
+                        .family("WEATHER")
+                        .label("Weather route blockage " + blockage.getPrimaryHazardId())
+                        .severity(blockage.getSeverity() == null ? null : blockage.getSeverity().name())
+                        .sourceRef(blockage.getPrimaryHazardId())
+                        .rationale(blockage.getRationale())
+                        .build());
             }
             for (Integer index : blockage.getBlockedSegmentIndexes()) {
                 impacted.add("segment " + index + " forecast-hour " + blockage.getForecastHour()
@@ -525,6 +541,8 @@ public class AirspaceProductService {
             segments += blockage.getBlockedSegmentIndexes().size();
         }
         for (OperationalConstraint constraint : decision.getBlockingConstraints()) {
+            ProductDtos.ConstraintImpactSummary summary = constraintSummary(constraint);
+            constraintSummaries.putIfAbsent(summary.getId(), summary);
             constraint.getSources().forEach(source -> sourceRefs.add(source.getType() + ":" + source.getId()));
         }
         for (ProductDtos.MessageSummary message : guidanceMessagesForMission(missionId)) {
@@ -536,15 +554,38 @@ public class AirspaceProductService {
             }
             notamConstraints++;
             sourceRefs.add(value(message.getFamily(), "NOTAM") + ":" + message.getId());
+            constraintSummaries.putIfAbsent(message.getId(), ProductDtos.ConstraintImpactSummary.builder()
+                    .id(message.getId())
+                    .family("NOTAM")
+                    .label(value(message.getSubject(), snippet(message.getRawText())))
+                    .severity(guidanceAction(message))
+                    .sourceRef(value(message.getFamily(), "NOTAM") + ":" + message.getId())
+                    .rationale("NOTAM constraint requires route/altitude/time review")
+                    .build());
             impacted.add("NOTAM constraint " + value(message.getSubject(), snippet(message.getRawText()))
                     + " requires route/altitude/time review");
         }
+        List<ProductDtos.RerouteTraceSummary> whyTrace = whyRerouteTrace(decision);
+        List<ProductDtos.RouteCandidateComparisonSummary> comparisons = new ArrayList<>();
         List<String> candidates = new ArrayList<>();
         if (decision.getRoutePlanResult() != null) {
             for (RouteCandidate candidate : decision.getRoutePlanResult().getCandidates()) {
-                candidates.add(candidate.getId() + " avoids " + candidate.getAvoidedConstraintIds()
-                        + " cost " + Math.round(candidate.getCost()));
+                ProductDtos.RouteCandidateComparisonSummary comparison = routeCandidateComparison(route, candidate, constraintSummaries, decision);
+                comparisons.add(comparison);
+                candidates.add(comparison.getLabel() + " avoids "
+                        + comparison.getAvoidedConstraints().stream().map(ProductDtos.ConstraintImpactSummary::getId).collect(java.util.stream.Collectors.toList())
+                        + " +" + Math.round(comparison.getCost().getAdditionalDistanceNm()) + " NM $"
+                        + Math.round(comparison.getCost().getAdditionalCostUsd()));
             }
+        }
+        if (comparisons.isEmpty() && route.size() >= 2 && !constraintSummaries.isEmpty()) {
+            RouteCandidate candidate = deterministicReviewCandidate(route, constraintSummaries);
+            ProductDtos.RouteCandidateComparisonSummary comparison = routeCandidateComparison(route, candidate, constraintSummaries, decision);
+            comparisons.add(comparison);
+            candidates.add(comparison.getLabel() + " avoids "
+                    + comparison.getAvoidedConstraints().stream().map(ProductDtos.ConstraintImpactSummary::getId).collect(java.util.stream.Collectors.toList())
+                    + " +" + Math.round(comparison.getCost().getAdditionalDistanceNm()) + " NM $"
+                    + Math.round(comparison.getCost().getAdditionalCostUsd()));
         }
         return ProductDtos.RouteImpactSummary.builder()
                 .missionId(missionId)
@@ -553,13 +594,174 @@ public class AirspaceProductService {
                 .recommendedAction(decision.getRecommendedAction() == null ? "NONE" : decision.getRecommendedAction().name())
                 .confidence(decision.getConfidence())
                 .rationale(routeImpactRationale(decision, notamConstraints))
+                .originalRouteDistanceNm(originalCost.getDistanceNm())
+                .originalRouteEstimatedMinutes(originalCost.getEstimatedMinutes())
+                .originalRouteEstimatedFuelLb(originalCost.getEstimatedFuelLb())
+                .originalRouteEstimatedCostUsd(originalCost.getEstimatedCostUsd())
                 .impactedSegmentCount(segments + notamConstraints)
                 .blockingConstraintCount(decision.getBlockingConstraints().size() + notamConstraints)
                 .impactedSegments(impacted)
                 .sourceRefs(distinct(sourceRefs))
                 .avoidanceCandidates(candidates)
+                .candidateComparisons(comparisons)
+                .whyRerouteTrace(whyTrace)
                 .diagnostics(inputs.diagnostics)
                 .build();
+    }
+
+    private RouteCandidate deterministicReviewCandidate(List<GeoCoordinate> route,
+                                                        Map<String, ProductDtos.ConstraintImpactSummary> constraints) {
+        GeoCoordinate start = route.get(0);
+        GeoCoordinate end = route.get(route.size() - 1);
+        double detourLat = Math.max(start.getLatitude(), end.getLatitude()) + 0.75;
+        List<GeoCoordinate> points = new ArrayList<>();
+        points.add(start);
+        points.add(GeoCoordinate.builder().latitude(detourLat).longitude(start.getLongitude()).altitude(start.getAltitude()).build());
+        points.add(GeoCoordinate.builder().latitude(detourLat).longitude(end.getLongitude()).altitude(end.getAltitude()).build());
+        points.add(end);
+        return RouteCandidate.builder()
+                .id("operator-review-dogleg")
+                .points(points)
+                .avoidedConstraintIds(new ArrayList<>(constraints.keySet()))
+                .remainingConstraintIds(Collections.emptyList())
+                .rationale("Deterministic operator-review dogleg around retained weather/NOTAM route impact sources")
+                .build();
+    }
+
+    private ProductDtos.RouteCandidateComparisonSummary routeCandidateComparison(List<GeoCoordinate> originalRoute,
+                                                                                 RouteCandidate candidate,
+                                                                                 Map<String, ProductDtos.ConstraintImpactSummary> constraints,
+                                                                                 OperationalDecisionResult decision) {
+        OperationalCostModel.RouteCostEstimate cost = operationalCostModel.estimate(originalRoute, candidate.getPoints());
+        List<ProductDtos.ConstraintImpactSummary> avoided = constraintImpacts(candidate.getAvoidedConstraintIds(), constraints);
+        List<ProductDtos.ConstraintImpactSummary> residual = constraintImpacts(candidate.getRemainingConstraintIds(), constraints);
+        List<String> refs = new ArrayList<>();
+        avoided.forEach(item -> refs.add(item.getSourceRef()));
+        residual.forEach(item -> refs.add(item.getSourceRef()));
+        List<ProductDtos.RerouteTraceSummary> trace = new ArrayList<>(whyRerouteTrace(decision));
+        trace.add(ProductDtos.RerouteTraceSummary.builder()
+                .stage("candidate")
+                .ruleId("ROUTE_CANDIDATE_COMPARISON")
+                .message(candidate.getId() + " avoids " + candidate.getAvoidedConstraintIds().size()
+                        + " constraint(s), leaves " + candidate.getRemainingConstraintIds().size()
+                        + " residual constraint(s)")
+                .confidence(decision.getConfidence())
+                .build());
+        return ProductDtos.RouteCandidateComparisonSummary.builder()
+                .id(candidate.getId())
+                .label(candidateLabel(candidate.getId()))
+                .rationale(candidate.getRationale())
+                .confidence(residual.isEmpty() ? Math.max(0.0, decision.getConfidence()) : Math.max(0.0, decision.getConfidence() - 0.2))
+                .cost(costSummary(cost))
+                .routePointLabels(routePointLabels(candidate.getPoints()))
+                .avoidedConstraints(avoided)
+                .residualConstraints(residual)
+                .sourceRefs(distinct(refs))
+                .trace(trace)
+                .build();
+    }
+
+    private List<ProductDtos.ConstraintImpactSummary> constraintImpacts(List<String> ids,
+                                                                        Map<String, ProductDtos.ConstraintImpactSummary> constraints) {
+        List<ProductDtos.ConstraintImpactSummary> out = new ArrayList<>();
+        for (String id : ids) {
+            ProductDtos.ConstraintImpactSummary known = constraints.get(id);
+            out.add(known == null ? ProductDtos.ConstraintImpactSummary.builder()
+                    .id(id)
+                    .family("CONSTRAINT")
+                    .label(id)
+                    .sourceRef(id)
+                    .rationale("Referenced by route replanning output")
+                    .build() : known);
+        }
+        return out;
+    }
+
+    private ProductDtos.ConstraintImpactSummary constraintSummary(OperationalConstraint constraint) {
+        String sourceRef = constraint.getSources().isEmpty()
+                ? constraint.getId()
+                : constraint.getSources().get(0).getType() + ":" + constraint.getSources().get(0).getId();
+        return ProductDtos.ConstraintImpactSummary.builder()
+                .id(constraint.getId())
+                .family(constraint.getType() == null ? "CONSTRAINT" : constraint.getType().name())
+                .label(value(constraint.getId(), sourceRef))
+                .severity(constraint.getSeverity() == null ? null : constraint.getSeverity().name())
+                .sourceRef(sourceRef)
+                .rationale(constraint.getRationale())
+                .build();
+    }
+
+    private List<ProductDtos.RerouteTraceSummary> whyRerouteTrace(OperationalDecisionResult decision) {
+        List<ProductDtos.RerouteTraceSummary> trace = new ArrayList<>();
+        trace.add(ProductDtos.RerouteTraceSummary.builder()
+                .stage("action-precedence")
+                .ruleId("ACTION_PRECEDENCE")
+                .message("Route blocked > unresolved CARF conflict > severe weather > NOTAM restriction > review > clear")
+                .confidence(decision.getConfidence())
+                .build());
+        for (RouteBlockagePrediction blockage : decision.getRouteBlockages()) {
+            if (blockage.getRuleIds().isEmpty() && blockage.getRuleApplications().isEmpty()) {
+                trace.add(ProductDtos.RerouteTraceSummary.builder()
+                        .stage("route-impact")
+                        .ruleId("ROUTE_BLOCKAGE")
+                        .message(blockage.getRationale())
+                        .sourceRef(blockage.getPrimaryHazardId())
+                        .confidence(blockage.getConfidence())
+                        .build());
+            }
+            for (String ruleId : blockage.getRuleIds()) {
+                trace.add(ProductDtos.RerouteTraceSummary.builder()
+                        .stage("route-impact")
+                        .ruleId(ruleId)
+                        .message(blockage.getConfidenceMath() == null ? blockage.getRationale() : blockage.getConfidenceMath())
+                        .sourceRef(blockage.getPrimaryHazardId())
+                        .confidence(blockage.getConfidence())
+                        .build());
+            }
+            for (org.tash.extensions.engine.DecisionRuleApplication application : blockage.getRuleApplications()) {
+                String ruleId = application.getRule() == null ? "ROUTE_IMPACT_SCORING" : application.getRule().getId();
+                trace.add(ProductDtos.RerouteTraceSummary.builder()
+                        .stage("scoring")
+                        .ruleId(ruleId)
+                        .message(value(application.getRationale(), value(application.getFormula(), blockage.getRationale())))
+                        .sourceRef(blockage.getPrimaryHazardId())
+                        .confidence(application.getOutputValue() == null ? blockage.getConfidence() : application.getOutputValue())
+                        .build());
+            }
+        }
+        return trace;
+    }
+
+    private ProductDtos.RouteCostEstimateSummary costSummary(OperationalCostModel.RouteCostEstimate cost) {
+        return ProductDtos.RouteCostEstimateSummary.builder()
+                .distanceNm(cost.getDistanceNm())
+                .additionalDistanceNm(cost.getAdditionalDistanceNm())
+                .estimatedMinutes(cost.getEstimatedMinutes())
+                .additionalMinutes(cost.getAdditionalMinutes())
+                .estimatedFuelLb(cost.getEstimatedFuelLb())
+                .additionalFuelLb(cost.getAdditionalFuelLb())
+                .estimatedCostUsd(cost.getEstimatedCostUsd())
+                .additionalCostUsd(cost.getAdditionalCostUsd())
+                .cruiseSpeedKnots(cost.getCruiseSpeedKnots())
+                .fuelBurnLbPerNm(cost.getFuelBurnLbPerNm())
+                .fuelCostUsdPerLb(cost.getFuelCostUsdPerLb())
+                .delayCostUsdPerMinute(cost.getDelayCostUsdPerMinute())
+                .build();
+    }
+
+    private List<String> routePointLabels(List<GeoCoordinate> points) {
+        List<String> labels = new ArrayList<>();
+        for (GeoCoordinate point : points) {
+            labels.add(String.format(Locale.US, "%.3f, %.3f", point.getLatitude(), point.getLongitude()));
+        }
+        return labels;
+    }
+
+    private String candidateLabel(String id) {
+        if (blank(id)) {
+            return "Alternate route";
+        }
+        return id.replace('-', ' ').toUpperCase(Locale.US);
     }
 
     public ProductDtos.PirepRelevanceResult relevantPireps(String missionId, ProductDtos.PirepRelevanceRequest request) {
@@ -725,6 +927,9 @@ public class AirspaceProductService {
                 continue;
             }
             long ageSeconds = lastObserved == null ? -1 : Math.max(0, Duration.between(lastObserved, now).getSeconds());
+            List<GeoCoordinate> route = routeForMission(mission(mission.getId()), null);
+            ProductDtos.RouteCandidateComparisonSummary bestCandidate = bestCandidate(impact.getCandidateComparisons());
+            ProductDtos.RouteCostEstimateSummary bestCost = bestCandidate == null ? null : bestCandidate.getCost();
             affected.add(ProductDtos.AffectedMissionSummary.builder()
                     .missionId(mission.getId())
                     .missionNumber(mission.getMissionNumber())
@@ -742,7 +947,16 @@ public class AirspaceProductService {
                     .stale(lastObserved != null && lastObserved.plus(Duration.ofMinutes(90)).isBefore(now))
                     .guidanceLatencySeconds(ageSeconds)
                     .guidanceTargetMet(ageSeconds >= 0 && ageSeconds <= 5)
+                    .rerouteCandidateCount(impact.getCandidateComparisons().size())
+                    .bestCandidateLabel(bestCandidate == null ? null : bestCandidate.getLabel())
+                    .rerouteAdditionalDistanceNm(bestCost == null ? 0.0 : bestCost.getAdditionalDistanceNm())
+                    .rerouteAdditionalMinutes(bestCost == null ? 0.0 : bestCost.getAdditionalMinutes())
+                    .rerouteAdditionalFuelLb(bestCost == null ? 0.0 : bestCost.getAdditionalFuelLb())
+                    .rerouteAdditionalCostUsd(bestCost == null ? 0.0 : bestCost.getAdditionalCostUsd())
+                    .avoidedConstraintCount(bestCandidate == null ? 0 : bestCandidate.getAvoidedConstraints().size())
+                    .residualConstraintCount(bestCandidate == null ? 0 : bestCandidate.getResidualConstraints().size())
                     .sourceRefs(distinctRefs)
+                    .routeCoordinates(routeCoordinates(route))
                     .build());
         }
         affected.sort((left, right) -> {
@@ -757,6 +971,44 @@ public class AirspaceProductService {
             return String.valueOf(right.getLastObservedAt()).compareTo(String.valueOf(left.getLastObservedAt()));
         });
         return affected.size() > max ? new ArrayList<>(affected.subList(0, max)) : affected;
+    }
+
+    private ProductDtos.RouteCandidateComparisonSummary bestCandidate(List<ProductDtos.RouteCandidateComparisonSummary> candidates) {
+        if (candidates == null || candidates.isEmpty()) {
+            return null;
+        }
+        ProductDtos.RouteCandidateComparisonSummary best = null;
+        for (ProductDtos.RouteCandidateComparisonSummary candidate : candidates) {
+            if (best == null) {
+                best = candidate;
+                continue;
+            }
+            int residualCompare = Integer.compare(candidate.getResidualConstraints().size(), best.getResidualConstraints().size());
+            if (residualCompare < 0) {
+                best = candidate;
+                continue;
+            }
+            if (residualCompare == 0) {
+                double candidateCost = candidate.getCost() == null ? Double.POSITIVE_INFINITY : candidate.getCost().getAdditionalCostUsd();
+                double bestCost = best.getCost() == null ? Double.POSITIVE_INFINITY : best.getCost().getAdditionalCostUsd();
+                if (candidateCost < bestCost) {
+                    best = candidate;
+                }
+            }
+        }
+        return best;
+    }
+
+    private List<List<Double>> routeCoordinates(List<GeoCoordinate> route) {
+        List<List<Double>> coordinates = new ArrayList<>();
+        for (GeoCoordinate point : route) {
+            List<Double> coordinate = new ArrayList<>();
+            coordinate.add(point.getLatitude());
+            coordinate.add(point.getLongitude());
+            coordinate.add(point.getAltitude());
+            coordinates.add(coordinate);
+        }
+        return coordinates;
     }
 
     public ProductDtos.DecisionSummary decision(String id) {

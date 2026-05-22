@@ -9,8 +9,9 @@ import { DataTable } from '../components/DataTable';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { OperationsMap } from '../components/OperationsMap';
 import { StatusBadge } from '../components/StatusBadge';
+import { RouteCandidateComparisonPanel } from '../components/RouteCandidateComparisonPanel';
 import { WeatherVerdictStrip } from '../components/WeatherVerdict';
-import { compactId, fmtZ, missionWeatherVerdict, sourceRefLabel, sourceRefRoute, type MissionWeatherVerdict } from '../lib/viewModels';
+import { compactId, fmtZ, mergeFeatureCollections, missionWeatherVerdict, routeImpactFeaturesFromSummary, sourceRefLabel, sourceRefRoute, type MissionWeatherVerdict } from '../lib/viewModels';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
 import type { MessageSummary, MissionWeatherVerdictSummary, ReservationSummary } from '../types';
 
@@ -53,6 +54,7 @@ export function MissionPage() {
   const queryClient = useQueryClient();
   const [selectedReservationId, setSelectedReservationId] = useState('');
   const [selectedMessageId, setSelectedMessageId] = useState('');
+  const [selectedRouteCandidateId, setSelectedRouteCandidateId] = useState('');
   const [pirepScope, setPirepScope] = useState({
     lowerAltitudeFeet: 22000,
     upperAltitudeFeet: 28000,
@@ -105,6 +107,10 @@ export function MissionPage() {
   const lock = useMutation({ mutationFn: () => api.lockMission(missionId, 'planner'), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mission', missionId] }) });
   const unlock = useMutation({ mutationFn: () => api.unlockMission(missionId, 'planner'), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mission', missionId] }) });
   const conflictCount = useMemo(() => (mission.data?.reservations ?? []).reduce((sum, reservation) => sum + reservation.conflictCount, 0), [mission.data]);
+  const mapFeatures = useMemo(() => mergeFeatureCollections(features.data, {
+    type: 'FeatureCollection',
+    features: routeImpactFeaturesFromSummary(routeImpact.data)
+  }), [features.data, routeImpact.data]);
   const weatherVerdict = useMemo(() => {
     return backendVerdict.data ? verdictFromBackend(backendVerdict.data) : missionWeatherVerdict(missionId, messages.data ?? mission.data?.messages ?? []);
   }, [backendVerdict.data, missionId, messages.data, mission.data?.messages]);
@@ -210,9 +216,11 @@ export function MissionPage() {
                 ))}
               </div>
             )}
-            {!!routeImpact.data?.avoidanceCandidates?.length && (
-              <div className="source-ref-grid">{routeImpact.data.avoidanceCandidates.map((item) => <span key={item}>{item}</span>)}</div>
-            )}
+            <RouteCandidateComparisonPanel
+              routeImpact={routeImpact.data}
+              selectedCandidateId={selectedRouteCandidateId}
+              onCandidateSelect={setSelectedRouteCandidateId}
+            />
             <button onClick={() => coordinationDraft.mutate()}>Coordinate From Hazard</button>
           </div>
           {coordinationDraft.data && (
@@ -350,7 +358,16 @@ export function MissionPage() {
             {!mission.data?.history?.length && <p className="muted">No history has been recorded for this mission.</p>}
           </div>
         </section>
-        <OperationsMap features={features.data} />
+        <OperationsMap
+          features={mapFeatures}
+          selectedFeatureId={selectedRouteCandidateId ? `route-candidate-${missionId}-${selectedRouteCandidateId}` : undefined}
+          onSelectedFeatureIdChange={(featureId) => {
+            const prefix = `route-candidate-${missionId}-`;
+            setSelectedRouteCandidateId(featureId?.startsWith(prefix) ? featureId.slice(prefix.length) : '');
+          }}
+          affectedMissionIds={[missionId]}
+          affectedSourceRefs={routeImpact.data?.sourceRefs}
+        />
       </div>
     </section>
   );

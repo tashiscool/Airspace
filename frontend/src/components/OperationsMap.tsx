@@ -11,16 +11,22 @@ import OSM from 'ol/source/OSM';
 import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import type { FeatureCollection } from '../types';
 import { DEFAULT_LAYOUT_PREFS, readWorkbenchJson, writeWorkbenchJson } from '../lib/workbenchState';
-import { featureDisplayLayer, featurePassesFreshnessFilter, layerDefinition, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, mapVisibleRiskCounts, MAP_LAYERS, type MapLayerId } from './mapLayers';
+import { featureDisplayLayer, featureMatchesAffectedContext, featurePassesFreshnessFilter, layerDefinition, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, mapVisibleRiskCounts, MAP_LAYERS, type MapLayerId } from './mapLayers';
 
 export function OperationsMap({
   features,
   selectedFeatureId: controlledSelectedFeatureId,
-  onSelectedFeatureIdChange
+  onSelectedFeatureIdChange,
+  affectedMissionIds,
+  affectedFeatureIds,
+  affectedSourceRefs
 }: {
   features?: FeatureCollection;
   selectedFeatureId?: string;
   onSelectedFeatureIdChange?: (featureId: string | undefined) => void;
+  affectedMissionIds?: string[];
+  affectedFeatureIds?: string[];
+  affectedSourceRefs?: string[];
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [forecastHour, setForecastHour] = useState(0);
@@ -30,6 +36,7 @@ export function OperationsMap({
   const [hideStaleWeather, setHideStaleWeather] = useState(false);
   const [internalSelectedFeatureId, setInternalSelectedFeatureId] = useState<string | undefined>();
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+  const [affectedMode, setAffectedMode] = useState(false);
   const [fitRequest, setFitRequest] = useState<{ scope: 'all' | 'selected'; sequence: number }>({ scope: 'all', sequence: 0 });
   const selectedFeatureId = controlledSelectedFeatureId ?? internalSelectedFeatureId;
   const [enabledLayers, setEnabledLayers] = useState<Set<MapLayerId>>(
@@ -40,6 +47,12 @@ export function OperationsMap({
     }
   );
   const forecastRange = useMemo(() => forecastBounds(features), [features]);
+  const affectedContext = useMemo(() => ({
+    featureIds: affectedFeatureIds,
+    missionIds: affectedMissionIds,
+    sourceRefs: affectedSourceRefs
+  }), [affectedFeatureIds, affectedMissionIds, affectedSourceRefs]);
+  const hasAffectedContext = !!(affectedFeatureIds?.length || affectedMissionIds?.length || affectedSourceRefs?.length);
   const visibleFeatures = useMemo<FeatureCollection | undefined>(() => {
     if (!features) return undefined;
     return {
@@ -91,7 +104,10 @@ export function OperationsMap({
             const freshness = mapFeatureFreshness({ properties: feature.getProperties() });
             const confidence = mapFeatureConfidence({ properties: feature.getProperties() });
             const severity = mapFeatureSeverity({ properties: feature.getProperties() });
-            const opacity = Math.min(freshness?.opacity ?? 1, confidence.opacity);
+            const sourceFeature = visibleFeatures?.features.find((item, index) => featureKey(item, index) === String(feature.get('_airspaceFeatureKey') ?? ''));
+            const affected = sourceFeature ? featureMatchesAffectedContext(sourceFeature, affectedContext) : false;
+            const affectedDim = affectedMode && hasAffectedContext && !affected ? 0.25 : 1;
+            const opacity = Math.min(freshness?.opacity ?? 1, confidence.opacity) * affectedDim;
             const geometryType = String(feature.getGeometry()?.getType() ?? '').toLowerCase();
             return new Style({
               stroke: new Stroke({
@@ -141,7 +157,7 @@ export function OperationsMap({
     });
     requestAnimationFrame(fitToFeatures);
     return () => map.setTarget(undefined);
-  }, [visibleFeatures, selectedFeatureId, fitRequest]);
+  }, [visibleFeatures, selectedFeatureId, fitRequest, affectedContext, affectedMode, hasAffectedContext]);
 
   const counts = useMemo(() => {
     const result = new globalThis.Map<MapLayerId, number>();
@@ -207,6 +223,7 @@ export function OperationsMap({
           <button className="map-layer" onClick={fitAll} type="button">Fit All</button>
           <button className="map-layer" disabled={!selectedFeatureId} onClick={fitSelected} type="button">Fit Selected</button>
           <button className={showSelectedOnly ? 'map-layer active' : 'map-layer'} onClick={() => setShowSelectedOnly((value) => !value)} type="button">Selected Only</button>
+          {hasAffectedContext && <button className={affectedMode ? 'map-layer active' : 'map-layer'} onClick={() => setAffectedMode((value) => !value)} type="button">Affected Missions</button>}
           <button className="map-layer" onClick={() => setLayerGroup('ops')} type="button">Ops</button>
           <button className="map-layer" onClick={() => setLayerGroup('weather')} type="button">Weather</button>
           <button className="map-layer" onClick={() => setLayerGroup('reference')} type="button">Reference</button>
@@ -274,13 +291,17 @@ export function OperationsMap({
             const isLine = String(feature.geometry?.type ?? '').toLowerCase() === 'linestring';
             const id = featureKey(feature, index);
             const selected = id === selectedFeatureId;
+            const affected = featureMatchesAffectedContext(feature, affectedContext, index);
+            const dim = affectedMode && hasAffectedContext && !affected ? 0.22 : 1;
             return (
               <path
                 key={id}
                 d={path}
                 fill={isLine ? 'none' : layer.fill}
                 stroke={layer.stroke}
-                strokeWidth={selected ? 2.1 : isLine ? 1.3 : 0.65}
+                strokeOpacity={dim}
+                fillOpacity={dim}
+                strokeWidth={selected || (affectedMode && affected) ? 2.1 : isLine ? 1.3 : 0.65}
                 vectorEffect="non-scaling-stroke"
               />
             );
@@ -293,6 +314,7 @@ export function OperationsMap({
         <div><strong>Weather/PIREP</strong><span>Hazards, reports, and route blockage overlays from the decision engine.</span></div>
         <div><strong>Freshness</strong><span>Weather and PIREP overlays fade/dash as reports age or become stale.</span></div>
         <div><strong>Risk Readout</strong><span>{visibleRiskCounts.blocked} blocking, {visibleRiskCounts.severe} severe, {visibleRiskCounts.lowConfidence} low confidence, {visibleRiskCounts.stale} stale visible.</span></div>
+        {hasAffectedContext && <div><strong>Affected Mode</strong><span>{affectedMode ? 'Highlighting affected mission and source-linked overlays.' : 'Available for active mission weather impact review.'}</span></div>}
       </div>
       <div className="map-feature-browser">
         <div>
@@ -333,6 +355,7 @@ function FeatureProperties({ feature }: { feature: FeatureCollection['features']
             {summary.confidence && <span>{summary.confidence}</span>}
             {summary.freshness && <span>{summary.freshness}</span>}
             {summary.movement && <span>{summary.movement}</span>}
+            {summary.cost && <span>{summary.cost}</span>}
             {summary.action && <span>{summary.action}</span>}
           </div>
           {summary.risk && <small className="map-risk-readout">{summary.risk}</small>}

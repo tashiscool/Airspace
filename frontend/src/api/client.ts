@@ -148,7 +148,7 @@ export const api = {
   feedArtifacts: () => request<FeedArtifactSummary[]>('/api/feed/artifacts'),
   feedArtifact: (id: string) => request<FeedArtifactSummary>(`/api/feed/artifacts/${id}`),
   feedTransactions: (id: string) => request<FeedTransactionSummary[]>(`/api/feed/artifacts/${id}/transactions`),
-  evaluateDecision: (body: { rawUsnsMessages?: string[]; rawCarfMessages?: string[]; route?: number[][]; decisionTime?: string }) =>
+  evaluateDecision: (body: { rawUsnsMessages?: string[]; rawCarfMessages?: string[]; route?: number[][]; missionId?: string; reservationId?: string; decisionTime?: string }) =>
     request<DecisionSummary>('/api/decisions/evaluate', { method: 'POST', body: JSON.stringify(body) }),
   decision: (id: string) => request<DecisionSummary>(`/api/decisions/${id}`),
   replayDecision: (id: string) =>

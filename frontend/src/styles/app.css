@@ -1672,12 +1672,159 @@ details summary span { float: right; }
 .console-line.warn span { color: var(--warn); }
 .console-line.err span { color: var(--bad); }
 
+.route-comparison-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+.panel-heading.compact {
+  margin: 0;
+}
+.route-baseline-grid,
+.route-cost-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.route-cost-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.route-cost-assumptions {
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+.metric.mini {
+  min-height: auto;
+  padding: 7px;
+  border-radius: 4px;
+}
+.metric.mini span {
+  font-size: 9px;
+}
+.metric.mini strong {
+  font-size: 13px;
+}
+.route-candidate-card {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, .68);
+}
+.route-candidate-card.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, .28) inset;
+}
+.route-candidate-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.route-candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.route-candidate-header p,
+.constraint-impact-row small {
+  margin: 3px 0 0;
+  color: var(--muted);
+}
+.constraint-impact-list {
+  display: grid;
+  gap: 6px;
+}
+.constraint-impact-list > strong,
+.reroute-trace-list > strong {
+  font: 10px var(--font-mono);
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.constraint-impact-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid rgba(51, 65, 85, .72);
+  border-radius: 4px;
+  background: #020617;
+}
+.constraint-impact-row small {
+  grid-column: 1 / -1;
+}
+.reroute-trace-list {
+  display: grid;
+  gap: 6px;
+}
+.reroute-trace-list.compact {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.reroute-trace-row {
+  display: grid;
+  grid-template-columns: minmax(120px, .55fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 5px 6px;
+  border: 1px solid rgba(51, 65, 85, .62);
+  border-radius: 4px;
+  color: var(--muted);
+  background: rgba(2, 6, 23, .8);
+}
+.reroute-trace-row code {
+  color: var(--primary);
+  white-space: nowrap;
+}
+.weather-event-drilldown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.weather-event-card {
+  display: grid;
+  gap: 5px;
+  text-align: left;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, .72);
+  color: var(--text);
+}
+.weather-event-card span {
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+.weather-event-card strong {
+  font-size: 20px;
+}
+.weather-event-card small {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.weather-event-card p {
+  margin: 0;
+  color: var(--muted);
+}
+.reroute-cost-line {
+  color: var(--primary) !important;
+}
+
 @media (max-width: 1100px) {
   .explorer-workspace, .reservation-layout, .message-grid, .workspace-grid-main, .feed-workspace, .decision-workspace, .config-workspace {
     grid-template-columns: 1fr;
   }
   .metric-sidebar, .split-tree, .feed-list, .decision-queue, .config-tree { display: none; }
-  .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .policy-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .policy-grid, .weather-event-drilldown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .command-button { display: none; }
 }
 
@@ -1686,7 +1833,7 @@ details summary span { float: right; }
   .breadcrumb, .ops-footer > span:last-child, .operator-block small { display: none; }
   .ops-rail { width: 58px; }
   .ops-rail span, .ops-rail small, .rail-collapse { display: none; }
-  .form-grid, .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .policy-grid { grid-template-columns: 1fr; }
+  .form-grid, .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .policy-grid, .weather-event-drilldown, .route-baseline-grid, .route-cost-grid { grid-template-columns: 1fr; }
 }
 
 @media print {

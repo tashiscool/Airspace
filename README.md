@@ -31,6 +31,12 @@ Airspace tackles that as an end-to-end safety loop:
 
 The acceptance target for the prototype is: a new SIGMET/PIREP/feed artifact should identify affected active missions locally in under 5 seconds, show a per-mission verdict badge, expose route impacts and source artifacts, support a coordination draft, and generate a printable pilot handoff brief.
 
+### Competitive Positioning
+
+The European-style benchmark is a live weather rerouting console: affected flights turn red, operators compare the original route against alternatives, and the system estimates extra distance, delay, fuel, and cost. Airspace now includes that prototype-grade reroute comparison surface, but the product goal is broader: **weather rerouting plus FAA-style operational fusion**.
+
+Airspace combines reroute candidates with USNS/NADIN/WMSCR-style messaging, NOTAM constraints, CARF/ALTRV reservations, PIREPs, protected-volume deconfliction, source traceability, audit/replay, and pilot handoff. The route-impact API returns structured candidate comparisons with original-route estimates, added distance, delay, fuel, cost, avoided hazards, residual constraints, and “Why this reroute?” trace rule IDs/source refs. The deterministic cost seam exposes its assumptions directly in the UI: cruise speed, fuel burn per nautical mile, fuel price, and delay cost per minute, so prototype economics stay inspectable rather than magic. The workbench exposes affected mission map mode, route-candidate map overlays, selected-feature reroute cost readouts, weather event drilldowns, and source-family chips so controllers can move from hazard to affected mission to reroute review to coordination draft without losing provenance.
+
 ## What Is Implemented
 
 ### CARF / ALTRV / Reservation Engine
@@ -141,7 +147,13 @@ The first product API path is intentionally local/test-friendly: the engine rema
 - Mission Explorer is the time-to-guidance board: per-mission weather verdicts, affected active missions, weather/PIREP/NOTAM deltas, attention filters, source-family chips, and coordinate actions.
 - Weather and PIREP pages expose real-time-style product intake, route blockage counts, PIREP workflow, coordination queue, freshness, no-geometry notices for METAR/TAF, and map/table coupling for coordinate-bearing hazards.
 - Mission, Reservation, Decision, and Pilot Brief pages show route impacts, blocking constraints, avoidance candidates, exact source refs, trace/audit/replay, and a readable handoff summary.
-- The map keeps CARF/ALTRV reservations, route impacts, conflicts, NOTAMs, weather, PIREPs, and reference points distinct, with forecast/freshness/altitude filtering and visible risk counts.
+- Mission, Reservation, Decision, and Pilot Brief pages include route candidate comparison panels: original vs alternate corridor, added distance, estimated delay, fuel, cost, avoided hazards, residual constraints, confidence, and “Why this reroute?” rule/source trace.
+- Route candidate panels and selected route-impact map features show the deterministic cost assumptions behind those estimates, keeping prototype distance, delay, fuel, and cost math operator-auditable.
+- Mission and Reservation maps include derived route-candidate GeoJSON overlays from the structured comparison DTOs, so selecting **Show On Map** on an alternate route highlights the matching route-impact layer.
+- Affected mission summaries include route geometry, allowing the Weather board to draw affected active mission routes directly in affected-mission map mode instead of only highlighting the weather source overlays.
+- Affected mission summaries also expose the best alternate route penalty: added distance, delay, fuel, cost, avoided constraint count, and residual constraint count, so the Weather board behaves more like a real-time reroute operations list while retaining FAA-style source refs.
+- The Weather page includes drilldowns for volcanic ash, hurricane/convection, icing/turbulence, PIREP clusters, ceiling/visibility, and generic weather, with affected mission counts and map/table coupling.
+- The map keeps CARF/ALTRV reservations, route impacts, conflicts, NOTAMs, weather, PIREPs, and reference points distinct, with forecast/freshness/altitude filtering, affected mission mode, selected feature risk readout, and visible risk counts.
 
 Frontend commands:
 
@@ -178,6 +190,9 @@ The safety loop this product is trying to close is explicit in the workbench:
 
 - **Weather product intake:** METAR/TAF/SIGMET/AIRMET/CWAP-style products, PIREPs, and generic weather advisories enter through USNS/feed/message paths.
 - **Route blockage and avoidance:** weather products are fused with route candidates, CARF/ALTRV reservations, NOTAM constraints, altitude bands, timing windows, and route-segment metadata.
+- **Route candidate comparison:** original routes and alternatives are compared with distance, delay, fuel, cost, avoided hazards, residual constraints, confidence, and a “Why this reroute?” trace.
+- **Affected mission map mode:** affected active mission routes/source-linked overlays can be emphasized while unrelated map layers are dimmed.
+- **Weather event drilldown:** volcanic ash, hurricane/convection, icing/turbulence, PIREP clusters, ceiling/visibility, and generic weather are grouped for fast inspection.
 - **PIREP handling:** aircraft reports are modeled separately from forecasts so turbulence/icing observations can drive review priority and route/altitude guidance.
 - **ATC/weather coordination:** severe, urgent, stale, or low-confidence products become review/coordination items instead of disappearing into raw text.
 - **Pilot/operator decision support:** the decision engine returns a single recommended action with confidence, rationale, blocking constraints, map features, trace steps, audit envelope, and replay bundle.
@@ -186,12 +201,12 @@ This is not a certified cockpit system or live FAA feed integration. It is a loc
 
 The screenshots below are organized around that safety loop:
 
-- **Mission Explorer and Mission Workspace:** show the operational queue, affected missions, weather verdicts, what changed since last brief, source-family chips, and route impact summaries.
-- **Pilot Brief:** converts the same fused decision into a read-only handoff with verdict, route impact, coordination guidance, source artifacts, and printable trace summary.
+- **Mission Explorer and Mission Workspace:** show the operational queue, affected missions, weather verdicts, what changed since last brief, source-family chips, route impact summaries, and route candidate comparison.
+- **Pilot Brief:** converts the same fused decision into a read-only handoff with verdict, route impact, route alternatives, coordination guidance, source artifacts, and printable trace summary.
 - **Reservation and Deconfliction:** keep CARF/ALTRV parsing, protected volumes, conflicts, NOTAM/APREQ/approval supplements, and force-action diagnostics visible to the operator.
 - **Messaging and Feed:** show retained USNS/weather/PIREP traffic, parsed transaction details, diagnostics, and downstream artifact IDs.
-- **Decision Summary, Trace, and Map:** show the recommended action, confidence, blocking constraints, route predictions, rule trace, source refs, audit/replay, and geospatial overlays.
-- **NOTAM and Weather/PIREP:** keep NOTAM constraints separate from reservations while weather products and PIREPs drive route-blockage, altitude-change, delay, and coordination guidance.
+- **Decision Summary, Trace, and Map:** show the replayable engine action alongside the mission-context route action, confidence, blocking constraints, route predictions, route comparison, rule trace, source refs, audit/replay, selected reroute candidate overlays, and geospatial source context.
+- **NOTAM and Weather/PIREP:** keep NOTAM constraints separate from reservations while weather products and PIREPs drive route-blockage, altitude-change, delay, event drilldown, and coordination guidance.
 
 ![Login](/docs/screenshots/01-login.png)
 

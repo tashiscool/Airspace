@@ -168,6 +168,8 @@ async function seedProductDemo() {
     body: JSON.stringify({
       rawUsnsMessages: [usnsText],
       rawCarfMessages: [carfText],
+      missionId: mission.id,
+      reservationId,
       route: [[30.0, -150.5, 24000], [30.5, -149.8, 25000], [31.0, -149.0, 26000]],
       decisionTime: '2026-05-21T12:00:00Z'
     })
@@ -212,12 +214,14 @@ await page.locator('.board-title', { hasText: 'Mission Explorer' }).waitFor({ ti
 await screenshot(page, '02-mission-explorer.png');
 
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}`);
+await clickIfVisible(page, 'Show On Map');
 await screenshot(page, '03-mission-workspace.png');
 
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}/brief`);
 await screenshot(page, '04-pilot-brief.png');
 
 await page.goto(`${frontendUrl}/missions/${seeded.missionId}/reservations/${seeded.reservationId}`);
+await clickIfVisible(page, 'Show On Map');
 await screenshot(page, '05-reservation-sections.png');
 await clickIfVisible(page, 'NOTAM');
 await screenshot(page, '06-reservation-supplements.png');
@@ -235,6 +239,8 @@ await page.goto(`${frontendUrl}/decisions/${seeded.decisionId}`);
 await screenshot(page, '10-decision-summary.png');
 await clickIfVisible(page, 'TRACE');
 await screenshot(page, '11-decision-trace.png');
+await clickIfVisible(page, 'SUMMARY');
+await clickIfVisible(page, 'Show On Map');
 await clickIfVisible(page, 'MAP');
 await screenshot(page, '12-decision-map.png');
 
@@ -243,6 +249,8 @@ await screenshot(page, '13-notam-constraints.png');
 
 await page.goto(`${frontendUrl}/weather`);
 await page.locator('.map-layer-group').first().getByRole('button', { name: 'Weather', exact: true }).click().catch(() => undefined);
+await page.locator('.weather-event-card', { hasText: 'Hurricane / Convection' }).first().click().catch(() => undefined);
+await clickIfVisible(page, 'Affected Missions');
 await page.locator('.guidance-card', { hasText: 'Convective SIGMET' }).first().click().catch(() => undefined);
 await page.waitForTimeout(500);
 await clickIfVisible(page, 'Fit Selected');

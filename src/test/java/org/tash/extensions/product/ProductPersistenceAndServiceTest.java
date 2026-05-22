@@ -558,6 +558,11 @@ class ProductPersistenceAndServiceTest {
         assertTrue(affected.stream().anyMatch(item -> mission.getId().equals(item.getMissionId())));
         assertTrue(affected.stream().filter(item -> mission.getId().equals(item.getMissionId())).findFirst().orElseThrow().getAgeSeconds() >= 0);
         assertTrue(affected.stream().filter(item -> mission.getId().equals(item.getMissionId())).findFirst().orElseThrow().getGuidanceLatencySeconds() >= 0);
+        ProductDtos.AffectedMissionSummary affectedMission = affected.stream().filter(item -> mission.getId().equals(item.getMissionId())).findFirst().orElseThrow();
+        assertFalse(affectedMission.getRouteCoordinates().isEmpty());
+        assertTrue(affectedMission.getRerouteCandidateCount() >= 1);
+        assertTrue(affectedMission.getRerouteAdditionalDistanceNm() > 0.0);
+        assertTrue(affectedMission.getRerouteAdditionalCostUsd() > 0.0);
         java.util.Map<String, Double> metrics = service.metrics();
         assertTrue(metrics.get("product.weather.affectedMissions") >= 1.0);
         assertTrue(metrics.get("product.weather.guidanceTargetMet") >= 1.0);
@@ -568,6 +573,17 @@ class ProductPersistenceAndServiceTest {
         assertTrue(impact.getSourceRefs().stream().anyMatch(ref -> ref.startsWith("FDC:")));
         assertTrue(impact.getImpactedSegments().stream().anyMatch(segment -> segment.contains("NOTAM constraint")));
         assertTrue(impact.getRationale().contains("NOTAM constraint source"));
+        assertTrue(impact.getOriginalRouteDistanceNm() > 0.0);
+        assertTrue(impact.getOriginalRouteEstimatedFuelLb() > 0.0);
+        assertFalse(impact.getWhyRerouteTrace().isEmpty());
+        assertTrue(impact.getWhyRerouteTrace().stream().anyMatch(trace -> "ACTION_PRECEDENCE".equals(trace.getRuleId())));
+        assertFalse(impact.getAvoidanceCandidates().isEmpty());
+        assertFalse(impact.getCandidateComparisons().isEmpty());
+        impact.getCandidateComparisons().forEach(candidate -> {
+            assertNotNull(candidate.getCost());
+            assertTrue(candidate.getCost().getDistanceNm() > 0.0);
+            assertNotNull(candidate.getTrace());
+        });
         assertTrue(relevant.getTotalPireps() >= 1);
         assertEquals(1500.0, relevant.getAltitudeToleranceFeet());
         assertEquals(60, relevant.getRecencyMinutes());

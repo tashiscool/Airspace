@@ -7,9 +7,12 @@ import {
   sourceRefLabel,
   sourceRefRoute,
   rowFromMessage,
+  affectedMissionRouteFeatures,
+  routeImpactFeaturesFromSummary,
   validateAltrvSections,
   missionWeatherVerdict,
   weatherGuidanceFromMessage,
+  weatherEventDrilldownGroups,
   weatherFeaturesFromMessages,
   weatherFeatureIdForMessageId,
   weatherRowsFromMessages
@@ -256,6 +259,126 @@ G. TAS: 300 KTAS`;
       }
     });
     expect((features[0].geometry?.coordinates as number[][][])[0][0]).toEqual([-73.75, 40.5]);
+  });
+
+  it('groups weather events for operational drilldown and affected mission context', () => {
+    const groups = weatherEventDrilldownGroups([
+      {
+        id: 'sigmet-1',
+        family: 'SIGMET',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'CONVECTIVE SIGMET',
+        rawText: 'SIGMET EMBD TS TOP FL430'
+      },
+      {
+        id: 'pirep-1',
+        family: 'PIREP',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'UA',
+        rawText: 'UA /OV ABC/TM 1200/FL240/TP B738/TB SEV'
+      },
+      {
+        id: 'taf-1',
+        family: 'TAF',
+        direction: 'INBOUND',
+        status: 'ACCEPTED',
+        subject: 'TAF KJFK',
+        rawText: 'TAF KJFK 2112/2218 1/2SM BKN004'
+      }
+    ], [{
+      missionId: 'mission-1',
+      missionNumber: 'M-1',
+      status: 'ACTIVE',
+      action: 'REROUTE',
+      priority: 'HIGH',
+      confidence: 0.86,
+      sourceCount: 1,
+      impactedSegmentCount: 1,
+      blockingConstraintCount: 1,
+      ageSeconds: 2,
+      stale: false,
+      guidanceLatencySeconds: 1,
+      guidanceTargetMet: true,
+      sourceRefs: ['SIGMET:sigmet-1']
+    }]);
+
+    expect(groups.map((group) => group.id)).toContain('hurricane-convection');
+    expect(groups.map((group) => group.id)).toContain('pirep-clusters');
+    expect(groups.map((group) => group.id)).toContain('ceiling-visibility');
+    expect(groups.find((group) => group.id === 'hurricane-convection')).toMatchObject({
+      count: 1,
+      highPriorityCount: 1,
+      affectedMissionCount: 1
+    });
+  });
+
+  it('derives route candidate map overlays from structured route-impact summaries', () => {
+    const features = routeImpactFeaturesFromSummary({
+      missionId: 'mission-1',
+      reservationId: 'reservation-1',
+      action: 'REROUTE',
+      recommendedAction: 'REROUTE',
+      candidateComparisons: [{
+        id: 'north-east',
+        label: 'NORTH EAST',
+        confidence: 0.82,
+        routePointLabels: ['30.000, -150.000', '31.000, -149.000'],
+        cost: { additionalDistanceNm: 12.5, additionalMinutes: 2, additionalFuelLb: 180, additionalCostUsd: 450 },
+        avoidedConstraints: [{ id: 'SIGMET-1', sourceRef: 'WEATHER:SIGMET-1' }],
+        residualConstraints: []
+      }]
+    });
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      id: 'route-candidate-mission-1-north-east',
+      geometry: { type: 'LineString', coordinates: [[-150, 30], [-149, 31]] },
+      properties: {
+        featureKind: 'route-avoidance-candidate',
+        displayLayer: 'route-impacts',
+        constraintType: 'ROUTE_AVOIDANCE',
+        missionId: 'mission-1',
+        reservationId: 'reservation-1',
+        additionalDistanceNm: 12.5,
+        sourceRefs: ['WEATHER:SIGMET-1']
+      }
+    });
+  });
+
+  it('derives affected mission route overlays from affected mission summaries', () => {
+    const features = affectedMissionRouteFeatures([{
+      missionId: 'mission-1',
+      missionNumber: 'M-1',
+      status: 'ACTIVE',
+      action: 'AVOID',
+      priority: 'HIGH',
+      confidence: 0.82,
+      sourceCount: 2,
+      impactedSegmentCount: 1,
+      blockingConstraintCount: 1,
+      ageSeconds: 4,
+      stale: false,
+      guidanceLatencySeconds: 4,
+      guidanceTargetMet: true,
+      sourceRefs: ['WEATHER:SIGMET-1'],
+      routeCoordinates: [[30, -150, 24000], [31, -149, 26000]]
+    }]);
+
+    expect(features).toHaveLength(1);
+    expect(features[0]).toMatchObject({
+      id: 'affected-mission-route-mission-1',
+      geometry: { type: 'LineString', coordinates: [[-150, 30, 24000], [-149, 31, 26000]] },
+      properties: {
+        featureKind: 'flight-path',
+        displayLayer: 'flight-paths',
+        constraintType: 'AFFECTED_MISSION_ROUTE',
+        missionId: 'mission-1',
+        recommendedAction: 'AVOID',
+        sourceRefs: ['WEATHER:SIGMET-1']
+      }
+    });
   });
 
   it('validates required ALTRV sections and practical timing hints', () => {

@@ -10,7 +10,7 @@ import { QueryNotice } from '../components/Notices';
 import { OperationsMap } from '../components/OperationsMap';
 import { StatusBadge } from '../components/StatusBadge';
 import type { MessageSummary } from '../types';
-import { fmtZ, referencePointToFeature, sourceRefLabel, sourceRefRoute, weatherChangeFeed, weatherFeatureIdForMessageId, weatherFeaturesFromMessages, weatherGuidanceFromMessage, weatherRowsFromMessages, type WeatherGuidanceItem } from '../lib/viewModels';
+import { affectedMissionRouteFeatures, fmtZ, referencePointToFeature, sourceRefLabel, sourceRefRoute, weatherChangeFeed, weatherEventDrilldownGroups, weatherFeatureIdForMessageId, weatherFeaturesFromMessages, weatherGuidanceFromMessage, weatherRowsFromMessages, type WeatherGuidanceItem } from '../lib/viewModels';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
 
 export function WeatherPage() {
@@ -39,6 +39,8 @@ export function WeatherPage() {
     window.dispatchEvent(new Event('airspace-workbench-selection'));
   }, [weatherMessages.length]);
   const weatherFeatures = useMemo(() => weatherFeaturesFromMessages(messages.data ?? []), [messages.data]);
+  const affectedRouteFeatures = useMemo(() => affectedMissionRouteFeatures(affectedMissions.data ?? []), [affectedMissions.data]);
+  const drilldownGroups = useMemo(() => weatherEventDrilldownGroups(messages.data ?? [], affectedMissions.data ?? []), [messages.data, affectedMissions.data]);
   const selectedWeatherHasFeature = selectedWeatherMessageId
     ? weatherFeatures.some((feature) => feature.id === weatherFeatureIdForMessageId(selectedWeatherMessageId))
     : false;
@@ -49,6 +51,7 @@ export function WeatherPage() {
     type: 'FeatureCollection' as const,
     features: [
       ...weatherFeatures,
+      ...affectedRouteFeatures,
       ...(reference.data ?? []).slice(0, 100).map(referencePointToFeature)
     ]
   };
@@ -113,6 +116,25 @@ export function WeatherPage() {
             <h3>Operational Guidance</h3>
             <span>hazard to action to rationale</span>
           </div>
+          <div className="weather-event-drilldown">
+            {(drilldownGroups.length ? drilldownGroups : []).map((group) => (
+              <button
+                key={group.id}
+                className={group.highPriorityCount ? 'weather-event-card attention-card' : 'weather-event-card'}
+                onClick={() => setSelectedWeatherMessageId(group.messageIds[0])}
+                type="button"
+              >
+                <span>{group.label}</span>
+                <strong>{group.count}</strong>
+                <small>
+                  <StatusBadge value={group.action} />
+                  {Math.round(group.maxConfidence * 100)}% confidence · {group.affectedMissionCount} affected mission(s)
+                </small>
+                <p>{group.rationale}</p>
+              </button>
+            ))}
+            {!drilldownGroups.length && <p className="muted">No weather event groups are available until weather, PIREP, or advisory traffic is retained.</p>}
+          </div>
           <div className="guidance-stack">
             {(guidance.length ? guidance : [emptyGuidance()]).map((item) => (
               <article
@@ -146,6 +168,11 @@ export function WeatherPage() {
                     {' · '}
                     {mission.rationale}
                   </small>
+                  {!!mission.rerouteCandidateCount && (
+                    <small className="reroute-cost-line">
+                      {mission.bestCandidateLabel ?? 'Best alternate'} · +{formatNumber(mission.rerouteAdditionalDistanceNm)} NM · +{formatNumber(mission.rerouteAdditionalMinutes)} min · +{formatNumber(mission.rerouteAdditionalFuelLb)} lb · +${formatCurrency(mission.rerouteAdditionalCostUsd)} · avoids {mission.avoidedConstraintCount ?? 0} / residual {mission.residualConstraintCount ?? 0}
+                    </small>
+                  )}
                 </button>
                 <div className="affected-mission-source-row" aria-label={`Sources for ${mission.missionNumber}`}>
                   {(mission.sourceRefs?.length ? mission.sourceRefs : ['No explicit source refs']).slice(0, 8).map((ref) => (
@@ -202,6 +229,10 @@ export function WeatherPage() {
         <OperationsMap
           features={featureCollection}
           selectedFeatureId={selectedMapFeatureId}
+          affectedMissionIds={(affectedMissions.data ?? []).map((mission) => mission.missionId)}
+          affectedSourceRefs={[...new Set((affectedMissions.data ?? []).flatMap((mission) =>
+            (mission.sourceRefs ?? []).flatMap((ref) => [ref, ref.includes(':') ? ref.split(':').slice(1).join(':') : ref])
+          ))]}
           onSelectedFeatureIdChange={(featureId) => {
             const match = /^weather-message-(.+)$/.exec(featureId ?? '');
             if (match) setSelectedWeatherMessageId(match[1]);
@@ -217,6 +248,16 @@ function freshnessLabel(ageSeconds?: number, stale?: boolean) {
   if (ageSeconds < 60) return `${ageSeconds}s old`;
   const minutes = Math.round(ageSeconds / 60);
   return `${minutes}m old${stale ? ' · stale' : ''}`;
+}
+
+function formatNumber(value?: number) {
+  if (value == null || !Number.isFinite(value)) return '0';
+  return value >= 100 ? Math.round(value).toLocaleString() : value.toFixed(1);
+}
+
+function formatCurrency(value?: number) {
+  if (value == null || !Number.isFinite(value)) return '0';
+  return Math.round(value).toLocaleString();
 }
 
 function emptyGuidance(): WeatherGuidanceItem {

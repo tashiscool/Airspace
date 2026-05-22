@@ -1,3 +1,5 @@
+import type { RouteImpactSummary } from '../types';
+
 export type JsonRecord = Record<string, unknown>;
 
 export type DecisionTraceGroup = {
@@ -72,6 +74,51 @@ export function decisionAvoidanceCandidates(result?: JsonRecord): JsonRecord[] {
   if (direct?.length) return direct;
   const routePlan = asRecord(result?.routePlanResult);
   return arrayValue(routePlan?.candidates) ?? [];
+}
+
+export function decisionRouteImpactSummary(result?: JsonRecord): Partial<RouteImpactSummary> | undefined {
+  if (!result) return undefined;
+  const direct = asRecord(result.routeImpact) ?? asRecord(result.routeImpactSummary);
+  if (direct) return direct as Partial<RouteImpactSummary>;
+  const candidates = decisionAvoidanceCandidates(result);
+  const trace = normalizeDecisionTrace(result).map((step) => ({
+    stage: recordLabel(step, ['stage', 'category'], 'trace'),
+    ruleId: recordLabel(step, ['ruleId', 'rule', 'decisionRuleId'], 'DECISION_TRACE'),
+    message: recordLabel(step, ['message', 'rationale', 'formula'], JSON.stringify(step)),
+    sourceRef: recordLabel(step, ['sourceRef', 'sourceId'], ''),
+    confidence: Number(recordLabel(step, ['confidence', 'outputValue'], '0')) || undefined
+  }));
+  return {
+    action: recordLabel(result, ['action'], 'PENDING'),
+    recommendedAction: recordLabel(result, ['recommendedAction'], 'MONITOR'),
+    confidence: Number(recordLabel(result, ['confidence'], '0')) || 0,
+    rationale: recordLabel(result, ['rationale'], 'Decision route comparison from persisted decision output.'),
+    impactedSegmentCount: decisionRoutePredictions(result).length,
+    blockingConstraintCount: (arrayValue(result.blockingConstraints) ?? []).length,
+    impactedSegments: decisionRoutePredictions(result).map((item) => recordLabel(item, ['rationale', 'primaryHazardId'], JSON.stringify(item))),
+    sourceRefs: decisionSourceReferences(normalizeDecisionTrace(result), result),
+    avoidanceCandidates: candidates.map((item) => recordLabel(item, ['id', 'rationale'], JSON.stringify(item))),
+    candidateComparisons: candidates.map((item, index) => ({
+      id: recordLabel(item, ['id'], `candidate-${index + 1}`),
+      label: recordLabel(item, ['id'], `Candidate ${index + 1}`).replace(/-/g, ' ').toUpperCase(),
+      rationale: recordLabel(item, ['rationale'], 'Decision route-plan candidate'),
+      confidence: Number(recordLabel(result, ['confidence'], '0')) || undefined,
+      avoidedConstraints: (arrayValue(item.avoidedConstraints) ?? arrayValue(item.avoidedConstraintIds) ?? []).map((constraint) => ({
+        id: recordLabel(constraint, ['id', 'message'], String(constraint)),
+        family: 'CONSTRAINT',
+        label: recordLabel(constraint, ['label', 'message', 'id'], String(constraint)),
+        sourceRef: recordLabel(constraint, ['sourceRef', 'message', 'id'], String(constraint))
+      })),
+      residualConstraints: (arrayValue(item.residualConstraints) ?? arrayValue(item.remainingConstraintIds) ?? []).map((constraint) => ({
+        id: recordLabel(constraint, ['id', 'message'], String(constraint)),
+        family: 'CONSTRAINT',
+        label: recordLabel(constraint, ['label', 'message', 'id'], String(constraint)),
+        sourceRef: recordLabel(constraint, ['sourceRef', 'message', 'id'], String(constraint))
+      })),
+      trace
+    })),
+    whyRerouteTrace: trace
+  };
 }
 
 export function decisionSourceReferences(trace: JsonRecord[], result?: JsonRecord) {

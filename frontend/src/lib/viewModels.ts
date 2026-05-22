@@ -1,5 +1,6 @@
 import type {
   AirspaceFeature,
+  AffectedMissionSummary,
   DecisionSummary,
   FeedArtifactSummary,
   HistoryEventSummary,
@@ -8,6 +9,7 @@ import type {
   MissionSummary,
   ReferencePointSummary,
   ReservationSummary,
+  RouteImpactSummary,
   ReservationSupplementSummary,
   SearchResultSummary
 } from '../types';
@@ -85,6 +87,20 @@ export type WeatherGuidanceItem = {
   missionId?: string;
   reservationId?: string;
   createdAt?: string;
+};
+
+export type WeatherEventDrilldownGroup = {
+  id: 'volcanic-ash' | 'hurricane-convection' | 'icing-turbulence' | 'pirep-clusters' | 'ceiling-visibility' | 'generic-weather';
+  label: string;
+  count: number;
+  highPriorityCount: number;
+  staleCount: number;
+  affectedMissionCount: number;
+  maxConfidence: number;
+  action: string;
+  sourceRefs: string[];
+  messageIds: string[];
+  rationale: string;
 };
 
 export type MissionWeatherVerdict = {
@@ -447,6 +463,34 @@ export function weatherChangeFeed(messages: MessageSummary[] = [], limit = 8): W
     .slice(0, limit);
 }
 
+export function weatherEventDrilldownGroups(messages: MessageSummary[] = [], affectedMissions: AffectedMissionSummary[] = []): WeatherEventDrilldownGroup[] {
+  const groups = new Map<WeatherEventDrilldownGroup['id'], WeatherEventDrilldownGroup>();
+  for (const message of weatherRowsFromMessages(messages)) {
+    const guidance = weatherGuidanceFromMessage(message);
+    const id = weatherEventGroupId(message, guidance);
+    const group = groups.get(id) ?? emptyWeatherEventGroup(id);
+    group.count += 1;
+    group.highPriorityCount += guidance.priority === 'HIGH' ? 1 : 0;
+    group.staleCount += guidance.createdAt && Date.now() - new Date(guidance.createdAt).getTime() > 90 * 60 * 1000 ? 1 : 0;
+    group.maxConfidence = Math.max(group.maxConfidence, guidance.priority === 'HIGH' ? 0.86 : guidance.priority === 'MEDIUM' ? 0.72 : 0.58);
+    group.action = actionRank(guidance.action as WeatherGuidanceItem['action']) > actionRank(group.action as WeatherGuidanceItem['action']) ? guidance.action : group.action;
+    group.sourceRefs.push(`${message.family}:${message.id}`);
+    group.messageIds.push(message.id);
+    groups.set(id, group);
+  }
+  for (const group of groups.values()) {
+    group.sourceRefs = [...new Set(group.sourceRefs)];
+    group.affectedMissionCount = affectedMissions.filter((mission) =>
+      (mission.sourceRefs ?? []).some((ref) => group.sourceRefs.includes(ref) || group.messageIds.some((id) => ref.includes(id)))
+    ).length;
+  }
+  return [...groups.values()].sort((a, b) =>
+    actionRank(b.action as WeatherGuidanceItem['action']) - actionRank(a.action as WeatherGuidanceItem['action'])
+    || b.count - a.count
+    || a.label.localeCompare(b.label)
+  );
+}
+
 export function weatherFeaturesFromMessages(messages: MessageSummary[] = []): AirspaceFeature[] {
   return weatherRowsFromMessages(messages).flatMap((message) => {
     const raw = `${message.subject ?? ''}\n${message.rawText ?? ''}`;
@@ -494,6 +538,7 @@ export function weatherFeaturesFromMessages(messages: MessageSummary[] = []): Ai
         corridorWidthNauticalMiles: corridor.corridorWidthNauticalMiles,
         geometryIntent: geometryMetadata.intent,
         geometryLabel: geometryMetadata.label,
+        sourceRefs: [`${message.family}:${message.id}`],
         observedAt: message.createdAt,
         createdAt: message.createdAt,
         rawText: message.rawText
@@ -504,6 +549,121 @@ export function weatherFeaturesFromMessages(messages: MessageSummary[] = []): Ai
 
 export function weatherFeatureIdForMessageId(messageId?: string) {
   return messageId ? `weather-message-${messageId}` : undefined;
+}
+
+export function routeImpactFeaturesFromSummary(routeImpact?: Partial<RouteImpactSummary>): AirspaceFeature[] {
+  return (routeImpact?.candidateComparisons ?? []).flatMap((candidate) => {
+    const coordinates = (candidate.routePointLabels ?? []).map(parseRoutePointLabel).filter((item): item is number[] => !!item);
+    if (coordinates.length < 2) return [];
+    const sourceRefs = candidate.sourceRefs?.length
+      ? candidate.sourceRefs
+      : [
+        ...(candidate.avoidedConstraints ?? []).map((item) => item.sourceRef || item.id),
+        ...(candidate.residualConstraints ?? []).map((item) => item.sourceRef || item.id)
+      ].filter(Boolean) as string[];
+    return [{
+      id: `route-candidate-${routeImpact?.missionId ?? 'mission'}-${candidate.id}`,
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates },
+      properties: {
+        featureKind: 'route-avoidance-candidate',
+        displayLayer: 'route-impacts',
+        constraintType: 'ROUTE_AVOIDANCE',
+        sourceFamily: 'WEATHER_ROUTE_IMPACT',
+        operationalRole: 'suggested-deviation-corridor',
+        missionId: routeImpact?.missionId,
+        reservationId: routeImpact?.reservationId,
+        label: candidate.label || candidate.id,
+        rationale: candidate.rationale,
+        recommendedAction: routeImpact?.recommendedAction || routeImpact?.action,
+        confidence: candidate.confidence,
+        distanceNm: candidate.cost?.distanceNm,
+        additionalDistanceNm: candidate.cost?.additionalDistanceNm,
+        additionalMinutes: candidate.cost?.additionalMinutes,
+        additionalFuelLb: candidate.cost?.additionalFuelLb,
+        additionalCostUsd: candidate.cost?.additionalCostUsd,
+        avoidedConstraintIds: (candidate.avoidedConstraints ?? []).map((item) => item.id),
+        residualConstraintIds: (candidate.residualConstraints ?? []).map((item) => item.id),
+        sourceRefs
+      }
+    }];
+  });
+}
+
+export function affectedMissionRouteFeatures(missions: AffectedMissionSummary[] = []): AirspaceFeature[] {
+  return missions.flatMap((mission) => {
+    const coordinates = (mission.routeCoordinates ?? [])
+      .filter((point) => point.length >= 2 && Number.isFinite(point[0]) && Number.isFinite(point[1]))
+      .map((point) => [point[1], point[0], point[2] ?? 0]);
+    if (coordinates.length < 2) return [];
+    return [{
+      id: `affected-mission-route-${mission.missionId}`,
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates },
+      properties: {
+        featureKind: 'flight-path',
+        displayLayer: 'flight-paths',
+        constraintType: 'AFFECTED_MISSION_ROUTE',
+        sourceFamily: 'MISSION',
+        operationalRole: 'affected-active-mission-route',
+        missionId: mission.missionId,
+        label: mission.missionNumber,
+        recommendedAction: mission.action,
+        confidence: mission.confidence,
+        rationale: mission.rationale,
+        sourceRefs: mission.sourceRefs
+      }
+    }];
+  });
+}
+
+export function mergeFeatureCollections(...collections: ({ type: 'FeatureCollection'; features: AirspaceFeature[] } | undefined)[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: collections.flatMap((collection) => collection?.features ?? [])
+  };
+}
+
+function weatherEventGroupId(message: MessageSummary, guidance: WeatherGuidanceItem): WeatherEventDrilldownGroup['id'] {
+  const family = String(message.family ?? '').toUpperCase();
+  const text = `${message.subject ?? ''} ${message.rawText ?? ''} ${guidance.hazard}`.toUpperCase();
+  if (text.includes('ASH') || text.includes('VOLCANIC')) return 'volcanic-ash';
+  if (text.includes('HURRICANE') || text.includes('CONV') || text.includes('SIGMET') || text.includes('CWAP') || text.includes('CWAF') || text.includes(' TS')) return 'hurricane-convection';
+  if (family.includes('PIREP')) return 'pirep-clusters';
+  if (text.includes('TURB') || text.includes('ICING') || text.includes('/IC') || text.includes('/TB') || text.includes('ICE')) return 'icing-turbulence';
+  if (family.includes('METAR') || family.includes('TAF') || text.includes('VIS') || text.includes('CEILING') || text.includes('BKN') || text.includes('OVC')) return 'ceiling-visibility';
+  return 'generic-weather';
+}
+
+function parseRoutePointLabel(value: string) {
+  const match = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/.exec(value);
+  if (!match) return undefined;
+  return [Number(match[2]), Number(match[1])];
+}
+
+function emptyWeatherEventGroup(id: WeatherEventDrilldownGroup['id']): WeatherEventDrilldownGroup {
+  const labels: Record<WeatherEventDrilldownGroup['id'], { label: string; rationale: string; action: string }> = {
+    'volcanic-ash': { label: 'Volcanic Ash', action: 'REROUTE', rationale: 'Ash hazards can close large route corridors and require explicit avoidance.' },
+    'hurricane-convection': { label: 'Hurricane / Convection', action: 'AVOID', rationale: 'Convective or tropical systems can block routes and reduce capacity.' },
+    'icing-turbulence': { label: 'Icing / Turbulence', action: 'ALTITUDE CHANGE', rationale: 'Icing and turbulence hazards drive altitude, route, or timing changes.' },
+    'pirep-clusters': { label: 'PIREP Clusters', action: 'CAUTION', rationale: 'Aircraft reports validate or contradict forecast products near active routes.' },
+    'ceiling-visibility': { label: 'Ceiling / Visibility', action: 'DELAY', rationale: 'Terminal conditions can delay departure, arrival, or route release.' },
+    'generic-weather': { label: 'Generic Weather', action: 'MONITOR', rationale: 'Retained weather products remain available for operator review and replay.' }
+  };
+  const item = labels[id];
+  return {
+    id,
+    label: item.label,
+    count: 0,
+    highPriorityCount: 0,
+    staleCount: 0,
+    affectedMissionCount: 0,
+    maxConfidence: 0,
+    action: item.action,
+    sourceRefs: [],
+    messageIds: [],
+    rationale: item.rationale
+  };
 }
 
 export function sourceRefFamily(ref: string) {

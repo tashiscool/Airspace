@@ -137,6 +137,8 @@ public final class ProductDtos {
         private List<String> rawUsnsMessages = new ArrayList<>();
         private List<String> rawCarfMessages = new ArrayList<>();
         private List<List<Double>> route = new ArrayList<>();
+        private String missionId;
+        private String reservationId;
         private String decisionTime;
     }
 
@@ -201,6 +203,10 @@ public final class ProductDtos {
         private String recommendedAction;
         private double confidence;
         private String rationale;
+        private double originalRouteDistanceNm;
+        private double originalRouteEstimatedMinutes;
+        private double originalRouteEstimatedFuelLb;
+        private double originalRouteEstimatedCostUsd;
         private int impactedSegmentCount;
         private int blockingConstraintCount;
         @Builder.Default
@@ -210,7 +216,69 @@ public final class ProductDtos {
         @Builder.Default
         private List<String> avoidanceCandidates = new ArrayList<>();
         @Builder.Default
+        private List<RouteCandidateComparisonSummary> candidateComparisons = new ArrayList<>();
+        @Builder.Default
+        private List<RerouteTraceSummary> whyRerouteTrace = new ArrayList<>();
+        @Builder.Default
         private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class RouteCandidateComparisonSummary {
+        private String id;
+        private String label;
+        private String rationale;
+        private double confidence;
+        private RouteCostEstimateSummary cost;
+        @Builder.Default
+        private List<String> routePointLabels = new ArrayList<>();
+        @Builder.Default
+        private List<ConstraintImpactSummary> avoidedConstraints = new ArrayList<>();
+        @Builder.Default
+        private List<ConstraintImpactSummary> residualConstraints = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<RerouteTraceSummary> trace = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class RouteCostEstimateSummary {
+        private double distanceNm;
+        private double additionalDistanceNm;
+        private double estimatedMinutes;
+        private double additionalMinutes;
+        private double estimatedFuelLb;
+        private double additionalFuelLb;
+        private double estimatedCostUsd;
+        private double additionalCostUsd;
+        private double cruiseSpeedKnots;
+        private double fuelBurnLbPerNm;
+        private double fuelCostUsdPerLb;
+        private double delayCostUsdPerMinute;
+    }
+
+    @Data
+    @Builder
+    public static class ConstraintImpactSummary {
+        private String id;
+        private String family;
+        private String label;
+        private String severity;
+        private String sourceRef;
+        private String rationale;
+    }
+
+    @Data
+    @Builder
+    public static class RerouteTraceSummary {
+        private String stage;
+        private String ruleId;
+        private String message;
+        private String sourceRef;
+        private double confidence;
     }
 
     @Data
@@ -283,8 +351,18 @@ public final class ProductDtos {
         private boolean stale;
         private long guidanceLatencySeconds;
         private boolean guidanceTargetMet;
+        private int rerouteCandidateCount;
+        private String bestCandidateLabel;
+        private double rerouteAdditionalDistanceNm;
+        private double rerouteAdditionalMinutes;
+        private double rerouteAdditionalFuelLb;
+        private double rerouteAdditionalCostUsd;
+        private int avoidedConstraintCount;
+        private int residualConstraintCount;
         @Builder.Default
         private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<List<Double>> routeCoordinates = new ArrayList<>();
     }
 
     @Data
@@ -295,6 +373,7 @@ public final class ProductDtos {
         private String recommendedAction;
         private double confidence;
         private String rationale;
+        private RouteImpactSummary routeImpact;
         private String resultJson;
         private String auditJson;
         private String replayJson;

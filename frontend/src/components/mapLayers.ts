@@ -100,6 +100,7 @@ export type MapFeatureSummary = {
   action?: string;
   freshness?: string;
   movement?: string;
+  cost?: string;
 };
 
 export type MapFeatureSourceLink = {
@@ -142,6 +143,12 @@ export type MapVisibleRiskCounts = {
   stale: number;
 };
 
+export type AffectedMapContext = {
+  featureIds?: string[];
+  missionIds?: string[];
+  sourceRefs?: string[];
+};
+
 export function mapFeatureSummary(feature?: AirspaceFeature): MapFeatureSummary | undefined {
   if (!feature) return undefined;
   const properties = feature.properties ?? {};
@@ -154,6 +161,7 @@ export function mapFeatureSummary(feature?: AirspaceFeature): MapFeatureSummary 
   const movement = stringProp(properties, 'movementVector') ?? movementLabel(properties);
   const severity = mapFeatureSeverity(feature);
   const freshness = mapFeatureFreshness(feature);
+  const cost = routeCostLabel(properties);
   return {
     title: stringProp(properties, 'label') ?? stringProp(properties, 'name') ?? stringProp(properties, 'featureKind') ?? String(feature.id ?? layer.label),
     subtitle: stringProp(properties, 'rationale') ?? stringProp(properties, 'explanation') ?? stringProp(properties, 'hazardType') ?? layer.label,
@@ -165,7 +173,8 @@ export function mapFeatureSummary(feature?: AirspaceFeature): MapFeatureSummary 
     confidence: confidence.label,
     action: stringProp(properties, 'recommendedAction') ?? stringProp(properties, 'action'),
     freshness: freshness?.label,
-    movement: movement ? `${movement} · ${severity.label}` : severity.label
+    movement: movement ? `${movement} · ${severity.label}` : severity.label,
+    cost
   };
 }
 
@@ -315,6 +324,19 @@ export function mapVisibleRiskCounts(features: AirspaceFeature[] = []): MapVisib
   }, { blocked: 0, severe: 0, lowConfidence: 0, stale: 0 });
 }
 
+export function featureMatchesAffectedContext(feature: AirspaceFeature, context: AffectedMapContext = {}, index = 0) {
+  const featureIds = new Set(context.featureIds ?? []);
+  const missionIds = new Set((context.missionIds ?? []).map(String));
+  const sourceRefs = new Set(context.sourceRefs ?? []);
+  if (!featureIds.size && !missionIds.size && !sourceRefs.size) return false;
+  const id = String(feature.id ?? index);
+  const properties = feature.properties ?? {};
+  if (featureIds.has(id)) return true;
+  const missionId = stringProp(properties, 'missionId') ?? stringProp(properties, 'affectedMissionId');
+  if (missionId && missionIds.has(missionId)) return true;
+  return mapFeatureSourceRefs(feature).some((ref) => sourceRefs.has(`${ref.family}:${ref.id}`) || sourceRefs.has(ref.id));
+}
+
 function isMapLayerId(value: string): value is MapLayerId {
   return MAP_LAYERS.some((layer) => layer.id === value);
 }
@@ -330,6 +352,24 @@ function numericProp(properties: Record<string, unknown>, key: string) {
   if (typeof value === 'number') return value;
   if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
   return undefined;
+}
+
+function routeCostLabel(properties: Record<string, unknown>) {
+  const distance = numericProp(properties, 'additionalDistanceNm');
+  const delay = numericProp(properties, 'additionalMinutes');
+  const fuel = numericProp(properties, 'additionalFuelLb');
+  const cost = numericProp(properties, 'additionalCostUsd');
+  if (distance == null && delay == null && fuel == null && cost == null) return undefined;
+  return [
+    distance == null ? undefined : `+${formatNumber(distance)} NM`,
+    delay == null ? undefined : `+${formatNumber(delay)} min`,
+    fuel == null ? undefined : `+${formatNumber(fuel)} lb fuel`,
+    cost == null ? undefined : `+$${formatNumber(cost)}`
+  ].filter(Boolean).join(' · ');
+}
+
+function formatNumber(value: number) {
+  return value >= 100 ? Math.round(value).toLocaleString() : value.toFixed(1);
 }
 
 function booleanProp(properties: Record<string, unknown>, key: string) {

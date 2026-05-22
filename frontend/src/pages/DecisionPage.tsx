@@ -5,9 +5,10 @@ import { CheckCircle2, GitBranch, Play, RotateCcw, ShieldAlert } from 'lucide-re
 import { api } from '../api/client';
 import { OperationsMap } from '../components/OperationsMap';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
+import { RouteCandidateComparisonPanel } from '../components/RouteCandidateComparisonPanel';
 import { StatusBadge } from '../components/StatusBadge';
-import { arrayValue, asRecord, decisionAvoidanceCandidates, decisionRoutePredictions, decisionSourceLinks, decisionSourceReferences, groupDecisionTrace, normalizeDecisionTrace, recordLabel, type JsonRecord } from '../lib/decisionView';
-import { compactId, parseJson } from '../lib/viewModels';
+import { arrayValue, asRecord, decisionAvoidanceCandidates, decisionRouteImpactSummary, decisionRoutePredictions, decisionSourceLinks, decisionSourceReferences, groupDecisionTrace, normalizeDecisionTrace, recordLabel, type JsonRecord } from '../lib/decisionView';
+import { compactId, mergeFeatureCollections, parseJson, routeImpactFeaturesFromSummary } from '../lib/viewModels';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
 
 type DecisionTab = 'summary' | 'constraints' | 'trace' | 'audit' | 'replay' | 'map';
@@ -18,6 +19,7 @@ export function DecisionPage() {
   const [tab, setTab] = useState<DecisionTab>('summary');
   const [traceFilter, setTraceFilter] = useState('');
   const [traceStageFilter, setTraceStageFilter] = useState('ALL');
+  const [selectedRouteCandidateId, setSelectedRouteCandidateId] = useState('');
   const evaluate = useMutation({
     mutationFn: () => api.evaluateDecision({
       decisionTime: new Date().toISOString(),
@@ -60,20 +62,35 @@ export function DecisionPage() {
   const blockingConstraints = arrayValue(effectiveResult?.blockingConstraints) ?? arrayValue(effectiveResult?.constraints) ?? [];
   const routePredictions = useMemo(() => decisionRoutePredictions(effectiveResult), [effectiveResult]);
   const avoidanceCandidates = useMemo(() => decisionAvoidanceCandidates(effectiveResult), [effectiveResult]);
-  const sourceRefs = useMemo(() => decisionSourceReferences(trace, effectiveResult), [trace, effectiveResult]);
+  const routeImpactSummary = useMemo(() => decision?.routeImpact ?? decisionRouteImpactSummary(effectiveResult), [decision?.routeImpact, effectiveResult]);
+  const routeCandidateFeatures = useMemo(() => routeImpactFeaturesFromSummary(routeImpactSummary), [routeImpactSummary]);
+  const mapFeatures = useMemo(() => mergeFeatureCollections(features.data, { type: 'FeatureCollection', features: routeCandidateFeatures }), [features.data, routeCandidateFeatures]);
+  const selectedRouteFeatureId = selectedRouteCandidateId
+    ? `route-candidate-${routeImpactSummary?.missionId ?? 'mission'}-${selectedRouteCandidateId}`
+    : undefined;
+  const sourceRefs = useMemo(() => {
+    return [...new Set([
+      ...decisionSourceReferences(trace, effectiveResult),
+      ...(routeImpactSummary?.sourceRefs ?? [])
+    ])];
+  }, [trace, effectiveResult, routeImpactSummary?.sourceRefs]);
   const sourceLinks = useMemo(() => decisionSourceLinks(trace, effectiveResult), [trace, effectiveResult]);
+  const engineAction = decision?.recommendedAction || decision?.action || '—';
+  const contextualAction = routeImpactSummary?.recommendedAction || routeImpactSummary?.action || engineAction;
+  const contextualAttention = isBlockingAction(contextualAction) || (routeImpactSummary?.candidateComparisons?.length ?? 0) > 0;
+  const avoidanceCount = Math.max(avoidanceCandidates.length, routeImpactSummary?.candidateComparisons?.length ?? 0);
   useEffect(() => {
     if (!decision) return;
     const selection: WorkbenchSelection = {
       decisionId: decision.id,
       sourceFamily: 'DECISION',
-      label: decision.recommendedAction || decision.action,
-      conflictCount: blockingConstraints.length,
-      lockState: `${Math.round(decision.confidence * 100)}% confidence`
+      label: contextualAction,
+      conflictCount: Math.max(blockingConstraints.length, routeImpactSummary?.blockingConstraintCount ?? 0),
+      lockState: `engine ${engineAction} · ${Math.round(decision.confidence * 100)}% confidence`
     };
     writeWorkbenchJson('airspace.workbench.selection', selection);
     window.dispatchEvent(new Event('airspace-workbench-selection'));
-  }, [decision, blockingConstraints.length]);
+  }, [decision, blockingConstraints.length, contextualAction, engineAction, routeImpactSummary?.blockingConstraintCount]);
 
   return (
     <section className="decision-workspace">
@@ -83,8 +100,8 @@ export function DecisionPage() {
         {decision ? (
           <button className="queue-item active">
             <span>{compactId(decision.id)}</span>
-            <StatusBadge value={decision.action} />
-            <small>{Math.round(decision.confidence * 100)}% confidence</small>
+            <StatusBadge value={contextualAction} />
+            <small>engine {engineAction} · {Math.round(decision.confidence * 100)}% confidence</small>
           </button>
         ) : (
           <p className="muted">No decision loaded. Evaluate a route or open a persisted decision.</p>
@@ -101,9 +118,9 @@ export function DecisionPage() {
         <div className="page-header">
           <div>
             <h2><GitBranch size={18} /> Operational Decision</h2>
-            <p>{decision?.rationale ?? 'USNS/CARF/NOTAM/weather/PIREP fusion result with replayable trace.'}</p>
+            <p>{routeImpactSummary?.rationale ?? decision?.rationale ?? 'USNS/CARF/NOTAM/weather/PIREP fusion result with replayable trace.'}</p>
           </div>
-          {decision && <StatusBadge value={decision.action} />}
+          {decision && <StatusBadge value={contextualAction} />}
         </div>
         <div className="supplement-tabs">
           {(['summary', 'constraints', 'trace', 'audit', 'replay', 'map'] as DecisionTab[]).map((item) => (
@@ -122,20 +139,33 @@ export function DecisionPage() {
           <>
             <section className="safety-loop-grid">
               <DecisionSafetyCard title="Inputs fused" value={inputCoverage(effectiveResult)} detail="USNS, CARF/ALTRV, NOTAM, weather, PIREP, and route candidates are normalized into one decision request." />
-              <DecisionSafetyCard title="Route guidance" value={decision?.recommendedAction || decision?.action || '—'} detail="The operator sees a single action instead of raw products: clear, monitor, caution, delay, altitude change, avoid, reroute, or blocked." attention={isBlockingAction(decision?.recommendedAction || decision?.action)} />
-              <DecisionSafetyCard title="Constraints" value={`${blockingConstraints.length} blocking`} detail="CARF conflicts, NOTAM restrictions, weather hazards, and route impacts remain linked to source IDs and map features." attention={blockingConstraints.length > 0} />
+              <DecisionSafetyCard title="Route guidance" value={contextualAction} detail="The operator sees a single action instead of raw products: clear, monitor, caution, delay, altitude change, avoid, reroute, or blocked." attention={contextualAttention} />
+              <DecisionSafetyCard title="Constraints" value={`${Math.max(blockingConstraints.length, routeImpactSummary?.blockingConstraintCount ?? 0)} blocking`} detail="CARF conflicts, NOTAM restrictions, weather hazards, and route impacts remain linked to source IDs and map features." attention={blockingConstraints.length > 0 || (routeImpactSummary?.blockingConstraintCount ?? 0) > 0} />
               <DecisionSafetyCard title="Auditability" value={`${trace.length} trace steps`} detail="Rule IDs, thresholds, source refs, warnings, and replay envelopes explain why the action was selected." />
             </section>
             <section className="decision-summary-grid">
-              <Metric label="Action" value={decision?.recommendedAction || decision?.action || '—'} />
+              <Metric label="Engine Action" value={engineAction} />
+              <Metric label="Mission Route Action" value={contextualAction} attention={contextualAttention} />
               <Metric label="Confidence" value={decision ? `${Math.round(decision.confidence * 100)}%` : '—'} />
-              <Metric label="Blocking Constraints" value={String(blockingConstraints.length ?? 0)} attention={(blockingConstraints.length ?? 0) > 0} />
-              <Metric label="Route Predictions" value={String(routePredictions.length ?? 0)} />
-              <Metric label="Avoidance Candidates" value={String(avoidanceCandidates.length ?? 0)} attention={isBlockingAction(decision?.recommendedAction || decision?.action) && avoidanceCandidates.length === 0} />
-              <Metric label="Source Refs" value={String(sourceRefs.length)} attention={isBlockingAction(decision?.recommendedAction || decision?.action) && sourceRefs.length === 0} />
+              <Metric label="Blocking Constraints" value={String(Math.max(blockingConstraints.length ?? 0, routeImpactSummary?.blockingConstraintCount ?? 0))} attention={(blockingConstraints.length ?? 0) > 0 || (routeImpactSummary?.blockingConstraintCount ?? 0) > 0} />
+              <Metric label="Route Predictions" value={String(Math.max(routePredictions.length ?? 0, routeImpactSummary?.impactedSegmentCount ?? 0))} />
+              <Metric label="Avoidance Candidates" value={String(avoidanceCount)} attention={contextualAttention && avoidanceCount === 0} />
+              <Metric label="Source Refs" value={String(sourceRefs.length)} attention={contextualAttention && sourceRefs.length === 0} />
+              {decision?.routeImpact && (
+                <div className="panel wide contextual-decision-note">
+                  <h3>Mission Context Overlay</h3>
+                  <p>The engine result remains replayable as evaluated. This page also attaches the selected mission/reservation route-impact review so operators can compare the replayed decision with current weather, PIREP, NOTAM, and CARF route context.</p>
+                  <div className="source-ref-grid">
+                    <span>Mission {routeImpactSummary?.missionId ?? '—'}</span>
+                    <span>Reservation {routeImpactSummary?.reservationId ?? '—'}</span>
+                    <span>{routeImpactSummary?.candidateComparisons?.length ?? 0} route alternate(s)</span>
+                    <span>{routeImpactSummary?.sourceRefs?.length ?? 0} route source ref(s)</span>
+                  </div>
+                </div>
+              )}
               <div className="panel wide">
                 <h3>Operational Rationale</h3>
-                <p>{decision?.rationale ?? 'No decision has been evaluated yet.'}</p>
+                <p>{routeImpactSummary?.rationale ?? decision?.rationale ?? 'No decision has been evaluated yet.'}</p>
                 <p className="muted">This is the engine’s answer to the core safety problem: convert live traffic, aircraft reports, forecasts, reservations, NOTAMs, and ATC constraints into clear operational guidance with traceable reasons.</p>
               </div>
               <div className="panel wide">
@@ -168,15 +198,15 @@ export function DecisionPage() {
               </div>
               <div className="panel wide">
                 <h3>Suggested Avoidance Corridors</h3>
-                <div className="constraint-grid">
-                  {(avoidanceCandidates.length ? avoidanceCandidates : ['No alternate corridor is attached to this decision.']).map((item, index) => (
-                    <article className="event supplement" key={index}>
-                      <strong>{recordLabel(item, ['id', 'name'], 'No candidate')}</strong>
-                      <p>{recordLabel(item, ['rationale'], typeof item === 'string' ? item : JSON.stringify(item))}</p>
-                      <small>{recordLabel(item, ['avoidedConstraintIds'], '')}</small>
-                    </article>
-                  ))}
-                </div>
+                <RouteCandidateComparisonPanel
+                  routeImpact={routeImpactSummary}
+                  title="Why This Reroute?"
+                  selectedCandidateId={selectedRouteCandidateId}
+                  onCandidateSelect={(candidateId) => {
+                    setSelectedRouteCandidateId(candidateId);
+                    setTab('map');
+                  }}
+                />
               </div>
             </section>
           </>
@@ -268,7 +298,18 @@ export function DecisionPage() {
             {persistedReplay ? <pre className="raw-panel">{JSON.stringify(persistedReplay, null, 2)}</pre> : <p className="muted">No persisted replay bundle loaded.</p>}
           </section>
         )}
-        {tab === 'map' && <OperationsMap features={features.data} />}
+        {tab === 'map' && (
+          <OperationsMap
+            features={mapFeatures}
+            selectedFeatureId={selectedRouteFeatureId}
+            onSelectedFeatureIdChange={(featureId) => {
+              const prefix = `route-candidate-${routeImpactSummary?.missionId ?? 'mission'}-`;
+              setSelectedRouteCandidateId(featureId?.startsWith(prefix) ? featureId.slice(prefix.length) : '');
+            }}
+            affectedMissionIds={routeImpactSummary?.missionId ? [routeImpactSummary.missionId] : undefined}
+            affectedSourceRefs={sourceRefs}
+          />
+        )}
       </main>
     </section>
   );

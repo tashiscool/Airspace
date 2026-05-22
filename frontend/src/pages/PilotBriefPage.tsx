@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Printer, Radio, ShieldAlert } from 'lucide-react';
 import { api } from '../api/client';
 import { QueryNotice } from '../components/Notices';
+import { RouteCandidateComparisonPanel } from '../components/RouteCandidateComparisonPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { fmtZ, sourceRefLabel, sourceRefRoute } from '../lib/viewModels';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
@@ -82,6 +83,10 @@ export function PilotBriefPage() {
           <p>Weather, PIREP, or NOTAM deltas since the briefing window.</p>
         </section>
       </main>
+      <section className="brief-section">
+        <h2>Route Candidate Comparison</h2>
+        <RouteCandidateComparisonPanel routeImpact={data?.routeImpact} title="Pilot Handoff Reroute Options" />
+      </section>
       <section className="brief-section">
         <h2><Radio size={16} /> Source Artifacts</h2>
         {!!data?.sourceSummaryLines?.length && (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { featureDisplayLayer, featurePassesFreshnessFilter, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureRiskLabel, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, mapVisibleRiskCounts } from './mapLayers';
+import { featureDisplayLayer, featureMatchesAffectedContext, featurePassesFreshnessFilter, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureRiskLabel, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, mapVisibleRiskCounts } from './mapLayers';
 
 describe('map layer classification', () => {
   it('keeps NOTAM restrictions separate from CARF/ALTRV reservations', () => {
@@ -78,6 +78,18 @@ describe('map layer classification', () => {
       movement: 'NE 25KT · severe'
     });
     expect(summary?.risk).toContain('severe · 82% confidence');
+    expect(mapFeatureSummary({
+      id: 'route-candidate-1',
+      properties: {
+        featureKind: 'route-avoidance-candidate',
+        label: 'North east alternate',
+        additionalDistanceNm: 88.5,
+        additionalMinutes: 11.8,
+        additionalFuelLb: 1328,
+        additionalCostUsd: 2150,
+        confidence: 0.78
+      }
+    })?.cost).toBe('+88.5 NM · +11.8 min · +1,328 lb fuel · +$2,150');
     expect(mapFeatureRiskLabel({
       properties: {
         sourceFamily: 'WEATHER',
@@ -241,5 +253,20 @@ describe('map layer classification', () => {
       lowConfidence: 1,
       stale: 1
     });
+  });
+
+  it('matches affected mission map context by feature id, mission id, and source refs', () => {
+    const feature = {
+      id: 'route-impact-1',
+      properties: {
+        missionId: 'mission-1',
+        sourceRefs: ['WEATHER:SIGMET-1', 'NOTAM:FDC-2']
+      }
+    };
+
+    expect(featureMatchesAffectedContext(feature, { featureIds: ['route-impact-1'] })).toBe(true);
+    expect(featureMatchesAffectedContext(feature, { missionIds: ['mission-1'] })).toBe(true);
+    expect(featureMatchesAffectedContext(feature, { sourceRefs: ['SIGMET-1'] })).toBe(true);
+    expect(featureMatchesAffectedContext(feature, { sourceRefs: ['ALTRV:other'] })).toBe(false);
   });
 });

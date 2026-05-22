@@ -92,12 +92,63 @@ export type RouteImpactSummary = {
   recommendedAction?: string;
   confidence: number;
   rationale: string;
+  originalRouteDistanceNm?: number;
+  originalRouteEstimatedMinutes?: number;
+  originalRouteEstimatedFuelLb?: number;
+  originalRouteEstimatedCostUsd?: number;
   impactedSegmentCount: number;
   blockingConstraintCount: number;
   impactedSegments: string[];
   sourceRefs: string[];
   avoidanceCandidates: string[];
+  candidateComparisons?: RouteCandidateComparisonSummary[];
+  whyRerouteTrace?: RerouteTraceSummary[];
   diagnostics: string[];
+};
+
+export type RouteCandidateComparisonSummary = {
+  id: string;
+  label?: string;
+  rationale?: string;
+  confidence?: number;
+  cost?: RouteCostEstimateSummary;
+  routePointLabels?: string[];
+  avoidedConstraints?: ConstraintImpactSummary[];
+  residualConstraints?: ConstraintImpactSummary[];
+  sourceRefs?: string[];
+  trace?: RerouteTraceSummary[];
+};
+
+export type RouteCostEstimateSummary = {
+  distanceNm?: number;
+  additionalDistanceNm?: number;
+  estimatedMinutes?: number;
+  additionalMinutes?: number;
+  estimatedFuelLb?: number;
+  additionalFuelLb?: number;
+  estimatedCostUsd?: number;
+  additionalCostUsd?: number;
+  cruiseSpeedKnots?: number;
+  fuelBurnLbPerNm?: number;
+  fuelCostUsdPerLb?: number;
+  delayCostUsdPerMinute?: number;
+};
+
+export type ConstraintImpactSummary = {
+  id: string;
+  family?: string;
+  label?: string;
+  severity?: string;
+  sourceRef?: string;
+  rationale?: string;
+};
+
+export type RerouteTraceSummary = {
+  stage?: string;
+  ruleId?: string;
+  message?: string;
+  sourceRef?: string;
+  confidence?: number;
 };
 
 export type PirepRelevanceResult = {
@@ -166,7 +217,16 @@ export type AffectedMissionSummary = {
   stale: boolean;
   guidanceLatencySeconds: number;
   guidanceTargetMet: boolean;
+  rerouteCandidateCount?: number;
+  bestCandidateLabel?: string;
+  rerouteAdditionalDistanceNm?: number;
+  rerouteAdditionalMinutes?: number;
+  rerouteAdditionalFuelLb?: number;
+  rerouteAdditionalCostUsd?: number;
+  avoidedConstraintCount?: number;
+  residualConstraintCount?: number;
   sourceRefs: string[];
+  routeCoordinates?: number[][];
 };
 
 export type MissionDetail = {
@@ -214,6 +274,7 @@ export type DecisionSummary = {
   recommendedAction?: string;
   confidence: number;
   rationale?: string;
+  routeImpact?: RouteImpactSummary;
   resultJson?: string;
   auditJson?: string;
   replayJson?: string;

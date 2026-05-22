@@ -5,6 +5,7 @@ import { CheckCircle2, FileWarning, Lock, Play, Save, ShieldCheck, Unlock, XCirc
 import { api } from '../api/client';
 import { OperationsMap } from '../components/OperationsMap';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
+import { RouteCandidateComparisonPanel } from '../components/RouteCandidateComparisonPanel';
 import { StatusBadge } from '../components/StatusBadge';
 import { isPlainLeftClick, shouldWarnForNavigation } from '../lib/navigationGuard';
 import {
@@ -13,7 +14,9 @@ import {
   composeAltrvSections,
   extractAltrvSections,
   fmtZ,
+  mergeFeatureCollections,
   notamRowsFromSources,
+  routeImpactFeaturesFromSummary,
   sourceRefLabel,
   sourceRefRoute,
   validateAltrvSections
@@ -69,6 +72,7 @@ export function ReservationPage() {
     isSupplementTab(prefs.reservationSupplementTab) ? prefs.reservationSupplementTab : 'CONSOLE'
   );
   const [forceReason, setForceReason] = useState('Operator override from reservation workspace');
+  const [selectedRouteCandidateId, setSelectedRouteCandidateId] = useState('');
 
   useEffect(() => {
     if (reservation?.rawText) {
@@ -165,6 +169,10 @@ export function ReservationPage() {
 
   const relatedMessages = (messages.data ?? []).filter((message) => message.reservationId === reservationId || message.missionId === missionId);
   const notams = notamRowsFromSources(relatedMessages, supplements.data ?? []);
+  const mapFeatures = useMemo(() => mergeFeatureCollections(features.data, {
+    type: 'FeatureCollection',
+    features: routeImpactFeaturesFromSummary(routeImpact.data)
+  }), [features.data, routeImpact.data]);
   const sectionDiagnostics = validateAltrvSections(mode === 'sections' ? sections : extractAltrvSections(rawText));
   const sectionErrors = sectionDiagnostics.filter((item) => item.severity === 'ERROR').length;
   const guardedNavigate = (route: string) => {
@@ -287,13 +295,24 @@ export function ReservationPage() {
                 ))}
               </div>
             )}
-            {!!routeImpact.data?.avoidanceCandidates?.length && (
-              <div className="source-ref-grid">{routeImpact.data.avoidanceCandidates.map((item) => <span key={item}>{item}</span>)}</div>
-            )}
+            <RouteCandidateComparisonPanel
+              routeImpact={routeImpact.data}
+              selectedCandidateId={selectedRouteCandidateId}
+              onCandidateSelect={setSelectedRouteCandidateId}
+            />
             <button onClick={() => coordinationDraft.mutate()}>Coordinate From Hazard</button>
           </div>
           {coordinationDraft.data && <pre className="raw-panel">{coordinationDraft.data.rawText}</pre>}
-          <OperationsMap features={features.data} />
+          <OperationsMap
+            features={mapFeatures}
+            selectedFeatureId={selectedRouteCandidateId ? `route-candidate-${missionId}-${selectedRouteCandidateId}` : undefined}
+            onSelectedFeatureIdChange={(featureId) => {
+              const prefix = `route-candidate-${missionId}-`;
+              setSelectedRouteCandidateId(featureId?.startsWith(prefix) ? featureId.slice(prefix.length) : '');
+            }}
+            affectedMissionIds={[missionId]}
+            affectedSourceRefs={routeImpact.data?.sourceRefs}
+          />
         </aside>
       </div>
 
