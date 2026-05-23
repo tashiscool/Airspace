@@ -8,6 +8,7 @@ import org.tash.extensions.messaging.transaction.ServiceTableCommand;
 import org.tash.extensions.messaging.transaction.UsnsTransaction;
 import org.tash.extensions.carf.api.CarfAnalysisResult;
 import org.tash.extensions.notam.DomesticNotamParseResult;
+import org.tash.extensions.notam.NotamFieldParseResult;
 import org.tash.extensions.notam.NotamAirspaceRestriction;
 import org.tash.extensions.reservation.CarfRouteMessage;
 import org.tash.extensions.weather.pirep.PirepIngestResult;
@@ -26,6 +27,7 @@ public class UsnsTransactionIngestResult {
     private UsnsRoutingOutcome routingOutcome;
     private CarfRouteMessage carfMessage;
     private NotamAirspaceRestriction fdcLaserRestriction;
+    private NotamFieldParseResult notamFieldResult;
     private FdcAcknowledgementCommand fdcAcknowledgement;
     private ServiceRequestCommand serviceRequest;
     private ServiceTableCommand serviceTable;

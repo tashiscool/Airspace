@@ -101,6 +101,93 @@ class AltrvFrameworkTest {
     }
 
     @Test
+    void parserPreservesLegacyRouteFamiliesAndEventMetadata() {
+        String message = "A. TEST01\n"
+                + "B. 2/F16\n"
+                + "C. LOCATION\n"
+                + "D. BEGIN CMN RTE TEST01 TEST02 FL240B280 FIXA 0000 JOIN CMN RTE TO FIXB 0010 ALTRV ENDS "
+                + "BEGIN BRANCH RTE TEST02 FL260 FIXB 0010 LEAVE TEST01 FIXC 0020 CLOSE BRANCH MERGE "
+                + "BEGIN PARTIAL RTE TEST03 FIXC 0020 FIXD 0030 ALTRV ENDS "
+                + "BEGIN ALT DPRT RTE TEST04 CLMB FL300 FIXE 0040 ALTRV ENDS "
+                + "REVERSE COURSE ALTRV TO FIXF FL240 TO CELL-1\n"
+                + "E. TEST01 TEST02\n"
+                + "F. TEST01 ETD 021300 MAR 2010 AVANA 021400 ADMIS 30 SEC\n"
+                + "G. TAS: 480 KTAS";
+
+        AltrvParseResult result = new AltrvParser().parse(message);
+
+        assertTrue(result.isAccepted(), result.getDiagnostics().toString());
+        assertTrue(result.getMessage().getRouteGroups().get(0).getRoutes().stream()
+                .anyMatch(route -> route.getKind() == org.tash.extensions.carf.altrv.AltrvRouteKind.COMMON));
+        assertTrue(result.getMessage().getRouteGroups().get(0).getRoutes().stream()
+                .anyMatch(route -> route.getKind() == org.tash.extensions.carf.altrv.AltrvRouteKind.BRANCH));
+        assertTrue(result.getMessage().getRouteGroups().get(0).getRoutes().stream()
+                .anyMatch(route -> route.getKind() == org.tash.extensions.carf.altrv.AltrvRouteKind.PARTIAL));
+        assertTrue(result.getMessage().getRouteGroups().get(0).getRoutes().stream()
+                .anyMatch(route -> route.getKind() == org.tash.extensions.carf.altrv.AltrvRouteKind.ALTERNATE_DEPARTURE));
+        assertTrue(result.getMessage().getRouteGroups().get(0).getRoutes().stream()
+                .anyMatch(route -> route.getKind() == org.tash.extensions.carf.altrv.AltrvRouteKind.REVERSE));
+        assertTrue(result.getMessage().getEvents().stream()
+                .anyMatch(event -> "ALTRV.g".equals(event.getMetadata().get("grammarSource"))
+                        && event.getMetadata().containsKey("flightLevel")));
+        assertTrue(result.getMessage().getEvents().stream()
+                .anyMatch(event -> event.getType() == AltrvRouteEventType.CLIMB
+                        && "FIXE".equals(event.getMetadata().get("fix"))
+                        && "0040".equals(event.getMetadata().get("elapsedTime"))
+                        && "FL300".equals(event.getMetadata().get("flightLevel"))
+                        && "LOCAL_EVENT_WINDOW".equals(event.getMetadata().get("scope"))));
+        assertTrue(result.getMessage().getEvents().stream()
+                .anyMatch(event -> event.getType() == AltrvRouteEventType.JOIN_COMMON_ROUTE
+                        && "JOIN".equals(event.getMetadata().get("enterExitAssociation"))));
+        assertTrue(result.getMessage().getEvents().stream()
+                .anyMatch(event -> event.getType() == AltrvRouteEventType.BRANCH_CLOSE
+                        && "CLOSE_BRANCH".equals(event.getMetadata().get("enterExitAssociation"))));
+        assertTrue(result.getMessage().getEvents().stream()
+                .anyMatch(event -> event.getType() == AltrvRouteEventType.ADMIS_SECONDS
+                        && "30".equals(event.getMetadata().get("intervalSeconds"))));
+    }
+
+    @Test
+    void parserPreservesLineCorridorEitherSideAreaMetadata() {
+        String message = "1. STATIONARY RESERVATION 20 NM EITHER SIDE FIXA 0000 FIXB 0010 FROM 021200 MAR 2010 TO 021400 MAR 2010 SFC TO FL180\n"
+                + "2. COMMENTS ONLY";
+        Map<String, GeoCoordinate> fixes = new HashMap<>();
+        fixes.put("FIXA", point(30, -150));
+        fixes.put("FIXB", point(31, -149));
+
+        AltrvParseResult result = new AltrvParser().parse(message);
+
+        assertTrue(result.isAccepted(), result.getDiagnostics().toString());
+        assertTrue(result.getMessage().getAreas().stream()
+                .anyMatch(area -> area.getType() == org.tash.extensions.carf.altrv.AltrvAreaType.LINE
+                        && area.getWidthNauticalMiles() == 40.0
+                        && "LINE_CORRIDOR".equals(area.getGeometryIntent())
+                        && "STATIONARY_RESERVATION".equals(area.getEnterExitAssociation())
+                        && "SFC".equals(area.getLowerFlightLevel())
+                        && "180".equals(area.getUpperFlightLevel())
+                        && area.getTimingText() != null));
+        List<CarfReservationEvent> events = new AltrvSpatialMapper()
+                .toReservationEvents(result.getMessage(), new InMemoryCarfReferenceDataProvider(fixes));
+        assertTrue(events.stream().anyMatch(event -> event.getRouteWidthNauticalMiles() == 40.0
+                && event.getLowerAltitudeFeet() == 0
+                && event.getUpperAltitudeFeet() == 18000
+                && "LINE_CORRIDOR".equals(event.getShapeIntent())
+                && event.getSourceText().contains("corridorWidthNm=40.0")));
+    }
+
+    @Test
+    void spatialMapperPreservesLegacyAltitudeForms() {
+        Map<String, GeoCoordinate> fixes = new HashMap<>();
+        fixes.put("FIXA", point(30, -150));
+        fixes.put("FIXB", point(31, -149));
+
+        assertMappedAltitude("D. FIXA 0000 FIXB 0010 SURFACE TO UNLIMITED", fixes, 0, 100000);
+        assertMappedAltitude("D. FIXA 0000 FIXB 0010 ABV FL240", fixes, 24000, 100000);
+        assertMappedAltitude("D. FIXA 0000 FIXB 0010 BLW FL180", fixes, 0, 18000);
+        assertMappedAltitude("D. FIXA 0000 FIXB 0010 FL260", fixes, 26000, 26000);
+    }
+
+    @Test
     void messageValidatorPortsCoreLegacyValidationRules() {
         String invalid = "A. TOOLONG01 TEST02 TEST02\n"
                 + "B. 1/F16\n"
@@ -182,6 +269,16 @@ class AltrvFrameworkTest {
         assertFalse(events.isEmpty());
         assertTrue(events.stream().anyMatch(e -> e.getType() == org.tash.extensions.reservation.CarfReservationEventType.STATIONARY_AREA));
         assertTrue(events.stream().anyMatch(e -> e.getType() == org.tash.extensions.reservation.CarfReservationEventType.ORBIT));
+        assertTrue(events.stream().anyMatch(e -> "POLYGON".equals(e.getShapeIntent())
+                && e.getSourceText().contains("geometryIntent=POLYGON")));
+        assertTrue(events.stream().anyMatch(e -> "POINT_RADIUS".equals(e.getShapeIntent())
+                && e.getSourceText().contains("radiusNm=25.0")));
+        assertTrue(result.getMessage().getAreas().stream()
+                .anyMatch(area -> "POLYGON".equals(area.getGeometryIntent())
+                        && "ALTRV.g".equals(area.getMetadata().get("grammarSource"))));
+        assertTrue(result.getMessage().getAreas().stream()
+                .anyMatch(area -> "POINT_RADIUS".equals(area.getGeometryIntent())
+                        && area.getRadiusNauticalMiles() == 25.0));
     }
 
     @Test
@@ -301,5 +398,23 @@ class AltrvFrameworkTest {
 
     private GeoCoordinate point(double latitude, double longitude) {
         return GeoCoordinate.builder().latitude(latitude).longitude(longitude).altitude(0).build();
+    }
+
+    private void assertMappedAltitude(String routeLine,
+                                      Map<String, GeoCoordinate> fixes,
+                                      double expectedLower,
+                                      double expectedUpper) {
+        String message = "A. ALT01\n"
+                + "B. MISSION\n"
+                + "C. LOCATION\n"
+                + routeLine + "\n"
+                + "F. ETD 021300 MAR 2010 AVANA 021400\n"
+                + "G. COMMENTS";
+        AltrvParseResult result = new AltrvParser().parse(message);
+        List<CarfReservationEvent> events = new AltrvSpatialMapper()
+                .toReservationEvents(result.getMessage(), new InMemoryCarfReferenceDataProvider(fixes));
+        assertFalse(events.isEmpty(), result.getDiagnostics().toString());
+        assertEquals(expectedLower, events.get(0).getLowerAltitudeFeet());
+        assertEquals(expectedUpper, events.get(0).getUpperAltitudeFeet());
     }
 }

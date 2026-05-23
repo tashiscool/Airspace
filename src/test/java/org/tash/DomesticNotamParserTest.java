@@ -177,6 +177,43 @@ class DomesticNotamParserTest {
     }
 
     @Test
+    void classifiesExpandedDom2SemanticFamiliesAndReducers() {
+        DomesticNotamParser parser = new DomesticNotamParser();
+
+        DomesticNotamParseResult runwaySnow = parser.parseDetailed(domestic("RWY 10 ICE SLUSH WINDROWS"));
+        DomesticNotamParseResult taxiwayClosed = parser.parseDetailed(domestic("TWY A CLSD"));
+        DomesticNotamParseResult aerobatic = parser.parseDetailed(domestic("AIRSPACE AEROBATIC AREA 5 NMR ABC"));
+        DomesticNotamParseResult restricted = parser.parseDetailed(domestic("AIRSPACE R1234 ACTIVE"));
+        DomesticNotamParseResult tdwr = parser.parseDetailed(domestic("SVC TDWR OTS"));
+        DomesticNotamParseResult llwas = parser.parseDetailed(domestic("SVC LLWAS UNAVBL"));
+        DomesticNotamParseResult obstruction = parser.parseDetailed(domestic("OBST CRANE LGTD"));
+
+        assertEquals("RWY", runwaySnow.getSemanticFacilityFamily());
+        assertEquals("ICE", runwaySnow.getSemanticCondition());
+        assertEquals("DOM2.SURFACE.ICE", runwaySnow.getReducerRuleId());
+        assertEquals("TWY", taxiwayClosed.getSemanticFacilityFamily());
+        assertEquals("CLOSED", taxiwayClosed.getSemanticAction());
+        assertEquals("AIRSPACE", aerobatic.getSemanticFacilityFamily());
+        assertEquals("AEROBATIC", aerobatic.getSemanticCondition());
+        assertEquals("RESTRICTED_ZONE", restricted.getSemanticCondition());
+        assertEquals("TDWR", tdwr.getSemanticCondition());
+        assertEquals("LLWAS", llwas.getSemanticCondition());
+        assertEquals("OBST", obstruction.getSemanticFacilityFamily());
+        assertNotNull(runwaySnow.getSemanticClassification());
+        assertTrue(runwaySnow.getReducerName().contains("snow/surface"));
+    }
+
+    @Test
+    void semanticFallbackKeepsAcceptedRecordWithDiagnosticWarning() {
+        DomesticNotamParseResult result = new DomesticNotamParser().parseDetailed(
+                domestic("RAMP UNUSUAL LEGACY TEXT"));
+
+        assertTrue(result.isAccepted());
+        assertEquals("DOM2.UNMATCHED", result.getReducerRuleId());
+        assertTrue(result.getWarnings().stream().anyMatch(warning -> warning.contains("No DOM2 semantic reducer")));
+    }
+
+    @Test
     void loadsContractionsFromLegacyDom2Grammar() throws Exception {
         Path ycc = Files.createTempFile("dom2-contractions", ".ycc");
         Files.write(ycc, java.util.Arrays.asList(

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.tash.extensions.notam.DomesticAirspaceRestrictionParser;
 import org.tash.extensions.notam.FdcLaserAirspaceParser;
 import org.tash.extensions.notam.NotamAirspaceParser;
+import org.tash.extensions.notam.NotamFieldParseResult;
 import org.tash.extensions.notam.NotamAirspaceRestriction;
 
 import java.time.ZoneOffset;
@@ -45,6 +46,46 @@ class NotamAirspaceParserTest {
 
         assertThrows(IllegalArgumentException.class, () ->
                 parser.parse("A) KDCA B) 2601011200 C) 2601011800 E) RUNWAY CLOSED"));
+    }
+
+    @Test
+    void parsesIcaoFieldsWithoutGeometryAsRetainedMetadata() {
+        String notam = "(A1236/26 NOTAMC A) KZNY B) 2601011200 C) PERM E) CANCELLED BY SOURCE)";
+
+        NotamFieldParseResult result = new NotamAirspaceParser().parseFields(notam);
+
+        assertTrue(result.isAccepted());
+        assertEquals("NOTAMC", result.getNotamType());
+        assertEquals("KZNY", result.getAField());
+        assertEquals("2601011200", result.getBField());
+        assertEquals("PERM", result.getCField());
+        assertEquals("CANCELLED BY SOURCE)", result.getEField());
+        assertTrue(result.isPermanentEnd());
+        assertFalse(result.isHasGeometry());
+        assertTrue(result.getWarnings().stream().anyMatch(warning -> warning.contains("No Q field")));
+        assertTrue(result.getDiagnostics().stream().anyMatch(diagnostic -> diagnostic.contains("No compact coordinate")));
+    }
+
+    @Test
+    void parsesIcaoAndCanadianQFieldsWithEmptyFirPermEstAndNotamj() {
+        String notam = "1234 NOTAMJ CZYZ Q) /QMRLC/IV/NBO/A/000/999/4339N07937W010 "
+                + "A) CYYZ B) 2601011200 C) 2601011800 EST E) RWY CLSD F) SFC G) UNL";
+
+        NotamFieldParseResult result = new NotamAirspaceParser().parseFields(notam);
+
+        assertTrue(result.isAccepted());
+        assertEquals("NOTAMJ", result.getNotamType());
+        assertNull(result.getAccountability());
+        assertEquals("QMRLC", result.getQCode());
+        assertEquals("000", result.getLowerFlightLevel());
+        assertEquals("999", result.getUpperFlightLevel());
+        assertEquals("CYYZ", result.getAField());
+        assertTrue(result.isEstimatedEnd());
+        assertTrue(result.isHasGeometry());
+        assertEquals(43.65, result.getCenterLatitude(), 0.01);
+        assertEquals(-79.616, result.getCenterLongitude(), 0.01);
+        assertEquals(10, result.getRadiusNauticalMiles(), 0.0001);
+        assertTrue(result.getWarnings().stream().anyMatch(warning -> warning.contains("empty FIR")));
     }
 
     @Test

@@ -19,8 +19,14 @@ import org.tash.extensions.feed.OperationalFeedIngestService;
 import org.tash.extensions.feed.OperationalFeedType;
 import org.tash.extensions.feed.ReferenceDataImportRecord;
 import org.tash.extensions.feed.ReferenceDataSyncResult;
+import org.tash.extensions.notam.DomesticNotamParseResult;
+import org.tash.extensions.notam.DomesticNotamRecord;
+import org.tash.extensions.notam.NotamFieldParseResult;
 import org.tash.extensions.product.dto.ProductDtos;
 import org.tash.extensions.routing.RouteCandidate;
+import org.tash.extensions.messaging.CarfMessageFamilyParseResult;
+import org.tash.extensions.messaging.transaction.ServiceRequestCommand;
+import org.tash.extensions.messaging.transaction.ServiceTableCommand;
 import org.tash.extensions.weather.decision.RouteBlockagePrediction;
 import org.tash.extensions.weather.pirep.PirepReport;
 import org.tash.extensions.weather.product.WeatherProduct;
@@ -391,7 +397,7 @@ public class AirspaceProductService {
         if (result.getUsnsResult() != null && result.getUsnsResult().getTransactionIngestResults() != null) {
             for (org.tash.extensions.messaging.UsnsTransactionIngestResult transactionResult
                     : result.getUsnsResult().getTransactionIngestResults()) {
-                values.add(ProductDtos.FeedTransactionSummary.builder()
+                ProductDtos.FeedTransactionSummary.FeedTransactionSummaryBuilder builder = ProductDtos.FeedTransactionSummary.builder()
                         .id(id + "#" + values.size())
                         .type(transactionResult.getTransaction() == null || transactionResult.getTransaction().getType() == null
                                 ? "UNKNOWN" : transactionResult.getTransaction().getType().name())
@@ -400,8 +406,13 @@ public class AirspaceProductService {
                         .supported(transactionResult.isSupported())
                         .normalizedText(transactionResult.getTransaction() == null ? null : transactionResult.getTransaction().getNormalizedText())
                         .warnings(transactionResult.getWarnings() == null ? Collections.emptyList() : transactionResult.getWarnings())
-                        .errors(transactionResult.getErrors() == null ? Collections.emptyList() : transactionResult.getErrors())
-                        .build());
+                        .errors(transactionResult.getErrors() == null ? Collections.emptyList() : transactionResult.getErrors());
+                applyNotamFields(builder, transactionResult.getNotamFieldResult());
+                applyDomesticNotamFields(builder, transactionResult.getDomesticResult());
+                applyServiceRequestFields(builder, transactionResult.getServiceRequest());
+                applyServiceTableFields(builder, transactionResult.getServiceTable());
+                applyFamilyParseFields(builder, transactionResult.getFamilyParseResult());
+                values.add(builder.build());
             }
         }
         if (values.isEmpty()) {
@@ -416,6 +427,103 @@ public class AirspaceProductService {
                     .build());
         }
         return values;
+    }
+
+    private void applyNotamFields(ProductDtos.FeedTransactionSummary.FeedTransactionSummaryBuilder builder,
+                                  NotamFieldParseResult fields) {
+        if (fields == null) {
+            return;
+        }
+        builder.notamType(fields.getNotamType())
+                .notamAccountability(fields.getAccountability())
+                .notamAffectedLocation(fields.getAField())
+                .notamQCode(fields.getQCode())
+                .notamTraffic(fields.getTraffic())
+                .notamPurpose(fields.getPurpose())
+                .notamScope(fields.getScope())
+                .notamLowerFlightLevel(fields.getLowerFlightLevel())
+                .notamUpperFlightLevel(fields.getUpperFlightLevel())
+                .notamEstimatedEnd(fields.isEstimatedEnd())
+                .notamPermanentEnd(fields.isPermanentEnd())
+                .notamHasGeometry(fields.isHasGeometry())
+                .notamCenterLatitude(fields.getCenterLatitude())
+                .notamCenterLongitude(fields.getCenterLongitude())
+                .notamRadiusNauticalMiles(fields.getRadiusNauticalMiles());
+    }
+
+    private void applyDomesticNotamFields(ProductDtos.FeedTransactionSummary.FeedTransactionSummaryBuilder builder,
+                                          DomesticNotamParseResult result) {
+        if (result == null) {
+            return;
+        }
+        DomesticNotamRecord record = result.getRecord();
+        builder.domesticNotamRecordType(record == null || record.getType() == null ? null : record.getType().name())
+                .domesticNotamKeyword(record == null ? null : record.getKeyword())
+                .domesticNotamAccountability(record == null ? null : record.getAccountability())
+                .domesticNotamLocation(record == null ? null : record.getLocation())
+                .domesticNotamNumber(record == null ? null : record.getNotamNumber())
+                .domesticNotamUnofficial(record != null && record.isUnofficial())
+                .domesticNotamQ23(result.getQ23())
+                .domesticNotamQ45(result.getQ45())
+                .domesticNotamSemanticFacilityFamily(result.getSemanticFacilityFamily())
+                .domesticNotamSemanticCondition(result.getSemanticCondition())
+                .domesticNotamSemanticAction(result.getSemanticAction())
+                .domesticNotamReducerRuleId(result.getReducerRuleId())
+                .domesticNotamReducerName(result.getReducerName());
+    }
+
+    private void applyServiceRequestFields(ProductDtos.FeedTransactionSummary.FeedTransactionSummaryBuilder builder,
+                                           ServiceRequestCommand command) {
+        if (command == null) {
+            return;
+        }
+        builder.serviceCommandType("REQUEST")
+                .serviceCommandService(command.getService())
+                .serviceCommandDomain(command.getDomain())
+                .serviceCommandOperation(command.getOperation())
+                .serviceCommandRequestFormat(command.getRequestFormat())
+                .serviceCommandLocation(command.getLocation())
+                .serviceCommandNotamId(command.getNotamId())
+                .serviceCommandRangeStart(command.getRangeStart())
+                .serviceCommandRangeEnd(command.getRangeEnd())
+                .serviceCommandAccepted(command.isAccepted())
+                .serviceCommandCount(command.isCount())
+                .serviceCommandList(command.isList())
+                .serviceCommandHistory(command.isHistory())
+                .serviceCommandAll(command.isAll())
+                .serviceCommandCurrent(command.isCurrent())
+                .serviceCommandWmscrEcho(command.isWmscrEcho())
+                .serviceCommandPrivilegedHistoryRequest(command.isPrivilegedHistoryRequest());
+    }
+
+    private void applyServiceTableFields(ProductDtos.FeedTransactionSummary.FeedTransactionSummaryBuilder builder,
+                                         ServiceTableCommand command) {
+        if (command == null) {
+            return;
+        }
+        builder.serviceCommandType("TABLE")
+                .serviceCommandService(command.getService())
+                .serviceCommandDomain(command.getDomain())
+                .serviceCommandOperation(command.getOperation())
+                .serviceCommandTableName(command.getTableName())
+                .serviceCommandAccepted(command.isAccepted());
+    }
+
+    private void applyFamilyParseFields(ProductDtos.FeedTransactionSummary.FeedTransactionSummaryBuilder builder,
+                                        CarfMessageFamilyParseResult result) {
+        if (result == null) {
+            return;
+        }
+        Map<String, String> fields = result.getFields() == null ? Collections.emptyMap() : result.getFields();
+        builder.familySemantic(result.getSemantic())
+                .familyPreview(fields.get("preview"))
+                .familyLifecycle(fields.get("lifecycle"))
+                .familyNotamAction(fields.get("notamAction"))
+                .familySnowtamId(fields.get("snowtamId"))
+                .familyBirdtamId(fields.get("birdtamId"))
+                .familyAshtamId(fields.get("ashtamId"))
+                .familyGenotSeries(fields.get("genotSeries"))
+                .familyFdcId(fields.get("fdcId"));
     }
 
     public ProductDtos.DecisionSummary evaluateDecision(ProductDtos.DecisionEvaluateRequest request) {
@@ -1089,10 +1197,12 @@ public class AirspaceProductService {
     }
 
     public List<ProductDtos.SearchResultSummary> search(String query) {
-        if (usePersistence()) {
-            return persistenceService.search(query);
-        }
         String needle = normalize(query);
+        if (usePersistence()) {
+            List<ProductDtos.SearchResultSummary> results = new ArrayList<>(persistenceService.search(query));
+            addFeedTransactionSearchResults(results, feedArtifacts(), needle);
+            return results;
+        }
         List<ProductDtos.SearchResultSummary> results = new ArrayList<>();
         for (ProductDtos.MissionSummary mission : store.missions.values()) {
             if (matches(needle, mission.getMissionNumber(), mission.getTitle(), mission.getStatus())) {
@@ -1133,6 +1243,7 @@ public class AirspaceProductService {
                         .build());
             }
         }
+        addFeedTransactionSearchResults(results, feedArtifacts(), needle);
         for (ProductDtos.DecisionSummary decision : store.decisions.values()) {
             if (matches(needle, decision.getAction(), decision.getRecommendedAction(), decision.getRationale(), decision.getResultJson())) {
                 results.add(ProductDtos.SearchResultSummary.builder()
@@ -1160,6 +1271,126 @@ public class AirspaceProductService {
             }
         }
         return results;
+    }
+
+    private void addFeedTransactionSearchResults(List<ProductDtos.SearchResultSummary> results,
+                                                 List<ProductDtos.FeedArtifactSummary> artifacts,
+                                                 String needle) {
+        for (ProductDtos.FeedArtifactSummary artifact : artifacts) {
+            for (ProductDtos.FeedTransactionSummary transaction : feedTransactions(artifact.getId())) {
+                if (matchesFeedTransaction(needle, transaction)) {
+                    results.add(ProductDtos.SearchResultSummary.builder()
+                            .id(artifact.getId() + "#" + transaction.getId())
+                            .type("feed-transaction")
+                            .title(value(transaction.getNotamType(),
+                                    value(transaction.getDomesticNotamReducerRuleId(), transaction.getType())))
+                            .status(transaction.getStatus())
+                            .snippet(feedTransactionSnippet(transaction))
+                            .route("/feed/" + artifact.getId())
+                            .updatedAt(artifact.getReceivedAt())
+                            .build());
+                }
+            }
+        }
+    }
+
+    private boolean matchesFeedTransaction(String needle, ProductDtos.FeedTransactionSummary transaction) {
+        return matches(needle,
+                transaction.getType(),
+                transaction.getStatus(),
+                transaction.getNormalizedText(),
+                transaction.getNotamType(),
+                transaction.getNotamAccountability(),
+                transaction.getNotamAffectedLocation(),
+                transaction.getNotamQCode(),
+                transaction.getNotamTraffic(),
+                transaction.getNotamPurpose(),
+                transaction.getNotamScope(),
+                transaction.getNotamLowerFlightLevel(),
+                transaction.getNotamUpperFlightLevel(),
+                transaction.getDomesticNotamRecordType(),
+                transaction.getDomesticNotamKeyword(),
+                transaction.getDomesticNotamAccountability(),
+                transaction.getDomesticNotamLocation(),
+                transaction.getDomesticNotamNumber(),
+                transaction.getDomesticNotamQ23(),
+                transaction.getDomesticNotamQ45(),
+                transaction.getDomesticNotamSemanticFacilityFamily(),
+                transaction.getDomesticNotamSemanticCondition(),
+                transaction.getDomesticNotamSemanticAction(),
+                transaction.getDomesticNotamReducerRuleId(),
+                transaction.getDomesticNotamReducerName(),
+                transaction.getServiceCommandType(),
+                transaction.getServiceCommandService(),
+                transaction.getServiceCommandDomain(),
+                transaction.getServiceCommandOperation(),
+                transaction.getServiceCommandRequestFormat(),
+                transaction.getServiceCommandLocation(),
+                transaction.getServiceCommandNotamId(),
+                transaction.getServiceCommandRangeStart(),
+                transaction.getServiceCommandRangeEnd(),
+                transaction.getServiceCommandTableName(),
+                transaction.getFamilySemantic(),
+                transaction.getFamilyPreview(),
+                transaction.getFamilyLifecycle(),
+                transaction.getFamilyNotamAction(),
+                transaction.getFamilySnowtamId(),
+                transaction.getFamilyBirdtamId(),
+                transaction.getFamilyAshtamId(),
+                transaction.getFamilyGenotSeries(),
+                transaction.getFamilyFdcId());
+    }
+
+    private String feedTransactionSnippet(ProductDtos.FeedTransactionSummary transaction) {
+        if (transaction.getFamilySemantic() != null || transaction.getFamilyLifecycle() != null) {
+            return java.util.Arrays.asList(
+                            value(transaction.getType(), "FAMILY"),
+                            value(transaction.getFamilySemantic(), ""),
+                            value(transaction.getFamilyLifecycle(), ""),
+                            value(transaction.getFamilyGenotSeries(), ""),
+                            value(transaction.getFamilySnowtamId(), ""),
+                            value(transaction.getFamilyBirdtamId(), ""),
+                            value(transaction.getFamilyAshtamId(), ""),
+                            value(transaction.getFamilyFdcId(), ""))
+                    .stream()
+                    .filter(value -> value != null && !value.trim().isEmpty())
+                    .collect(java.util.stream.Collectors.joining(" "));
+        }
+        if (transaction.getServiceCommandType() != null || transaction.getServiceCommandService() != null) {
+            return java.util.Arrays.asList(
+                            value(transaction.getServiceCommandType(), "SERVICE"),
+                            value(transaction.getServiceCommandDomain(), ""),
+                            value(transaction.getServiceCommandOperation(), value(transaction.getServiceCommandTableName(), "")),
+                            value(transaction.getServiceCommandLocation(), ""),
+                            value(transaction.getServiceCommandNotamId(), ""),
+                            transaction.isServiceCommandHistory() ? "HISTORY" : null,
+                            transaction.isServiceCommandCurrent() ? "CURRENT" : null,
+                            transaction.isServiceCommandAccepted() ? "ACCEPTED" : "DIAGNOSTIC")
+                    .stream()
+                    .filter(value -> value != null && !value.trim().isEmpty())
+                    .collect(java.util.stream.Collectors.joining(" "));
+        }
+        if (transaction.getDomesticNotamReducerRuleId() != null || transaction.getDomesticNotamKeyword() != null) {
+            return java.util.Arrays.asList(
+                            value(transaction.getDomesticNotamKeyword(), "DOM"),
+                            value(transaction.getDomesticNotamSemanticFacilityFamily(), ""),
+                            value(transaction.getDomesticNotamSemanticCondition(), value(transaction.getDomesticNotamSemanticAction(), "")),
+                            value(transaction.getDomesticNotamReducerRuleId(), ""))
+                    .stream()
+                    .filter(value -> value != null && !value.trim().isEmpty())
+                    .collect(java.util.stream.Collectors.joining(" "));
+        }
+        if (transaction.getNotamType() != null || transaction.getNotamQCode() != null) {
+            return java.util.Arrays.asList(
+                            value(transaction.getNotamType(), "NOTAM"),
+                            value(transaction.getNotamQCode(), ""),
+                            value(transaction.getNotamAffectedLocation(), value(transaction.getNotamAccountability(), "")),
+                            transaction.isNotamHasGeometry() ? "GEOMETRY" : "NO_GEOMETRY")
+                    .stream()
+                    .filter(value -> value != null && !value.trim().isEmpty())
+                    .collect(java.util.stream.Collectors.joining(" "));
+        }
+        return snippet(transaction.getNormalizedText());
     }
 
     public List<ProductDtos.ReferencePointSummary> referencePoints(String pointType) {

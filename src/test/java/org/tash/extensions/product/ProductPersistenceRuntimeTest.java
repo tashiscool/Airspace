@@ -8,10 +8,14 @@ import org.tash.extensions.engine.OperationalDecisionRequest;
 import org.tash.extensions.feed.OperationalFeedEnvelope;
 import org.tash.extensions.feed.OperationalFeedIngestResult;
 import org.tash.extensions.feed.OperationalFeedType;
+import org.tash.extensions.messaging.MessageControlCharacters;
+import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.application.ProductPersistenceService;
 import org.tash.extensions.product.dto.ProductDtos;
+import org.tash.extensions.workflow.InMemoryReservationWorkflowRepository;
 import org.tash.extensions.workflow.ReservationDraft;
 import org.tash.extensions.workflow.ReservationWorkflowRecord;
+import org.tash.extensions.workflow.ReservationWorkflowService;
 import org.tash.extensions.workflow.ReservationWorkflowState;
 
 import java.time.ZonedDateTime;
@@ -23,6 +27,30 @@ import static org.junit.jupiter.api.Assertions.*;
 class ProductPersistenceRuntimeTest {
     @Inject
     ProductPersistenceService persistenceService;
+
+    @Test
+    void productServiceSearchRehydratesPersistedFeedTransactions() {
+        AirspaceProductService service = new AirspaceProductService(
+                new ReservationWorkflowService(new InMemoryReservationWorkflowRepository()),
+                persistenceService,
+                true);
+        ProductDtos.FeedIngestRequest feed = new ProductDtos.FeedIngestRequest();
+        feed.setSourceId("runtime-grammar-" + System.nanoTime());
+        feed.setType("USNS");
+        feed.setRawPayload(envelope("!DCA LDN RWY 10/28 CLSD 1012211200-1012211300\n"
+                + "(A1001/26 NOTAMN Q) /QRTCA/IV/BO/W/000/180/3000N15000W005 A) KZNY B) 2601011200 C) PERM E) TEST)"));
+
+        String artifactId = service.ingestFeed(feed).getResults().get(0).getEnvelope().getId();
+
+        assertTrue(service.search("DOM2.SURFACE.CLOSED").stream().anyMatch(result ->
+                "feed-transaction".equals(result.getType())
+                        && result.getRoute().equals("/feed/" + artifactId)
+                        && result.getSnippet().contains("RWY")));
+        assertTrue(service.search("QRTCA").stream().anyMatch(result ->
+                "feed-transaction".equals(result.getType())
+                        && result.getRoute().equals("/feed/" + artifactId)
+                        && result.getSnippet().contains("GEOMETRY")));
+    }
 
     @Test
     void productPersistenceServiceStoresOperationalAggregatesThroughFlywaySchema() {
@@ -171,5 +199,14 @@ class ProductPersistenceRuntimeTest {
         assertTrue(metrics.get("product.apreqs") >= 1.0);
         assertTrue(metrics.get("product.approvals") >= 1.0);
         assertNotNull(decisionId);
+    }
+
+    private String envelope(String body) {
+        return "01GGNC07GP\n"
+                + "CNS000 300334\n"
+                + "GG KDZZNAXX\n"
+                + "300334 KGPS\n"
+                + MessageControlCharacters.STX + body
+                + MessageControlCharacters.VT + MessageControlCharacters.ETX;
     }
 }

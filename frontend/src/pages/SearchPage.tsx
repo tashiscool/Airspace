@@ -9,7 +9,8 @@ import { ErrorNotice } from '../components/Notices';
 import { StatusBadge } from '../components/StatusBadge';
 import type { SearchResultSummary } from '../types';
 import { fmtZ } from '../lib/viewModels';
-import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
+import { searchTypeLabel, selectionForSearch } from '../lib/searchView';
+import { writeWorkbenchJson } from '../lib/workbenchState';
 
 export function SearchPage() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export function SearchPage() {
   const search = useQuery({ queryKey: ['search', query], queryFn: () => api.search(query), enabled: query.trim().length > 1 });
   const column = createColumnHelper<SearchResultSummary>();
   const columns = [
-    column.accessor('type', { header: 'Type' }),
+    column.accessor((row) => searchTypeLabel(row.type), { id: 'type', header: 'Type' }),
     column.accessor('title', { header: 'Title' }),
     column.accessor('status', { header: 'Status', cell: (info) => info.getValue() ? <StatusBadge value={info.getValue()} /> : null }),
     column.accessor('snippet', { header: 'Snippet' }),
@@ -39,21 +40,4 @@ export function SearchPage() {
       />
     </section>
   );
-}
-
-function selectionForSearch(row: SearchResultSummary): WorkbenchSelection {
-  const type = row.type.toUpperCase();
-  return {
-    missionId: type.includes('MISSION') ? row.id : undefined,
-    messageId: type.includes('MESSAGE') || type.includes('NOTAM') ? row.id : undefined,
-    feedArtifactId: type.includes('FEED') ? row.id : undefined,
-    decisionId: type.includes('DECISION') ? row.id : undefined,
-    sourceFamily: type.includes('NOTAM') ? 'NOTAM'
-      : type.includes('DECISION') ? 'DECISION'
-        : type.includes('WEATHER') || type.includes('PIREP') ? 'WEATHER'
-          : type.includes('CARF') || type.includes('RESERVATION') || type.includes('MISSION') ? 'CARF_ALTRV'
-            : 'UNKNOWN',
-    label: row.title,
-    lockState: row.status
-  };
 }

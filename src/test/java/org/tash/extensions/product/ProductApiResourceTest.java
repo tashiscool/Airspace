@@ -258,6 +258,42 @@ class ProductApiResourceTest {
                 .body("size()", greaterThanOrEqualTo(1))
                 .body("[0].type", notNullValue());
 
+        String notamFeedArtifactId = given()
+                .contentType("application/json")
+                .body("{\"sourceId\":\"notam-api\",\"type\":\"USNS\",\"rawPayload\":"
+                        + json(envelope("!DCA LDN RWY 10/28 CLSD 1012211200-1012211300\\n"
+                        .replace("\\n", "\n") + "(A0001/26 NOTAMN Q) /QRTCA/IV/BO/W/000/180/3000N15000W005 A) KZNY B) 2601011200 C) PERM E) TEST)\\n"
+                        .replace("\\n", "\n") + "(A0002/26 NOTAMC A) KZNY E) CANCEL TEST)\\n"
+                        .replace("\\n", "\n") + "(SVC RQ DOM RQN KJFK HIST)\\n"
+                        .replace("\\n", "\n") + "(SVC TBL ROUTING UPDATE)\\n"
+                        .replace("\\n", "\n") + "GENOT RWA TEST ADMIN MESSAGE")) + "}")
+                .when()
+                .post("/api/feed/ingest")
+                .then()
+                .statusCode(200)
+                .body("results.size()", equalTo(1))
+                .extract()
+                .path("results[0].envelope.id");
+
+        given()
+                .when()
+                .get("/api/feed/artifacts/" + notamFeedArtifactId + "/transactions")
+                .then()
+                .statusCode(200)
+                .body("find { it.notamType == 'NOTAMN' }.notamQCode", equalTo("QRTCA"))
+                .body("find { it.notamType == 'NOTAMN' }.notamHasGeometry", equalTo(true))
+                .body("find { it.notamType == 'NOTAMN' }.notamPermanentEnd", equalTo(true))
+                .body("find { it.type == 'DOMESTIC' }.domesticNotamKeyword", equalTo("RWY"))
+                .body("find { it.type == 'DOMESTIC' }.domesticNotamReducerRuleId", equalTo("DOM2.SURFACE.CLOSED"))
+                .body("find { it.type == 'DOMESTIC' }.domesticNotamQ23", equalTo("LC"))
+                .body("find { it.notamType == 'NOTAMC' }.notamHasGeometry", equalTo(false))
+                .body("find { it.notamType == 'NOTAMC' }.warnings[0]", org.hamcrest.Matchers.containsString("No Q field"))
+                .body("find { it.type == 'SERVICE_REQUEST' }.serviceCommandOperation", equalTo("RQN"))
+                .body("find { it.type == 'SERVICE_REQUEST' }.serviceCommandLocation", equalTo("KJFK"))
+                .body("find { it.type == 'SERVICE_TABLE' }.serviceCommandOperation", equalTo("UPDATE"))
+                .body("find { it.type == 'GENOT' }.familySemantic", equalTo("genot-admin-message"))
+                .body("find { it.type == 'GENOT' }.familyGenotSeries", equalTo("RWA"));
+
         given()
                 .queryParam("q", "Oceanic")
                 .when()
@@ -273,6 +309,38 @@ class ProductApiResourceTest {
                 .then()
                 .statusCode(200)
                 .body("find { it.type == 'feed' }.route", equalTo("/feed/" + feedArtifactId));
+
+        given()
+                .queryParam("q", "DOM2.SURFACE.CLOSED")
+                .when()
+                .get("/api/search")
+                .then()
+                .statusCode(200)
+                .body("find { it.type == 'feed-transaction' }.route", equalTo("/feed/" + notamFeedArtifactId));
+
+        given()
+                .queryParam("q", "QRTCA")
+                .when()
+                .get("/api/search")
+                .then()
+                .statusCode(200)
+                .body("find { it.type == 'feed-transaction' }.snippet", org.hamcrest.Matchers.containsString("GEOMETRY"));
+
+        given()
+                .queryParam("q", "RQN")
+                .when()
+                .get("/api/search")
+                .then()
+                .statusCode(200)
+                .body("find { it.type == 'feed-transaction' }.snippet", org.hamcrest.Matchers.containsString("REQUEST"));
+
+        given()
+                .queryParam("q", "genot-admin-message")
+                .when()
+                .get("/api/search")
+                .then()
+                .statusCode(200)
+                .body("find { it.type == 'feed-transaction' }.snippet", org.hamcrest.Matchers.containsString("GENOT"));
 
         String decisionId = given()
                 .contentType("application/json")
@@ -465,6 +533,44 @@ class ProductApiResourceTest {
     }
 
     private String json(String text) {
-        return "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"";
+        StringBuilder escaped = new StringBuilder("\"");
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            switch (ch) {
+                case '\\':
+                    escaped.append("\\\\");
+                    break;
+                case '"':
+                    escaped.append("\\\"");
+                    break;
+                case '\n':
+                    escaped.append("\\n");
+                    break;
+                case '\r':
+                    escaped.append("\\r");
+                    break;
+                case '\t':
+                    escaped.append("\\t");
+                    break;
+                default:
+                    if (ch < 0x20) {
+                        escaped.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        escaped.append(ch);
+                    }
+                    break;
+            }
+        }
+        return escaped.append("\"").toString();
+    }
+
+    private String envelope(String body) {
+        return "01GGNC07GP\n"
+                + "CNS000 300334\n"
+                + "GG KDZZNAXX\n"
+                + "300334 KGPS\n"
+                + org.tash.extensions.messaging.MessageControlCharacters.STX + body
+                + org.tash.extensions.messaging.MessageControlCharacters.VT
+                + org.tash.extensions.messaging.MessageControlCharacters.ETX;
     }
 }

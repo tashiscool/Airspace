@@ -6,6 +6,7 @@ import org.tash.extensions.messaging.transaction.UsnsTransaction;
 import org.tash.extensions.messaging.transaction.UsnsTransactionParseResult;
 import org.tash.extensions.carf.api.CarfAnalysisResult;
 import org.tash.extensions.notam.DomesticNotamParseResult;
+import org.tash.extensions.notam.NotamFieldParseResult;
 import org.tash.extensions.reservation.CarfRouteMessage;
 import org.tash.extensions.weather.pirep.PirepIngestResult;
 import org.tash.extensions.weather.product.WeatherProduct;
@@ -32,6 +33,13 @@ public class UsnsIngestResult {
     public List<DomesticNotamParseResult> getDomesticResults() {
         return transactionIngestResults == null ? java.util.Collections.emptyList() : transactionIngestResults.stream()
                 .map(UsnsTransactionIngestResult::getDomesticResult)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    public List<NotamFieldParseResult> getNotamFieldResults() {
+        return transactionIngestResults == null ? java.util.Collections.emptyList() : transactionIngestResults.stream()
+                .map(UsnsTransactionIngestResult::getNotamFieldResult)
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
     }

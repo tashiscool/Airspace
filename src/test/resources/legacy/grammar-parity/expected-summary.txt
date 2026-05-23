@@ -1,0 +1,2 @@
+Legacy grammar parity corpus covers ALTRV route families, ALTRV stationary line corridors, DOM1 record shapes, DOM2 semantic reducers, and USNS/ICAO/Canadian/RQ/TBL/GENOT transaction families.
+These fixtures are behavior oracles only; Airspace keeps modern typed parsers and does not import the 2010 generated parser runtime or .llr binaries.

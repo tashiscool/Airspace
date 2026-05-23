@@ -2,6 +2,7 @@ package org.tash.extensions.product;
 
 import org.junit.jupiter.api.Test;
 import org.tash.extensions.feed.OperationalFeedBatchResult;
+import org.tash.extensions.messaging.MessageControlCharacters;
 import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.dto.ProductDtos;
 import org.tash.extensions.workflow.InMemoryReservationWorkflowRepository;
@@ -44,6 +45,73 @@ class ProductReplayCorpusTest {
         assertNotNull(service.decisionResult(summary.getId()).getReplayBundle());
         assertTrue(service.metrics().get("product.feedArtifacts") >= 1.0);
         assertTrue(service.metrics().get("product.decisions") >= 1.0);
+    }
+
+    @Test
+    void feedTransactionsExposeTypedIcaoAndCanadianNotamFields() {
+        AirspaceProductService service = new AirspaceProductService(
+                new ReservationWorkflowService(new InMemoryReservationWorkflowRepository()));
+        ProductDtos.FeedIngestRequest feed = new ProductDtos.FeedIngestRequest();
+        feed.setSourceId("grammar-parity");
+        feed.setType("USNS");
+        feed.setRawPayload(envelope("!DCA LDN RWY 10/28 CLSD 1012211200-1012211300\n"
+                + "(A0001/26 NOTAMN Q) /QRTCA/IV/BO/W/000/180/3000N15000W005 A) KZNY B) 2601011200 C) PERM E) TEST)\n"
+                + "(A0002/26 NOTAMC A) KZNY E) CANCEL TEST)\n"
+                + "(1234/26 NOTAMJ A) CYUL E) CANADIAN TEST TIL APRX 2601011200)\n"
+                + "(SVC RQ DOM RQN KJFK HIST)\n"
+                + "(SVC TBL ROUTING UPDATE)\n"
+                + "GENOT RWA TEST ADMIN MESSAGE"));
+
+        OperationalFeedBatchResult batch = service.ingestFeed(feed);
+        String artifactId = batch.getResults().get(0).getEnvelope().getId();
+        java.util.List<ProductDtos.FeedTransactionSummary> transactions = service.feedTransactions(artifactId);
+
+        assertTrue(transactions.stream().anyMatch(transaction ->
+                "NOTAMN".equals(transaction.getNotamType())
+                        && "QRTCA".equals(transaction.getNotamQCode())
+                        && transaction.isNotamHasGeometry()
+                        && transaction.isNotamPermanentEnd()));
+        assertTrue(transactions.stream().anyMatch(transaction ->
+                "RWY".equals(transaction.getDomesticNotamKeyword())
+                        && "DOM2.SURFACE.CLOSED".equals(transaction.getDomesticNotamReducerRuleId())
+                        && "LC".equals(transaction.getDomesticNotamQ23())));
+        assertTrue(transactions.stream().anyMatch(transaction ->
+                "NOTAMC".equals(transaction.getNotamType())
+                        && !transaction.isNotamHasGeometry()
+                        && transaction.getWarnings().stream().anyMatch(warning -> warning.contains("No compact coordinate"))));
+        assertTrue(transactions.stream().anyMatch(transaction ->
+                "NOTAMJ".equals(transaction.getNotamType())
+                        && "CYUL".equals(transaction.getNotamAffectedLocation())));
+        assertTrue(transactions.stream().anyMatch(transaction ->
+                "REQUEST".equals(transaction.getServiceCommandType())
+                        && "DOM".equals(transaction.getServiceCommandDomain())
+                        && "RQN".equals(transaction.getServiceCommandOperation())
+                        && "KJFK".equals(transaction.getServiceCommandLocation())
+                        && transaction.isServiceCommandHistory()));
+        assertTrue(transactions.stream().anyMatch(transaction ->
+                "TABLE".equals(transaction.getServiceCommandType())
+                        && "ROUTING".equals(transaction.getServiceCommandDomain())
+                        && "UPDATE".equals(transaction.getServiceCommandOperation())));
+        assertTrue(transactions.stream().anyMatch(transaction ->
+                "GENOT".equals(transaction.getType())
+                        && "genot-admin-message".equals(transaction.getFamilySemantic())
+                        && "RWA".equals(transaction.getFamilyGenotSeries())));
+        assertTrue(service.search("DOM2.SURFACE.CLOSED").stream().anyMatch(result ->
+                "feed-transaction".equals(result.getType())
+                        && result.getRoute().equals("/feed/" + artifactId)
+                        && result.getSnippet().contains("RWY")));
+        assertTrue(service.search("QRTCA").stream().anyMatch(result ->
+                "feed-transaction".equals(result.getType())
+                        && result.getRoute().equals("/feed/" + artifactId)
+                        && result.getSnippet().contains("GEOMETRY")));
+        assertTrue(service.search("RQN").stream().anyMatch(result ->
+                "feed-transaction".equals(result.getType())
+                        && result.getRoute().equals("/feed/" + artifactId)
+                        && result.getSnippet().contains("REQUEST")));
+        assertTrue(service.search("genot-admin-message").stream().anyMatch(result ->
+                "feed-transaction".equals(result.getType())
+                        && result.getRoute().equals("/feed/" + artifactId)
+                        && result.getSnippet().contains("GENOT")));
     }
 
     @Test
@@ -165,5 +233,14 @@ class ProductReplayCorpusTest {
 
     private String resource(String path) throws Exception {
         return new String(getClass().getResourceAsStream(path).readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    private String envelope(String body) {
+        return "01GGNC07GP\n"
+                + "CNS000 300334\n"
+                + "GG KDZZNAXX\n"
+                + "300334 KGPS\n"
+                + MessageControlCharacters.STX + body
+                + MessageControlCharacters.VT + MessageControlCharacters.ETX;
     }
 }

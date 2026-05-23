@@ -46,6 +46,44 @@ class UsnsIngestServiceTest {
     }
 
     @Test
+    void routesIcaoAndCanadianNotamsToTypedFieldParser() {
+        String body = "(A0001/26 NOTAMN Q) /QRTCA/IV/BO/W/000/180/3000N15000W005 A) KZNY B) 2601011200 C) PERM E) TEST)\n"
+                + "(A0002/26 NOTAMC A) KZNY E) CANCEL TEST)\n"
+                + "(1234/26 NOTAMJ A) CYUL E) CANADIAN TEST TIL APRX 2601011200)";
+
+        UsnsIngestResult result = new UsnsIngestService().parse(envelope(body));
+
+        assertTrue(result.getErrors().isEmpty(), result.getErrors().toString());
+        assertEquals(3, result.getNotamFieldResults().size());
+        assertTrue(result.getNotamFieldResults().stream().anyMatch(fields ->
+                "NOTAMN".equals(fields.getNotamType())
+                        && "QRTCA".equals(fields.getQCode())
+                        && fields.isHasGeometry()));
+        assertTrue(result.getNotamFieldResults().stream().anyMatch(fields ->
+                "NOTAMC".equals(fields.getNotamType())
+                        && !fields.isHasGeometry()
+                        && fields.getDiagnostics().stream().anyMatch(d -> d.contains("No compact coordinate"))));
+        assertTrue(result.getNotamFieldResults().stream().anyMatch(fields ->
+                "NOTAMJ".equals(fields.getNotamType())
+                        && "CYUL".equals(fields.getAField())));
+    }
+
+    @Test
+    void propagatesMalformedServiceCommandDiagnostics() {
+        UsnsIngestResult result = new UsnsIngestService().parse(envelope("(SVC RQ)\n(SVC TBL DOM)"));
+
+        assertFalse(result.getErrors().isEmpty());
+        assertTrue(result.getTransactionIngestResults().stream()
+                .anyMatch(transaction -> transaction.getServiceRequest() != null
+                        && !transaction.getServiceRequest().isAccepted()
+                        && transaction.getErrors().stream().anyMatch(error -> error.contains("domain is missing"))));
+        assertTrue(result.getTransactionIngestResults().stream()
+                .anyMatch(transaction -> transaction.getServiceTable() != null
+                        && !transaction.getServiceTable().isAccepted()
+                        && transaction.getErrors().stream().anyMatch(error -> error.contains("operation is missing"))));
+    }
+
+    @Test
     void rejectsMalformedFdcAcknowledgementBeforeExecution() {
         UsnsIngestResult result = new UsnsIngestService().parse(envelope("R FDC 0/1234 12"));
 

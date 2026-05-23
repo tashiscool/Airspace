@@ -65,6 +65,12 @@ public class ServiceRequestCommand {
         if (!expectedService.equals(service)) {
             warnings.add("Parsed service " + service + " while expecting " + expectedService);
         }
+        if (domain.isEmpty()) {
+            errors.add("SVC " + service + " domain is missing");
+        }
+        if (operation.isEmpty()) {
+            errors.add("SVC " + service + " operation is missing");
+        }
         return ServiceRequestCommand.builder()
                 .accepted(errors.isEmpty())
                 .service(service)

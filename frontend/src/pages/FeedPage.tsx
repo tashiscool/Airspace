@@ -7,6 +7,7 @@ import { api } from '../api/client';
 import { DataTable } from '../components/DataTable';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { StatusBadge } from '../components/StatusBadge';
+import { transactionFieldLabel, transactionMetadataNotice } from '../lib/feedView';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
 import type { FeedArtifactSummary, FeedTransactionSummary } from '../types';
 
@@ -58,6 +59,7 @@ export function FeedPage() {
   const txColumns = [
     txColumn.accessor('type', { header: 'Type' }),
     txColumn.accessor('status', { header: 'Status', cell: (info) => <StatusBadge value={info.getValue()} /> }),
+    txColumn.accessor((row) => transactionFieldLabel(row), { id: 'metadata', header: 'Parsed Fields' }),
     txColumn.accessor('supported', { header: 'Supported', cell: (info) => String(info.getValue()) }),
     txColumn.accessor('normalizedText', { header: 'Normalized' }),
     txColumn.accessor((row) => row.errors.length + row.warnings.length, { id: 'diagnostics', header: 'Diagnostics' })
@@ -101,6 +103,18 @@ export function FeedPage() {
               </div>
               <h4>Transactions</h4>
               <DataTable data={transactions.data ?? []} columns={txColumns} />
+              <div className="notice-stack">
+                {(transactions.data ?? [])
+                  .filter((transaction) => transaction.notamType || transaction.notamQCode
+                    || transaction.domesticNotamReducerRuleId || transaction.serviceCommandType
+                    || transaction.familySemantic || transaction.familyLifecycle)
+                  .slice(0, 4)
+                  .map((transaction) => (
+                    <div className="event" key={`${transaction.id}-parsed-fields`}>
+                      <strong>{transactionFieldLabel(transaction)}</strong> {transactionMetadataNotice(transaction)}
+                    </div>
+                  ))}
+              </div>
               <h4>Diagnostics</h4>
               {(selected.data.diagnostics.length ? selected.data.diagnostics : ['No diagnostics']).map((item) => <div className="event" key={item}>{item}</div>)}
               <pre className="raw-panel">{selected.data.rawPayload || 'No raw payload retained.'}</pre>

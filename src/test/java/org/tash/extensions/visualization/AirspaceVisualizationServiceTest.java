@@ -27,6 +27,9 @@ class AirspaceVisualizationServiceTest {
                 .protectedVolume(volume("V1"))
                 .sourceFixes(Arrays.asList("A", "B", "C"))
                 .routeWidthNauticalMiles(20)
+                .displayShapeIntent("TIMING_TRIANGLE")
+                .sourceText("geometryIntent=TIMING_TRIANGLE | timing=021200 MAR 2010")
+                .diagnostics(Arrays.asList("legacy grammar parity retained"))
                 .build();
 
         AirspaceFeatureCollection collection =
@@ -44,6 +47,10 @@ class AirspaceVisualizationServiceTest {
         assertEquals(false, feature.getProperties().get("isNotam"));
         assertEquals(true, feature.getProperties().get("isAltrv"));
         assertEquals("TIMING_TRIANGLE", feature.getProperties().get("reservationType"));
+        assertEquals("TIMING_TRIANGLE", feature.getProperties().get("geometryIntent"));
+        assertEquals("geometryIntent=TIMING_TRIANGLE | timing=021200 MAR 2010",
+                feature.getProperties().get("sourceText"));
+        assertEquals(Arrays.asList("legacy grammar parity retained"), feature.getProperties().get("diagnostics"));
         assertNotNull(feature.getProperties().get("style"));
         assertTrue(new GeoJsonAirspaceExporter().toGeoJson(collection).contains("\"FeatureCollection\""));
     }

@@ -2,6 +2,7 @@ package org.tash.extensions.agentic;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.tash.extensions.messaging.MessageControlCharacters;
 import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.dto.ProductDtos;
 import org.tash.extensions.workflow.InMemoryReservationWorkflowRepository;
@@ -334,6 +335,43 @@ class AgenticOperationsServiceTest {
         smoothPirep.setSubject("Contradictory smooth PIREP");
         smoothPirep.setRawText("UA /OV 7000N10000W/TM 2000/FL120/TP B738/TB SMOOTH/IC NEG/RM FAR OFF ROUTE");
         productService.sendMessage(smoothPirep);
+        ProductDtos.MessageRequest ambiguousDomNotam = new ProductDtos.MessageRequest();
+        ambiguousDomNotam.setMissionId(missionId);
+        ambiguousDomNotam.setReservationId(reservationId);
+        ambiguousDomNotam.setFamily("DOMESTIC");
+        ambiguousDomNotam.setDirection("INBOUND");
+        ambiguousDomNotam.setSubject("Ambiguous domestic NOTAM");
+        ambiguousDomNotam.setRawText("!DCA LDN RAMP UNUSUAL LEGACY TEXT 1012211200-1012211300");
+        productService.sendMessage(ambiguousDomNotam);
+        ProductDtos.MessageRequest nonGeometricIcaoNotam = new ProductDtos.MessageRequest();
+        nonGeometricIcaoNotam.setMissionId(missionId);
+        nonGeometricIcaoNotam.setReservationId(reservationId);
+        nonGeometricIcaoNotam.setFamily("ICAO_NOTAMC");
+        nonGeometricIcaoNotam.setDirection("INBOUND");
+        nonGeometricIcaoNotam.setSubject("Cancellation without geometry");
+        nonGeometricIcaoNotam.setRawText("(A0002/26 NOTAMC A) KZNY E) CANCEL TEST)");
+        productService.sendMessage(nonGeometricIcaoNotam);
+        ProductDtos.MessageRequest emptyFirIcaoNotam = new ProductDtos.MessageRequest();
+        emptyFirIcaoNotam.setMissionId(missionId);
+        emptyFirIcaoNotam.setReservationId(reservationId);
+        emptyFirIcaoNotam.setFamily("ICAO_NOTAMN");
+        emptyFirIcaoNotam.setDirection("INBOUND");
+        emptyFirIcaoNotam.setSubject("Empty FIR Q-line");
+        emptyFirIcaoNotam.setRawText("(A0001/26 NOTAMN Q) /QRTCA/IV/BO/W/000/180/3000N15000W005 A) KZNY B) 2601011200 C) PERM E) TEST)");
+        productService.sendMessage(emptyFirIcaoNotam);
+        ProductDtos.MessageRequest malformedAltrv = new ProductDtos.MessageRequest();
+        malformedAltrv.setMissionId(missionId);
+        malformedAltrv.setReservationId(reservationId);
+        malformedAltrv.setFamily("CARF_ALTRV");
+        malformedAltrv.setDirection("INBOUND");
+        malformedAltrv.setSubject("Malformed ALTRV");
+        malformedAltrv.setRawText("A. BROKEN\nD. FIXA 0000\nG. MISSING TIMING");
+        productService.sendMessage(malformedAltrv);
+        ProductDtos.FeedIngestRequest commandFeed = new ProductDtos.FeedIngestRequest();
+        commandFeed.setSourceId("agentic-rq-tbl");
+        commandFeed.setType("USNS");
+        commandFeed.setRawPayload(envelope("(SVC TBL DOM)\n(SVC RQ DOM RQN KJFK HIST)"));
+        productService.ingestFeed(commandFeed);
         DataIntegrityAgent agent = new DataIntegrityAgent();
         agent.productService = productService;
 
@@ -343,6 +381,12 @@ class AgenticOperationsServiceTest {
         AgentRunResult result = agent.scan(request);
 
         assertTrue(result.getFindings().stream().anyMatch(finding -> "CONTRADICTORY_PIREP_WEATHER".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "AMBIGUOUS_DOM2_SEMANTIC_REDUCTION".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "MISSING_NOTAM_GEOMETRY".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "AMBIGUOUS_ICAO_NOTAM_Q_FIELD".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "MALFORMED_ALTRV_GRAMMAR".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "MALFORMED_USNS_SERVICE_COMMAND".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "USNS_TABLE_COMMAND_RETAINED_ONLY".equals(finding.getCategory())));
         assertTrue(result.getFindings().stream().anyMatch(finding -> "MISSING_GEOMETRY".equals(finding.getCategory())
                 || "PIREP_RELEVANCE_MISMATCH".equals(finding.getCategory())));
         assertTrue(result.getFindings().stream().allMatch(finding -> finding.getCitations() != null && !finding.getCitations().isEmpty()));
@@ -464,6 +508,15 @@ class AgenticOperationsServiceTest {
                 java.util.Arrays.asList(30.5, -149.8, 25000.0),
                 java.util.Arrays.asList(31.0, -149.0, 26000.0)));
         return request;
+    }
+
+    private String envelope(String body) {
+        return "01GGNC07GP\n"
+                + "CNS000 300334\n"
+                + "GG KDZZNAXX\n"
+                + "300334 KGPS\n"
+                + MessageControlCharacters.STX + body
+                + MessageControlCharacters.VT + MessageControlCharacters.ETX;
     }
 
     @Test

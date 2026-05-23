@@ -122,7 +122,10 @@ public class AirspaceVisualizationService {
         properties.put("avanaMinutes", reservation.getAvanaMinutes());
         properties.put("longitudinalSeparationMinutes", reservation.getLongitudinalSeparationMinutes());
         properties.put("displayShapeIntent", reservation.getDisplayShapeIntent());
+        properties.put("geometryIntent", reservation.getDisplayShapeIntent());
         properties.put("deconflictionShapeIntent", reservation.getDeconflictionShapeIntent());
+        properties.put("sourceText", reservation.getSourceText());
+        properties.put("diagnostics", reservation.getDiagnostics());
         properties.put("sourceFamily", "CARF_ALTRV");
         properties.put("displayLayer", "reservations");
         properties.put("constraintType", "CARF_RESERVATION");
@@ -159,6 +162,10 @@ public class AirspaceVisualizationService {
         properties.put("sourceRatioEnd", reservation.getSourceRatioEnd());
         properties.put("routeWidthNauticalMiles", reservation.getRouteWidthNauticalMiles());
         properties.put("routeSegmentDistanceNauticalMiles", reservation.getRouteSegmentDistanceNauticalMiles());
+        properties.put("displayShapeIntent", reservation.getDisplayShapeIntent());
+        properties.put("geometryIntent", reservation.getDisplayShapeIntent());
+        properties.put("sourceText", reservation.getSourceText());
+        properties.put("diagnostics", reservation.getDiagnostics());
         properties.put("polylineMergeKey", polylineMergeKey(reservation));
         properties.put("polylineSegmentKey", reservation.getRouteStartFix() + "->" + reservation.getRouteEndFix());
         properties.put("polylineSegmentIndex", polylineSegmentIndex(reservation.getId()));

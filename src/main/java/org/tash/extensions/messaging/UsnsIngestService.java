@@ -13,6 +13,8 @@ import org.tash.extensions.notam.DomesticNotamParseResult;
 import org.tash.extensions.notam.DomesticNotamParser;
 import org.tash.extensions.notam.FdcLaserAirspaceParser;
 import org.tash.extensions.notam.NotamAirspaceRestriction;
+import org.tash.extensions.notam.NotamAirspaceParser;
+import org.tash.extensions.notam.NotamFieldParseResult;
 import org.tash.extensions.reservation.CarfRouteMessage;
 import org.tash.extensions.reservation.CarfRouteMessageParser;
 import org.tash.extensions.weather.pirep.PirepIngestResult;
@@ -32,6 +34,7 @@ public class UsnsIngestService {
     private final CarfRouteMessageParser carfRouteMessageParser;
     private final CarfAnalysisService carfAnalysisService;
     private final FdcLaserAirspaceParser fdcLaserAirspaceParser;
+    private final NotamAirspaceParser notamAirspaceParser = new NotamAirspaceParser();
     private final CarfMessageFamilyParser familyParser = new CarfMessageFamilyParser();
     private final UsnsTransactionPolicy transactionPolicy = new UsnsTransactionPolicy();
     private final WeatherProductParser weatherProductParser = new WeatherProductParser();
@@ -152,12 +155,29 @@ public class UsnsIngestService {
                 return supported(transaction).routingOutcome(routingOutcome)
                         .fdcAcknowledgement(ack).warnings(warnings).errors(errors).build();
             }
+            if (isIcaoOrCanadianNotam(transaction.getType())) {
+                NotamFieldParseResult fields = notamAirspaceParser.parseFields(transaction.getRawText());
+                warnings.addAll(fields.getWarnings());
+                warnings.addAll(fields.getDiagnostics());
+                return supported(transaction)
+                        .routingOutcome(routingOutcome)
+                        .notamFieldResult(fields)
+                        .warnings(warnings)
+                        .errors(errors)
+                        .build();
+            }
             if (transaction.getType() == UsnsTransactionType.SERVICE_REQUEST) {
-                return supported(transaction).serviceRequest(ServiceRequestCommand.parse(transaction.getRawText()))
+                ServiceRequestCommand command = ServiceRequestCommand.parse(transaction.getRawText());
+                warnings.addAll(command.getWarnings() == null ? java.util.Collections.emptyList() : command.getWarnings());
+                errors.addAll(command.getErrors() == null ? java.util.Collections.emptyList() : command.getErrors());
+                return supported(transaction).serviceRequest(command)
                         .routingOutcome(routingOutcome).warnings(warnings).errors(errors).build();
             }
             if (transaction.getType() == UsnsTransactionType.SERVICE_TABLE) {
-                return supported(transaction).serviceTable(ServiceTableCommand.parse(transaction.getRawText()))
+                ServiceTableCommand command = ServiceTableCommand.parse(transaction.getRawText());
+                warnings.addAll(command.getWarnings() == null ? java.util.Collections.emptyList() : command.getWarnings());
+                errors.addAll(command.getErrors() == null ? java.util.Collections.emptyList() : command.getErrors());
+                return supported(transaction).serviceTable(command)
                         .routingOutcome(routingOutcome).warnings(warnings).errors(errors).build();
             }
             if (isWeatherTransaction(transaction.getType())) {
@@ -215,6 +235,13 @@ public class UsnsIngestService {
                 || type == UsnsTransactionType.TAF
                 || type == UsnsTransactionType.NEXRAD_ADVISORY
                 || type == UsnsTransactionType.WEATHER_ADVISORY;
+    }
+
+    private boolean isIcaoOrCanadianNotam(UsnsTransactionType type) {
+        return type == UsnsTransactionType.ICAO_NOTAMN
+                || type == UsnsTransactionType.ICAO_NOTAMR
+                || type == UsnsTransactionType.ICAO_NOTAMC
+                || type == UsnsTransactionType.CANADIAN_DOMESTIC;
     }
 
     private WeatherProductType weatherHint(UsnsTransactionType type) {

@@ -78,4 +78,41 @@ class UsnsTransactionSplitterTest {
         assertTrue(ack.isAccepted());
         assertEquals("AB", ack.getInitials());
     }
+
+    @Test
+    void serviceCommandsRejectMissingDomainOrOperationWithoutMutatingState() {
+        ServiceRequestCommand request = ServiceRequestCommand.parse(")SVC RQ");
+        ServiceTableCommand table = ServiceTableCommand.parse(")SVC TBL DOM");
+
+        assertFalse(request.isAccepted());
+        assertTrue(request.getErrors().stream().anyMatch(error -> error.contains("domain is missing")));
+        assertTrue(request.getErrors().stream().anyMatch(error -> error.contains("operation is missing")));
+        assertFalse(table.isAccepted());
+        assertTrue(table.getErrors().stream().anyMatch(error -> error.contains("operation is missing")));
+    }
+
+    @Test
+    void preservesLegacyGrammarFamiliesWithoutMutatingServiceTableState() {
+        UsnsMessageEnvelope envelope = UsnsMessageEnvelope.builder()
+                .originAddress("KZNY")
+                .body("(A0001/26 NOTAMN Q) /QRTCA/IV/BO/W/000/180/3000N15000W005 A) KZNY B) 2601011200 C) PERM E) TEST)\n"
+                        + "(A0002/26 NOTAMC A) KZNY E) CANCEL TEST)\n"
+                        + "(1234/26 NOTAMJ A) CYUL E) CANADIAN TEST TIL APRX 2601011200)\n"
+                        + ")SVC RQ DOM LOC=KZNY COUNT\n"
+                        + ")SVC TBL DOM LST CROSSOVER\n"
+                        + "GENOT RWA 1/26 CANCELLATION: 2601011200")
+                .build();
+
+        UsnsTransactionParseResult result = new UsnsTransactionSplitter().split(envelope);
+
+        assertTrue(result.isAccepted(), result.getErrors().toString());
+        assertTrue(result.getTransactions().stream().anyMatch(t -> t.getType() == UsnsTransactionType.ICAO_NOTAMN
+                && t.getRawText().contains("Q) /QRTCA")));
+        assertTrue(result.getTransactions().stream().anyMatch(t -> t.getType() == UsnsTransactionType.ICAO_NOTAMC));
+        assertTrue(result.getTransactions().stream().anyMatch(t -> t.getType() == UsnsTransactionType.CANADIAN_DOMESTIC));
+        assertTrue(result.getTransactions().stream().anyMatch(t -> t.getType() == UsnsTransactionType.SERVICE_REQUEST));
+        assertTrue(result.getTransactions().stream().anyMatch(t -> t.getType() == UsnsTransactionType.SERVICE_TABLE
+                && t.getRawText().contains("LST CROSSOVER")));
+        assertTrue(result.getTransactions().stream().anyMatch(t -> t.getType() == UsnsTransactionType.GENOT));
+    }
 }

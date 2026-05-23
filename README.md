@@ -48,7 +48,9 @@ Airspace now also includes an agentic operations layer. Unlike a black-box AI re
 
 - CARF route-message parsing and reservation construction.
 - Modern ALTRV parser package under `org.tash.extensions.carf.altrv`.
-- A-G section/domain models, route events, route graph building, route graph validation, diagnostics, and spatial mapping.
+- A-G and stationary reservation section models, grammar-oracle route families, route events with source spans/metadata, route graph building, route graph validation, diagnostics, and spatial mapping.
+- Legacy `ALTRV.g` behavior is implemented as modern typed parsing for standard, partial, common, branch, alternate departure, reverse, implicit, stationary, and maneuver routes, including bounded polygons, radius areas, line corridors, timing triangles, maneuver areas, enter/exit associations, route-event fix/time/altitude metadata, and unresolved-fix diagnostics.
+- ALTRV geometry intent now survives downstream mapping: `POLYGON`, `POINT_RADIUS`, `LINE_CORRIDOR`, `TIMING_TRIANGLE`, `MANEUVER_AREA`, and `STATIONARY_RESERVATION` are retained in reservation events, source text, diagnostics, and GeoJSON feature properties instead of being flattened into one generic reservation shape.
 - Reservation conflict detection with explicit lateral, longitudinal, vertical, and time explanations.
 - Regression coverage for the 2010 legacy CARF examples that motivated the project, including:
   - lateral-separation-safe parallel routes,
@@ -68,8 +70,14 @@ CarfAnalysisResult result = service.parseValidateMap(rawCarfOrAltrvText);
 
 - USNS envelope parsing for MRS/NADIN/WMSCR-style traffic.
 - Transaction splitting and family classification for DOM, FDC, ICAO NOTAM, Canadian domestic, SNOWTAM, BIRDTAM, ASHTAM, GENOT, service requests, CARF-like bodies, and weather/advisory traffic.
+- USNS ingest results now expose typed ICAO/Canadian NOTAM field summaries alongside domestic NOTAM parse results, so feed artifacts can retain Q/A/B/C/D/E/F/G metadata, PERM/EST flags, geometry presence, and missing-geometry diagnostics without confusing NOTAMs with ALTRV reservations.
+- The Feed workspace surfaces retained NOTAM fields, typed service request/table command fields, and classified legacy family metadata directly in transaction tables and notices, distinguishing geometry-capable constraints, non-geometric NOTAM metadata, RQ/TBL administrative traffic, and GENOT/SNOWTAM/BIRDTAM/ASHTAM retained traffic that must stay table/audit-only.
+- Product search indexes typed feed transaction metadata, including rehydrated persisted feed artifacts, so operators can search by ICAO q-code, NOTAM affected location, DOM2 reducer rule ID, domestic keyword, q23/q45, semantic family, service request operation, table command, or retained family semantic after restart and jump back to the retained feed artifact.
+- Search results distinguish full feed artifacts from individual feed transactions; selecting a NOTAM transaction preserves the feed artifact context while marking the source family as a NOTAM constraint in the workbench context strip.
 - Batch-oriented parse diagnostics and routing outcomes.
-- Domestic NOTAM parser support for DOM1/DOM2-style grammar behavior, cancellations, edits, comments, WEF/TIL, PERM/EST, 10/12-digit date forms, keyword defaults, and q-code/contraction classification.
+- Domestic NOTAM parser support for DOM1 record-shape behavior, cancellations, edits, comments, WEF/TIL, PERM/EST, 10/12-digit date forms, keyword defaults, unofficial/Canadian-crossover cases, and malformed-duration diagnostics.
+- DOM2 semantic classification is implemented as a second-stage reducer with facility family, condition/action, q23/q45 where known, reducer rule IDs, recognized contractions, and fallback warnings while preserving accepted raw records.
+- ICAO/Canadian NOTAM field parsing retains NOTAMN/NOTAMR/NOTAMC/NOTAMJ Q/A/B/C/D/E/F/G metadata even when no route-usable geometry exists; geometry-capable NOTAMs still map to native airspace restrictions and non-geometric records retain diagnostics instead of becoming fake map features.
 - NOTAM access-policy abstractions and in-memory reference data.
 
 Key entry point:
@@ -134,7 +142,7 @@ OperationalDecisionResult result = engine.evaluate(request);
   - Replay Audit Agent.
 - Every agent result includes source citations, confidence, diagnostics, generated time, policy version, input hash, output hash, audit envelope, and an explicit NextGen operating-loop snapshot from observe through audit.
 - Mission-risk and replay-audit output use `OperationalDeltaService` for typed “what changed” deltas, including action changes, confidence changes, new source refs, route candidate changes, blocking-constraint changes, and fallback mission weather/PIREP/NOTAM deltas.
-- Data-integrity scans flag malformed or unsupported inputs, stale products, missing geometry, contradictory severe weather vs smooth/negative PIREPs, off-route/off-altitude PIREP relevance mismatches, missing source refs, and route candidates with residual NOTAM/CARF/ALTRV risk.
+- Data-integrity scans flag malformed or unsupported inputs, stale products, missing geometry, ambiguous DOM2 semantic reduction, malformed domestic NOTAM records, ICAO/Canadian NOTAMs retained without route-usable geometry, empty/ambiguous ICAO Q-field FIR prefixes, contradictory severe weather vs smooth/negative PIREPs, off-route/off-altitude PIREP relevance mismatches, missing source refs, and route candidates with residual NOTAM/CARF/ALTRV risk.
 - Agent policy enforcement blocks future autonomous external-send or official workflow-mutation recommendations unless policy explicitly permits them.
 - Agent evaluation summaries score citation coverage, policy violations, source-family coverage, claim counts, and delta counts so future model-backed reasoning can be gated before display.
 - Each run also carries a model-ready reasoning envelope with prompt version, draft hash, deterministic/model mode, input summary, allowed facts, required output rules, prohibited actions, and citations. The default mode is `DETERMINISTIC_DRAFT_ONLY`, so no external LLM key is required and future model providers must reason from the cited draft context.
@@ -194,7 +202,7 @@ The first product API path is intentionally local/test-friendly: the engine rema
 - Affected mission summaries include route geometry, allowing the Weather board to draw affected active mission routes directly in affected-mission map mode instead of only highlighting the weather source overlays.
 - Affected mission summaries also expose the best alternate route penalty: added distance, delay, fuel, cost, avoided constraint count, and residual constraint count, so the Weather board behaves more like a real-time reroute operations list while retaining FAA-style source refs.
 - The Weather page includes drilldowns for volcanic ash, hurricane/convection, icing/turbulence, PIREP clusters, ceiling/visibility, and generic weather, with affected mission counts and map/table coupling.
-- The map keeps CARF/ALTRV reservations, route impacts, conflicts, NOTAMs, weather, PIREPs, and reference points distinct, with forecast/freshness/altitude filtering, affected mission mode, selected feature risk readout, and visible risk counts.
+- The map keeps CARF/ALTRV reservations, route impacts, conflicts, NOTAMs, weather, PIREPs, and reference points distinct, with forecast/freshness/altitude filtering, affected mission mode, selected feature risk readout, visible risk counts, retained ALTRV geometry intent, raw grammar source text, and parser diagnostics.
 
 Frontend commands:
 
@@ -388,10 +396,13 @@ The project no longer depends on files in `~/Downloads`. Legacy evidence that re
 
 ```text
 src/test/resources/legacy/carf/
+src/test/resources/legacy/grammar-parity/
 src/test/resources/scenarios/weather-engine/
 ```
 
 Examples include CARF reservation text, head-on and lateral-separation regressions, navaid/fix fixtures, PTR-style examples, METAR/SPECI corpora, TAF corpora, SIGMET/AIRMET corpora, CWAP/CWAF examples, PIREP examples, and mixed USNS/CARF/NOTAM/weather scenarios.
+
+The `legacy/grammar-parity` corpus pins the useful 2010 grammar behavior without importing old generated parser runtimes or `.llr` binaries. It covers ALTRV route-family phrases from `ALTRV.g`, stationary line-corridor geometry, radius/area/timing-triangle metadata, DOM1 domestic NOTAM record shapes, DOM2 semantic reducer cases, ICAO/Canadian NOTAM field extraction, and USNS/request/table/GENOT transaction families. These fixtures are behavior oracles only: Airspace keeps modern typed parser outputs, typed diagnostics, retained raw text, restart-safe feed/search metadata, GeoJSON source-family separation, and no fake geometry for non-geometric NOTAMs.
 
 ## Useful Commands
 

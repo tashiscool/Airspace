@@ -56,17 +56,26 @@ public class DomesticNotamParser {
     public DomesticNotamParseResult parseDetailed(String rawText) {
         try {
             ParseOutcome outcome = parseInternal(rawText);
-            DomesticQCodeClassifier.Classification qCode = qCodeClassifier.classify(outcome.record);
+            List<String> contractions = classifyContractions(outcome.record.getText());
+            DomesticNotamSemanticClassification semantic = qCodeClassifier.semantic(outcome.record, contractions);
+            List<String> warnings = new ArrayList<>(outcome.warnings);
+            warnings.addAll(semantic.getWarnings());
             return DomesticNotamParseResult.builder()
                     .accepted(true)
                     .record(outcome.record)
                     .inferredKeyword(outcome.inferredKeyword)
                     .contractionClassification(outcome.record.getKeyword())
-                    .q23(qCode.getQ23())
-                    .q45(qCode.getQ45())
-                    .qCodeReason(qCode.getReason())
-                    .recognizedContractions(classifyContractions(outcome.record.getText()))
-                    .warnings(outcome.warnings)
+                    .q23(semantic.getQ23())
+                    .q45(semantic.getQ45())
+                    .qCodeReason(semantic.getReducerName())
+                    .semanticFacilityFamily(semantic.getFacilityFamily())
+                    .semanticCondition(semantic.getCondition())
+                    .semanticAction(semantic.getAction())
+                    .reducerRuleId(semantic.getReducerRuleId())
+                    .reducerName(semantic.getReducerName())
+                    .semanticClassification(semantic)
+                    .recognizedContractions(contractions)
+                    .warnings(warnings)
                     .build();
         } catch (IllegalArgumentException ex) {
             return DomesticNotamParseResult.builder()

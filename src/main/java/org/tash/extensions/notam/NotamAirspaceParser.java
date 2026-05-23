@@ -8,6 +8,8 @@ import org.tash.spatial.SpatialVolume;
 
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,41 +22,24 @@ import java.util.regex.Pattern;
  * project-native spatial models instead of database-backed FAA message objects.
  */
 public class NotamAirspaceParser {
-    private static final Pattern NOTAM_TYPE = Pattern.compile("\\b(NOTAM[NRC])\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NOTAM_TYPE = Pattern.compile("\\b(NOTAM[NRCJ])\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern FIELD_MARKER = Pattern.compile("(?m)(^|\\s)(Q|A|B|C|D|E|F|G)\\)\\s*");
     private static final Pattern Q_COORDINATE = Pattern.compile("(\\d{4}[NS]\\d{5}[EW])(\\d{3})?");
 
     public NotamAirspaceRestriction parse(String rawNotam) {
-        if (rawNotam == null || rawNotam.trim().isEmpty()) {
-            throw new IllegalArgumentException("NOTAM text is required");
-        }
-
-        String normalized = rawNotam.replace("\r", "").trim();
-        String qField = field(normalized, "Q");
-        String aField = field(normalized, "A");
-        String bField = field(normalized, "B");
-        String cField = field(normalized, "C");
-        String dField = field(normalized, "D");
-        String eField = field(normalized, "E");
-        String fField = field(normalized, "F");
-        String gField = field(normalized, "G");
-
-        String[] qParts = qField == null ? new String[0] : qField.split("/", -1);
-        String accountability = qParts.length > 0 ? emptyToNull(qParts[0]) : null;
-        String qCode = qParts.length > 1 ? emptyToNull(qParts[1]) : null;
-        String traffic = qParts.length > 2 ? emptyToNull(qParts[2]) : null;
-        String purpose = qParts.length > 3 ? emptyToNull(qParts[3]) : null;
-        String scope = qParts.length > 4 ? emptyToNull(qParts[4]) : null;
-        double lower = qParts.length > 5 ? altitudeFromFlightLevel(qParts[5]) : altitudeFromText(fField, 0);
-        double upper = qParts.length > 6 ? altitudeFromFlightLevel(qParts[6]) : altitudeFromText(gField, 100000);
-
-        CoordinateRadius coordinateRadius = extractCoordinateRadius(qField, eField);
-        if (coordinateRadius == null) {
+        NotamFieldParseResult fields = parseFields(rawNotam);
+        if (!fields.isHasGeometry()) {
             throw new IllegalArgumentException("NOTAM does not include a Q-field coordinate/radius");
         }
-
-        ZonedDateTime start = parseNotamTime(bField, ZonedDateTime.now(ZoneOffset.UTC));
-        ZonedDateTime end = parseNotamTime(cField, start.plusYears(1));
+        double lower = fields.getLowerFlightLevel() == null ? altitudeFromText(fields.getFField(), 0)
+                : altitudeFromFlightLevel(fields.getLowerFlightLevel());
+        double upper = fields.getUpperFlightLevel() == null ? altitudeFromText(fields.getGField(), 100000)
+                : altitudeFromFlightLevel(fields.getUpperFlightLevel());
+        CoordinateRadius coordinateRadius = new CoordinateRadius(fields.getCenterLatitude(),
+                fields.getCenterLongitude(),
+                fields.getRadiusNauticalMiles());
+        ZonedDateTime start = parseNotamTime(fields.getBField(), ZonedDateTime.now(ZoneOffset.UTC));
+        ZonedDateTime end = parseNotamTime(fields.getCField(), start.plusYears(1));
         if (end.isBefore(start)) {
             throw new IllegalArgumentException("NOTAM end time is before start time");
         }
@@ -84,13 +69,13 @@ public class NotamAirspaceParser {
 
         return NotamAirspaceRestriction.builder()
                 .id("NOTAM-" + UUID.randomUUID())
-                .notamType(extractNotamType(normalized))
-                .accountability(accountability)
-                .affectedLocation(emptyToNull(aField))
-                .qCode(qCode)
-                .traffic(traffic)
-                .purpose(purpose)
-                .scope(scope)
+                .notamType(fields.getNotamType())
+                .accountability(fields.getAccountability())
+                .affectedLocation(emptyToNull(fields.getAField()))
+                .qCode(fields.getQCode())
+                .traffic(fields.getTraffic())
+                .purpose(fields.getPurpose())
+                .scope(fields.getScope())
                 .effectiveStart(start)
                 .effectiveEnd(end)
                 .lowerAltitudeFeet(lower)
@@ -98,9 +83,75 @@ public class NotamAirspaceParser {
                 .centerLatitude(coordinateRadius.latitude)
                 .centerLongitude(coordinateRadius.longitude)
                 .radiusNauticalMiles(coordinateRadius.radiusNauticalMiles)
-                .scheduleText(emptyToNull(dField))
-                .description(emptyToNull(eField))
+                .scheduleText(emptyToNull(fields.getDField()))
+                .description(emptyToNull(fields.getEField()))
                 .volume(volume)
+                .build();
+    }
+
+    public NotamFieldParseResult parseFields(String rawNotam) {
+        if (rawNotam == null || rawNotam.trim().isEmpty()) {
+            throw new IllegalArgumentException("NOTAM text is required");
+        }
+
+        String normalized = rawNotam.replace("\r", "").trim();
+        String qField = field(normalized, "Q");
+        String aField = field(normalized, "A");
+        String bField = field(normalized, "B");
+        String cField = field(normalized, "C");
+        String dField = field(normalized, "D");
+        String eField = field(normalized, "E");
+        String fField = field(normalized, "F");
+        String gField = field(normalized, "G");
+        List<String> warnings = new ArrayList<>();
+        List<String> diagnostics = new ArrayList<>();
+
+        String[] qParts = qField == null ? new String[0] : qField.split("/", -1);
+        String accountability = qParts.length > 0 ? emptyToNull(qParts[0]) : null;
+        String qCode = qParts.length > 1 ? emptyToNull(qParts[1]) : null;
+        String traffic = qParts.length > 2 ? emptyToNull(qParts[2]) : null;
+        String purpose = qParts.length > 3 ? emptyToNull(qParts[3]) : null;
+        String scope = qParts.length > 4 ? emptyToNull(qParts[4]) : null;
+        String lowerFlightLevel = qParts.length > 5 ? emptyToNull(qParts[5]) : null;
+        String upperFlightLevel = qParts.length > 6 ? emptyToNull(qParts[6]) : null;
+        if (qField == null) {
+            warnings.add("No Q field present; retained as non-geometric NOTAM metadata.");
+        } else if (accountability == null) {
+            warnings.add("Q field has empty FIR/accountability prefix.");
+        }
+
+        CoordinateRadius coordinateRadius = extractCoordinateRadius(qField, eField);
+        if (coordinateRadius == null) {
+            diagnostics.add("No compact coordinate/radius found in Q or E field.");
+        }
+        String cUpper = cField == null ? "" : cField.toUpperCase();
+        return NotamFieldParseResult.builder()
+                .accepted(true)
+                .notamType(extractNotamType(normalized))
+                .qField(emptyToNull(qField))
+                .aField(emptyToNull(aField))
+                .bField(emptyToNull(bField))
+                .cField(emptyToNull(cField))
+                .dField(emptyToNull(dField))
+                .eField(emptyToNull(eField))
+                .fField(emptyToNull(fField))
+                .gField(emptyToNull(gField))
+                .accountability(accountability)
+                .qCode(qCode)
+                .traffic(traffic)
+                .purpose(purpose)
+                .scope(scope)
+                .lowerFlightLevel(lowerFlightLevel)
+                .upperFlightLevel(upperFlightLevel)
+                .estimatedEnd(cUpper.contains("EST"))
+                .permanentEnd(cUpper.contains("PERM") || cUpper.contains("UFN"))
+                .hasGeometry(coordinateRadius != null)
+                .centerLatitude(coordinateRadius == null ? null : coordinateRadius.latitude)
+                .centerLongitude(coordinateRadius == null ? null : coordinateRadius.longitude)
+                .radiusNauticalMiles(coordinateRadius == null ? null : coordinateRadius.radiusNauticalMiles)
+                .warnings(warnings)
+                .diagnostics(diagnostics)
+                .rawText(rawNotam)
                 .build();
     }
 

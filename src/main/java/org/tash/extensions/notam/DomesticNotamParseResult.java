@@ -16,6 +16,12 @@ public class DomesticNotamParseResult {
     private String q23;
     private String q45;
     private String qCodeReason;
+    private String semanticFacilityFamily;
+    private String semanticCondition;
+    private String semanticAction;
+    private String reducerRuleId;
+    private String reducerName;
+    private DomesticNotamSemanticClassification semanticClassification;
     private List<String> recognizedContractions;
     private List<String> warnings;
 }
