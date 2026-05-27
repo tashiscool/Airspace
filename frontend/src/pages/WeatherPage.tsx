@@ -19,6 +19,10 @@ export function WeatherPage() {
   const messages = useQuery({ queryKey: ['messages'], queryFn: api.messages });
   const reference = useQuery({ queryKey: ['reference-points'], queryFn: () => api.referencePoints() });
   const affectedMissions = useQuery({ queryKey: ['weather-affected-missions'], queryFn: () => api.affectedMissions(undefined, 25) });
+  const liveStatus = useQuery({ queryKey: ['weather-live-status'], queryFn: api.weatherLiveStatus });
+  const weatherPatterns = useQuery({ queryKey: ['weather-patterns'], queryFn: api.weatherPatterns });
+  const weatherEvents = useQuery({ queryKey: ['weather-events'], queryFn: api.weatherEvents });
+  const weatherPatternFeatures = useQuery({ queryKey: ['weather-pattern-features'], queryFn: api.weatherPatternFeatures });
   const metrics = useQuery({ queryKey: ['metrics', 'weather'], queryFn: api.metrics });
   const weatherMessages = weatherRowsFromMessages(messages.data ?? []);
   const guidance = weatherMessages.map(weatherGuidanceFromMessage);
@@ -50,6 +54,7 @@ export function WeatherPage() {
   const featureCollection = {
     type: 'FeatureCollection' as const,
     features: [
+      ...(weatherPatternFeatures.data?.features ?? []),
       ...weatherFeatures,
       ...affectedRouteFeatures,
       ...(reference.data ?? []).slice(0, 100).map(referencePointToFeature)
@@ -114,7 +119,40 @@ export function WeatherPage() {
         <section className="panel">
           <div className="panel-heading">
             <h3>Operational Guidance</h3>
-            <span>hazard to action to rationale</span>
+            <span>hazard to action to rationale · {liveStatus.data?.enabled ? 'live AWC enabled' : 'live AWC disabled'}</span>
+          </div>
+          <div className="safety-loop-grid compact-loop">
+            <SafetyCard
+              icon={<CloudSun size={16} />}
+              title="Weather patterns"
+              value={`${liveStatus.data?.patternCount ?? weatherPatterns.data?.length ?? 0}`}
+              detail="Deterministic time/altitude/geometry patterns normalized from retained weather products."
+            />
+            <SafetyCard
+              icon={<ShieldAlert size={16} />}
+              title="Pattern events"
+              value={`${liveStatus.data?.eventCount ?? weatherEvents.data?.length ?? 0}`}
+              detail="Products are grouped into source-cited events for map drilldown and route sampling."
+              attention={(weatherEvents.data?.some((event) => ['SEVERE', 'EXTREME', 'URGENT'].includes(String(event.severity).toUpperCase())) ?? false)}
+            />
+          </div>
+          <div className="weather-event-drilldown">
+            {(weatherEvents.data ?? []).slice(0, 8).map((event) => (
+              <button
+                key={event.id}
+                className={String(event.severity).toUpperCase().includes('SEV') ? 'weather-event-card attention-card' : 'weather-event-card'}
+                onClick={() => setSelectedWeatherMessageId(undefined)}
+                type="button"
+              >
+                <span>{event.label ?? event.eventType}</span>
+                <strong>{event.productCount}</strong>
+                <small>
+                  <StatusBadge value={event.severity ?? 'UNKNOWN'} />
+                  {Math.round((event.confidence ?? 0) * 100)}% confidence · {event.affectedMissionCount} affected source(s)
+                </small>
+                <p>{event.rationale}</p>
+              </button>
+            ))}
           </div>
           <div className="weather-event-drilldown">
             {(drilldownGroups.length ? drilldownGroups : []).map((group) => (
@@ -211,6 +249,9 @@ export function WeatherPage() {
           </div>
           <QueryNotice query={messages} label="Weather messages" />
           <QueryNotice query={affectedMissions} label="Affected missions" />
+          <QueryNotice query={weatherPatterns} label="Weather patterns" />
+          <QueryNotice query={weatherEvents} label="Weather events" />
+          <QueryNotice query={weatherPatternFeatures} label="Weather pattern map features" />
           <QueryNotice query={metrics} label="Guidance metrics" />
           {selectedWeatherMessage && !selectedWeatherHasFeature && (
             <div className="notice">

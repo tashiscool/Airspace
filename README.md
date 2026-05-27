@@ -107,6 +107,9 @@ UsnsIngestResult result = ingest.parse(rawUsnsMessage);
 
 - Structured weather product model for convection, turbulence, icing, ceiling, visibility, SIGMET, AIRMET, METAR, TAF, NEXRAD/CWAP/CWAF-style advisories, PIREP-derived hazards, and generic forecast hazards.
 - Product-specific decoders for pragmatic METAR, TAF, SIGMET, AIRMET, CWAP/CWAF, and PIREP parsing.
+- Configuration-gated live NOAA/AWC polling through `LiveAviationWeatherAdapter`; live mode is disabled by default and keeps tests/offline demos network-free.
+- Deterministic weather-pattern mapping normalizes retained products into convection, turbulence, icing, wind shear, volcanic ash, ceiling/visibility, precipitation, PIREP cluster, terminal forecast, and generic advisory patterns with source refs, geometry intent, time/altitude windows, confidence, freshness, and diagnostics.
+- METAR/TAF products without usable route geometry remain station/time guidance artifacts; Airspace does not create fake polygons for non-geometric products.
 - Forecast slicing for TAF/CWAP-style products.
 - Route weather decision support with actions such as clear, monitor, caution, delay, altitude change, reroute, avoid, and blocked.
 - Route blockage prediction with severity, echo tops, growth/decay, storm phase, lead-time confidence, stale-product diagnostics, ensemble uncertainty, and capacity-impact seams.
@@ -211,6 +214,7 @@ The first product API path is intentionally local/test-friendly: the engine rema
 - The map stack is OpenLayers and consumes the backend’s GeoJSON-compatible feature collections.
 - Mission Explorer is the time-to-guidance board: per-mission weather verdicts, affected active missions, weather/PIREP/NOTAM deltas, attention filters, source-family chips, and coordinate actions.
 - Weather and PIREP pages expose real-time-style product intake, route blockage counts, PIREP workflow, coordination queue, freshness, no-geometry notices for METAR/TAF, and map/table coupling for coordinate-bearing hazards.
+- Weather Pattern APIs expose live status, optional AWC polling, normalized patterns, grouped events, GeoJSON feature output, and deterministic route sampling for trajectory/corridor-style review.
 - Mission, Reservation, Decision, and Pilot Brief pages show route impacts, blocking constraints, avoidance candidates, exact source refs, trace/audit/replay, and a readable handoff summary.
 - Mission, Reservation, Decision, and Pilot Brief pages include route candidate comparison panels: original vs alternate corridor, added distance, estimated delay, fuel, cost, avoided hazards, residual constraints, confidence, and “Why this reroute?” rule/source trace.
 - Route candidate panels and selected route-impact map features show the deterministic cost assumptions behind those estimates, keeping prototype distance, delay, fuel, and cost math operator-auditable.
@@ -461,9 +465,14 @@ Implemented as engine/framework code:
 - Restart-safe product decision replay verification and persisted decision feature export.
 - Local product workflow APIs for reservation parse/deconflict, message reply/forward, feed transaction inspection, and RBAC-gated operator actions.
 
+Available only as configuration-gated prototype integrations:
+
+- Live NOAA/AWC aviation weather polling through `LiveAviationWeatherAdapter`.
+- Deterministic weather-pattern event grouping and route/corridor sampling.
+
 Not implemented as production integrations:
 
-- Live FAA/NWS/SWIM data feed adapters.
+- Live FAA/NWS/SWIM operational deployment adapters beyond the AWC prototype seam.
 - Certified FAA/NWS decoders.
 - Certified cockpit UI.
 - Live database/KVM connectivity.
@@ -501,6 +510,8 @@ The last 24 hours of commits moved the repo substantially:
 - Added pluggable spatial backends for JTS/H3/S2.
 - Added JaCoCo coverage enforcement and raised enforced line coverage above 75%.
 - Added regression fixtures under `src/test/resources` so the project is testable from the repository alone.
+
+See [Weather Pattern Mapping](docs/weather-pattern-mapping.md) for the live AWC adapter, deterministic pattern model, time/altitude/movement map semantics, event grouping, route sampling, and certification limits.
 
 ## Author
 

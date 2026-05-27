@@ -16,6 +16,79 @@ import static org.hamcrest.Matchers.notNullValue;
 @QuarkusTest
 class ProductApiResourceTest {
     @Test
+    void weatherPatternEndpointsExposeOfflineSafeLiveStatusPatternsEventsAndRouteSampling() {
+        String artifactId = given()
+                .contentType("application/json")
+                .body("{\"sourceId\":\"awc-mock\",\"type\":\"WEATHER\",\"rawPayload\":\"SIGMET CONV SEV VALID 201200/201800 3000N15000W 3000N14900W 3100N14900W FL240-260 CONF 90\"}")
+                .when()
+                .post("/api/feed/ingest")
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("results[0].envelope.id");
+
+        given()
+                .when()
+                .get("/api/weather/live/status")
+                .then()
+                .statusCode(200)
+                .body("enabled", equalTo(false))
+                .body("baseUrl", notNullValue());
+
+        given()
+                .contentType("application/json")
+                .body("{\"products\":[\"metar\"],\"hoursBeforeNow\":1,\"maxResults\":5}")
+                .when()
+                .post("/api/weather/live/poll")
+                .then()
+                .statusCode(200)
+                .body("accepted", equalTo(false))
+                .body("diagnostics[0]", org.hamcrest.Matchers.containsString("disabled"));
+
+        given()
+                .when()
+                .get("/api/weather/patterns")
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThanOrEqualTo(1))
+                .body("find { it.id != null }.sourceRefs.size()", greaterThanOrEqualTo(1));
+
+        given()
+                .when()
+                .get("/api/weather/events")
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThanOrEqualTo(1))
+                .body("find { it.eventType == 'CONVECTION' }.productCount", greaterThanOrEqualTo(1));
+
+        given()
+                .when()
+                .get("/api/weather/patterns/features")
+                .then()
+                .statusCode(200)
+                .body("type", equalTo("FeatureCollection"))
+                .body("features.find { it.properties.patternType == 'CONVECTION' }.properties.sourceRefs.size()", greaterThanOrEqualTo(1));
+
+        given()
+                .contentType("application/json")
+                .body("{\"route\":[[30,-150.2,25000],[30.5,-148.8,25000]],\"lowerAltitudeFeet\":24000,\"upperAltitudeFeet\":26000,\"corridorNauticalMiles\":50}")
+                .when()
+                .post("/api/weather/route-sample")
+                .then()
+                .statusCode(200)
+                .body("size()", greaterThanOrEqualTo(1))
+                .body("[0].geometryOverlap", equalTo(true))
+                .body("[0].sourceRefs.size()", greaterThanOrEqualTo(1));
+
+        given()
+                .when()
+                .get("/api/feed/artifacts/" + artifactId)
+                .then()
+                .statusCode(200)
+                .body("sourceId", equalTo("awc-mock"));
+    }
+
+    @Test
     void authMissionMessageFeedAndDecisionEndpointsWorkTogether() {
         String token = given()
                 .contentType("application/json")

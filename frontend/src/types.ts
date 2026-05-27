@@ -542,6 +542,95 @@ export type FeedTransactionSummary = {
   errors: string[];
 };
 
+export type WeatherLiveStatusSummary = {
+  enabled: boolean;
+  baseUrl?: string;
+  pollIntervalSeconds: number;
+  maxResults: number;
+  userAgent?: string;
+  lastPollAt?: string;
+  patternCount: number;
+  eventCount: number;
+  diagnostics: string[];
+};
+
+export type WeatherLivePollSummary = {
+  accepted: boolean;
+  sourceId?: string;
+  receivedAt?: string;
+  envelopeCount: number;
+  acceptedCount: number;
+  patternCount: number;
+  diagnostics: string[];
+};
+
+export type WeatherPatternSummary = {
+  id: string;
+  patternType?: string;
+  productFamily?: string;
+  sourceFamily?: string;
+  sourceProductId?: string;
+  sourceUrl?: string;
+  geometryIntent?: string;
+  issuedAt?: string;
+  receivedAt?: string;
+  validStart?: string;
+  validEnd?: string;
+  forecastHour?: number;
+  lowerAltitudeFeet?: number;
+  upperAltitudeFeet?: number;
+  movementBearingDegrees?: number;
+  movementSpeedKnots?: number;
+  severity?: string;
+  confidence: number;
+  freshnessCategory?: string;
+  rationale?: string;
+  rawText?: string;
+  geometry: number[][];
+  sourceRefs: string[];
+  diagnostics: string[];
+};
+
+export type WeatherEventSummary = {
+  id: string;
+  eventType?: string;
+  label?: string;
+  severity?: string;
+  confidence: number;
+  validStart?: string;
+  validEnd?: string;
+  affectedMissionCount: number;
+  productCount: number;
+  pirepCount: number;
+  rationale?: string;
+  sourceRefs: string[];
+  patternIds: string[];
+  representativeGeometry: number[][];
+};
+
+export type WeatherPatternRouteSampleRequest = {
+  route: number[][];
+  lowerAltitudeFeet?: number;
+  upperAltitudeFeet?: number;
+  corridorNauticalMiles?: number;
+  startTime?: string;
+  endTime?: string;
+};
+
+export type RouteWeatherPatternIntersectionSummary = {
+  patternId: string;
+  patternType?: string;
+  severity?: string;
+  confidence: number;
+  timeOverlap: boolean;
+  altitudeOverlap: boolean;
+  geometryOverlap: boolean;
+  segmentIndex: number;
+  nearestDistanceNauticalMiles: number;
+  rationale?: string;
+  sourceRefs: string[];
+};
+
 export type FeatureCollection = {
   type: 'FeatureCollection';
   features: AirspaceFeature[];

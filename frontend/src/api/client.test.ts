@@ -3,6 +3,12 @@ import { api } from './client';
 
 const calls: Array<{ url: string; init: RequestInit }> = [];
 
+function bodyFor(url: string) {
+  const call = calls.find((candidate) => candidate.url === url);
+  expect(call, `Expected request to ${url}`).toBeDefined();
+  return JSON.parse(String(call?.init.body));
+}
+
 beforeEach(() => {
   calls.length = 0;
   vi.stubGlobal('localStorage', {
@@ -46,6 +52,12 @@ describe('product API client', () => {
     await api.missionWeatherVerdict('mission-1');
     await api.missionWeatherChanges('mission-1', '2026-05-20T00:00:00Z', 5);
     await api.affectedMissions('wx-1', 10);
+    await api.weatherLiveStatus();
+    await api.pollLiveWeather({ products: ['metar', 'airsigmet'], hoursBeforeNow: 2, maxResults: 25 });
+    await api.weatherPatterns();
+    await api.weatherPatternFeatures();
+    await api.weatherEvents();
+    await api.sampleWeatherRoute({ route: [[30, -150, 24000], [31, -149, 24000]], corridorNauticalMiles: 40 });
     await api.missionRouteImpact('mission-1', 'reservation-1');
     await api.relevantPireps('mission-1', {
       reservationId: 'reservation-1',
@@ -83,6 +95,12 @@ describe('product API client', () => {
       '/api/missions/mission-1/weather-verdict',
       '/api/missions/mission-1/weather-changes?since=2026-05-20T00%3A00%3A00Z&limit=5',
       '/api/weather/affected-missions?sourceId=wx-1&limit=10',
+      '/api/weather/live/status',
+      '/api/weather/live/poll',
+      '/api/weather/patterns',
+      '/api/weather/patterns/features',
+      '/api/weather/events',
+      '/api/weather/route-sample',
       '/api/missions/mission-1/route-impact?reservationId=reservation-1',
       '/api/missions/mission-1/pireps/relevant',
       '/api/missions/mission-1/coordinate-weather',
@@ -105,16 +123,18 @@ describe('product API client', () => {
       '/api/agents/tasks/task-1',
       '/api/agents/tasks/task-1/transition'
     ]);
-    expect(JSON.parse(String(calls[8].init.body))).toMatchObject({
+    expect(bodyFor('/api/weather/live/poll')).toMatchObject({ products: ['metar', 'airsigmet'], hoursBeforeNow: 2 });
+    expect(bodyFor('/api/weather/route-sample')).toMatchObject({ corridorNauticalMiles: 40 });
+    expect(bodyFor('/api/missions/mission-1/pireps/relevant')).toMatchObject({
       reservationId: 'reservation-1',
       altitudeToleranceFeet: 2000,
       corridorNauticalMiles: 40
     });
-    expect(JSON.parse(String(calls[11].init.body))).toMatchObject({ agentType: 'ALL', missionId: 'mission-1' });
-    expect(JSON.parse(String(calls[14].init.body))).toMatchObject({ missionId: 'mission-1', reservationId: 'reservation-1' });
-    expect(JSON.parse(String(calls[19].init.body))).toMatchObject({ previousDecisionId: 'decision-0', decisionId: 'decision-1' });
-    expect(JSON.parse(String(calls[20].init.body))).toMatchObject({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
-    expect(JSON.parse(String(calls[27].init.body))).toMatchObject({ status: 'ACKNOWLEDGED', actor: 'planner' });
+    expect(bodyFor('/api/agents/run')).toMatchObject({ agentType: 'ALL', missionId: 'mission-1' });
+    expect(bodyFor('/api/agents/reroute-analysis')).toMatchObject({ missionId: 'mission-1', reservationId: 'reservation-1' });
+    expect(bodyFor('/api/agents/delta')).toMatchObject({ previousDecisionId: 'decision-0', decisionId: 'decision-1' });
+    expect(bodyFor('/api/agents/scenario/generate')).toMatchObject({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
+    expect(bodyFor('/api/agents/tasks/task-1/transition')).toMatchObject({ status: 'ACKNOWLEDGED', actor: 'planner' });
   });
 
   it('surfaces JSON diagnostics from failed API responses', async () => {

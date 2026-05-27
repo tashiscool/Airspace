@@ -103,6 +103,42 @@ public final class ProductDtos {
     }
 
     @Data
+    public static class WeatherLivePollRequest {
+        private List<String> products = new ArrayList<>();
+        private Integer hoursBeforeNow;
+        private Integer maxResults;
+    }
+
+    @Data
+    @Builder
+    public static class WeatherLiveStatusSummary {
+        private boolean enabled;
+        private String baseUrl;
+        private int pollIntervalSeconds;
+        private int maxResults;
+        private String userAgent;
+        private ZonedDateTime lastPollAt;
+        private int patternCount;
+        private int eventCount;
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class WeatherLivePollSummary {
+        private boolean accepted;
+        private String sourceId;
+        private ZonedDateTime receivedAt;
+        private int envelopeCount;
+        private int acceptedCount;
+        private int patternCount;
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+        private OperationalFeedBatchResult feedBatch;
+    }
+
+    @Data
     @Builder
     public static class FeedArtifactSummary {
         private String id;
@@ -185,6 +221,87 @@ public final class ProductDtos {
         private List<String> warnings = new ArrayList<>();
         @Builder.Default
         private List<String> errors = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class WeatherPatternSummary {
+        private String id;
+        private String patternType;
+        private String productFamily;
+        private String sourceFamily;
+        private String sourceProductId;
+        private String sourceUrl;
+        private String geometryIntent;
+        private ZonedDateTime issuedAt;
+        private ZonedDateTime receivedAt;
+        private ZonedDateTime validStart;
+        private ZonedDateTime validEnd;
+        private Integer forecastHour;
+        private Double lowerAltitudeFeet;
+        private Double upperAltitudeFeet;
+        private Double movementBearingDegrees;
+        private Double movementSpeedKnots;
+        private String severity;
+        private double confidence;
+        private String freshnessCategory;
+        private String rationale;
+        private String rawText;
+        @Builder.Default
+        private List<List<Double>> geometry = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class WeatherEventSummary {
+        private String id;
+        private String eventType;
+        private String label;
+        private String severity;
+        private double confidence;
+        private ZonedDateTime validStart;
+        private ZonedDateTime validEnd;
+        private int affectedMissionCount;
+        private int productCount;
+        private int pirepCount;
+        private String rationale;
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<String> patternIds = new ArrayList<>();
+        @Builder.Default
+        private List<List<Double>> representativeGeometry = new ArrayList<>();
+    }
+
+    @Data
+    public static class WeatherPatternRouteSampleRequest {
+        private List<List<Double>> route = new ArrayList<>();
+        private Double lowerAltitudeFeet;
+        private Double upperAltitudeFeet;
+        private Double corridorNauticalMiles;
+        private String startTime;
+        private String endTime;
+    }
+
+    @Data
+    @Builder
+    public static class RouteWeatherPatternIntersectionSummary {
+        private String patternId;
+        private String patternType;
+        private String severity;
+        private double confidence;
+        private boolean timeOverlap;
+        private boolean altitudeOverlap;
+        private boolean geometryOverlap;
+        private int segmentIndex;
+        private double nearestDistanceNauticalMiles;
+        private String rationale;
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
     }
 
     @Data

@@ -33,7 +33,10 @@ export function OperationsMap({
   const [altitudeFloor, setAltitudeFloor] = useState('');
   const [altitudeCeiling, setAltitudeCeiling] = useState('');
   const [maxFreshnessMinutes, setMaxFreshnessMinutes] = useState('');
+  const [minConfidence, setMinConfidence] = useState('');
+  const [sourceFamilyFilter, setSourceFamilyFilter] = useState('ALL');
   const [hideStaleWeather, setHideStaleWeather] = useState(false);
+  const [showMovementProjection, setShowMovementProjection] = useState(true);
   const [internalSelectedFeatureId, setInternalSelectedFeatureId] = useState<string | undefined>();
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [affectedMode, setAffectedMode] = useState(false);
@@ -65,13 +68,15 @@ export function OperationsMap({
           maxAgeMinutes: maxFreshnessMinutes.trim() === '' ? undefined : Number(maxFreshnessMinutes),
           hideStale: hideStaleWeather
         })) return false;
+        if (!featurePassesConfidenceFilter(feature.properties, minConfidence)) return false;
+        if (!featurePassesSourceFamilyFilter(feature.properties, sourceFamilyFilter)) return false;
         const hour = numericProp(feature.properties, 'forecastHour');
         if (hour == null || !forecastRange) return true;
         const duration = numericProp(feature.properties, 'validDurationH') ?? 3;
         return forecastHour >= hour && forecastHour <= hour + duration;
       })
     };
-  }, [features, enabledLayers, forecastHour, forecastRange, selectedFeatureId, showSelectedOnly, altitudeFloor, altitudeCeiling, maxFreshnessMinutes, hideStaleWeather]);
+  }, [features, enabledLayers, forecastHour, forecastRange, selectedFeatureId, showSelectedOnly, altitudeFloor, altitudeCeiling, maxFreshnessMinutes, hideStaleWeather, minConfidence, sourceFamilyFilter]);
 
   useEffect(() => {
     const currentPrefs = readWorkbenchJson('airspace.workbench.layout', DEFAULT_LAYOUT_PREFS);
@@ -281,6 +286,26 @@ export function OperationsMap({
         </button>
         <button className="map-layer" type="button" onClick={() => { setMaxFreshnessMinutes(''); setHideStaleWeather(false); }}>All Reports</button>
       </div>
+      <div className="forecast-slider altitude-filter">
+        <span>Source / confidence</span>
+        <select value={sourceFamilyFilter} onChange={(event) => setSourceFamilyFilter(event.target.value)} aria-label="Source family filter">
+          <option value="ALL">All sources</option>
+          <option value="WEATHER">Weather</option>
+          <option value="PIREP">PIREPs</option>
+          <option value="NOTAM">NOTAM</option>
+          <option value="CARF">CARF/ALTRV</option>
+        </select>
+        <input value={minConfidence} onChange={(event) => setMinConfidence(event.target.value)} placeholder="min confidence %" inputMode="numeric" />
+        <button
+          className={showMovementProjection ? 'map-layer active' : 'map-layer'}
+          type="button"
+          onClick={() => setShowMovementProjection((value) => !value)}
+          aria-pressed={showMovementProjection}
+        >
+          Movement Projection
+        </button>
+        <button className="map-layer" type="button" onClick={() => { setSourceFamilyFilter('ALL'); setMinConfidence(''); }}>All Sources</button>
+      </div>
       <div className="map-canvas">
         <div className="map" ref={ref} />
         <svg className="map-vector-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -313,6 +338,7 @@ export function OperationsMap({
         <div><strong>NOTAM</strong><span>Restrictions and advisories stay separate from reservations.</span></div>
         <div><strong>Weather/PIREP</strong><span>Hazards, reports, and route blockage overlays from the decision engine.</span></div>
         <div><strong>Freshness</strong><span>Weather and PIREP overlays fade/dash as reports age or become stale.</span></div>
+        <div><strong>Movement</strong><span>{showMovementProjection ? 'Movement vectors and projected timing are shown in selected-feature readouts.' : 'Movement projection hidden for review.'}</span></div>
         <div><strong>Risk Readout</strong><span>{visibleRiskCounts.blocked} blocking, {visibleRiskCounts.severe} severe, {visibleRiskCounts.lowConfidence} low confidence, {visibleRiskCounts.stale} stale visible.</span></div>
         {hasAffectedContext && <div><strong>Affected Mode</strong><span>{affectedMode ? 'Highlighting affected mission and source-linked overlays.' : 'Available for active mission weather impact review.'}</span></div>}
       </div>
@@ -448,6 +474,23 @@ function altitudeOverlaps(properties: Record<string, unknown> | undefined, floor
   const queryMin = floor == null || Number.isNaN(floor) ? 0 : floor;
   const queryMax = ceiling == null || Number.isNaN(ceiling) ? 60000 : ceiling;
   return featureMax >= queryMin && featureMin <= queryMax;
+}
+
+function featurePassesConfidenceFilter(properties: Record<string, unknown> | undefined, minimumText: string) {
+  if (minimumText.trim() === '') return true;
+  const minimum = Number(minimumText);
+  if (!Number.isFinite(minimum)) return true;
+  const confidence = numericProp(properties, 'confidence') ?? numericProp(properties, 'probability') ?? numericProp(properties, 'blockedProbability');
+  if (confidence == null) return true;
+  const normalized = confidence > 1 ? confidence : confidence * 100;
+  return normalized >= minimum;
+}
+
+function featurePassesSourceFamilyFilter(properties: Record<string, unknown> | undefined, filter: string) {
+  if (!filter || filter === 'ALL') return true;
+  const text = String(properties?.sourceFamily ?? properties?.family ?? properties?.constraintType ?? '').toUpperCase();
+  if (filter === 'CARF') return text.includes('CARF') || text.includes('ALTRV');
+  return text.includes(filter);
 }
 
 function svgPathForFeature(feature: FeatureCollection['features'][number], collection: FeatureCollection): string | undefined {

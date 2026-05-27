@@ -12,6 +12,7 @@ import org.tash.extensions.engine.OperationalDecisionResult;
 import org.tash.extensions.engine.OperationalConstraint;
 import org.tash.extensions.feed.InMemoryOperationalFeedSource;
 import org.tash.extensions.feed.LocalReferenceDataSyncAdapter;
+import org.tash.extensions.feed.LiveAviationWeatherAdapter;
 import org.tash.extensions.feed.OperationalFeedBatchResult;
 import org.tash.extensions.feed.OperationalFeedEnvelope;
 import org.tash.extensions.feed.OperationalFeedIngestResult;
@@ -19,6 +20,8 @@ import org.tash.extensions.feed.OperationalFeedIngestService;
 import org.tash.extensions.feed.OperationalFeedType;
 import org.tash.extensions.feed.ReferenceDataImportRecord;
 import org.tash.extensions.feed.ReferenceDataSyncResult;
+import org.tash.extensions.feed.WeatherFeedBatch;
+import org.tash.extensions.feed.WeatherFeedPollRequest;
 import org.tash.extensions.notam.DomesticNotamParseResult;
 import org.tash.extensions.notam.DomesticNotamRecord;
 import org.tash.extensions.notam.NotamFieldParseResult;
@@ -29,9 +32,16 @@ import org.tash.extensions.messaging.transaction.ServiceRequestCommand;
 import org.tash.extensions.messaging.transaction.ServiceTableCommand;
 import org.tash.extensions.weather.decision.RouteBlockagePrediction;
 import org.tash.extensions.weather.pirep.PirepReport;
+import org.tash.extensions.weather.pattern.RouteWeatherPatternIntersection;
+import org.tash.extensions.weather.pattern.WeatherPattern;
+import org.tash.extensions.weather.pattern.WeatherPatternEvent;
+import org.tash.extensions.weather.pattern.WeatherPatternMapFeatureFactory;
+import org.tash.extensions.weather.pattern.WeatherPatternQuery;
+import org.tash.extensions.weather.pattern.WeatherPatternService;
 import org.tash.extensions.weather.product.WeatherProduct;
 import org.tash.extensions.weather.product.WeatherProductParseResult;
 import org.tash.extensions.weather.product.WeatherProductParser;
+import org.tash.extensions.visualization.AirspaceFeatureCollection;
 import org.tash.extensions.workflow.ReservationWorkflowRecord;
 import org.tash.extensions.workflow.ReservationWorkflowResult;
 import org.tash.extensions.workflow.ReservationWorkflowService;
@@ -59,21 +69,61 @@ public class AirspaceProductService {
     private final OperationalDecisionEngine decisionEngine = new OperationalDecisionEngine();
     private final WeatherProductParser weatherProductParser = new WeatherProductParser();
     private final OperationalCostModel operationalCostModel = new OperationalCostModel();
+    private final WeatherPatternService weatherPatternService = new WeatherPatternService();
+    private final WeatherPatternMapFeatureFactory weatherPatternMapFeatureFactory = new WeatherPatternMapFeatureFactory();
+    private final boolean liveWeatherEnabled;
+    private final String awcBaseUrl;
+    private final int weatherPollIntervalSeconds;
+    private final String weatherUserAgent;
+    private final int weatherMaxResults;
 
     @Inject
     public AirspaceProductService(ReservationWorkflowService workflowService,
                                   ProductPersistenceService persistenceService,
                                   @ConfigProperty(name = "airspace.product.persistence.enabled", defaultValue = "false")
-                                  boolean persistenceEnabled) {
+                                  boolean persistenceEnabled,
+                                  @ConfigProperty(name = "airspace.weather.live.enabled", defaultValue = "false")
+                                  boolean liveWeatherEnabled,
+                                  @ConfigProperty(name = "airspace.weather.awc.base-url", defaultValue = "https://aviationweather.gov/api/data")
+                                  String awcBaseUrl,
+                                  @ConfigProperty(name = "airspace.weather.poll.interval-seconds", defaultValue = "300")
+                                  int weatherPollIntervalSeconds,
+                                  @ConfigProperty(name = "airspace.weather.user-agent", defaultValue = "Airspace-WeatherPatternPrototype/1.0")
+                                  String weatherUserAgent,
+                                  @ConfigProperty(name = "airspace.weather.max-results", defaultValue = "250")
+                                  int weatherMaxResults) {
         this.workflowService = workflowService;
         this.persistenceService = persistenceService;
         this.persistenceEnabled = persistenceEnabled;
+        this.liveWeatherEnabled = liveWeatherEnabled;
+        this.awcBaseUrl = awcBaseUrl;
+        this.weatherPollIntervalSeconds = weatherPollIntervalSeconds;
+        this.weatherUserAgent = weatherUserAgent;
+        this.weatherMaxResults = weatherMaxResults;
     }
 
     public AirspaceProductService(ReservationWorkflowService workflowService) {
         this.workflowService = workflowService;
         this.persistenceService = null;
         this.persistenceEnabled = false;
+        this.liveWeatherEnabled = false;
+        this.awcBaseUrl = "https://aviationweather.gov/api/data";
+        this.weatherPollIntervalSeconds = 300;
+        this.weatherUserAgent = "Airspace-WeatherPatternPrototype/1.0";
+        this.weatherMaxResults = 250;
+    }
+
+    public AirspaceProductService(ReservationWorkflowService workflowService,
+                                  ProductPersistenceService persistenceService,
+                                  boolean persistenceEnabled) {
+        this.workflowService = workflowService;
+        this.persistenceService = persistenceService;
+        this.persistenceEnabled = persistenceEnabled;
+        this.liveWeatherEnabled = false;
+        this.awcBaseUrl = "https://aviationweather.gov/api/data";
+        this.weatherPollIntervalSeconds = 300;
+        this.weatherUserAgent = "Airspace-WeatherPatternPrototype/1.0";
+        this.weatherMaxResults = 250;
     }
 
     public List<ProductDtos.MissionSummary> missions() {
@@ -326,6 +376,85 @@ public class AirspaceProductService {
                     result.isAccepted() ? "accepted" : "rejected");
         }
         return batch;
+    }
+
+    public ProductDtos.WeatherLiveStatusSummary liveWeatherStatus() {
+        List<WeatherPattern> patterns = weatherPatternsInternal();
+        List<WeatherPatternEvent> events = weatherPatternService.events(patterns, affectedSourceRefs());
+        return ProductDtos.WeatherLiveStatusSummary.builder()
+                .enabled(liveWeatherEnabled)
+                .baseUrl(awcBaseUrl)
+                .pollIntervalSeconds(weatherPollIntervalSeconds)
+                .maxResults(weatherMaxResults)
+                .userAgent(weatherUserAgent)
+                .lastPollAt(store.lastLiveWeatherPollAt)
+                .patternCount(patterns.size())
+                .eventCount(events.size())
+                .diagnostics(new ArrayList<>(store.liveWeatherDiagnostics))
+                .build();
+    }
+
+    public ProductDtos.WeatherLivePollSummary pollLiveWeather(ProductDtos.WeatherLivePollRequest request) {
+        ProductDtos.WeatherLivePollRequest safe = request == null ? new ProductDtos.WeatherLivePollRequest() : request;
+        WeatherFeedPollRequest pollRequest = new WeatherFeedPollRequest();
+        pollRequest.setProducts(safe.getProducts());
+        pollRequest.setHoursBeforeNow(safe.getHoursBeforeNow());
+        pollRequest.setMaxResults(safe.getMaxResults());
+        LiveAviationWeatherAdapter adapter = new LiveAviationWeatherAdapter(
+                liveWeatherEnabled, awcBaseUrl, weatherUserAgent, weatherMaxResults);
+        WeatherFeedBatch weatherBatch = adapter.poll(pollRequest);
+        OperationalFeedBatchResult feedBatch = feedIngestService.ingest(weatherBatch.getPollResult());
+        for (OperationalFeedIngestResult result : feedBatch.getResults()) {
+            store.feedArtifacts.put(result.getEnvelope().getId(), result);
+            if (usePersistence()) {
+                persistenceService.saveFeedArtifact(result);
+            }
+            history("feed", result.getEnvelope().getId(), "LIVE_WEATHER_POLL_INGESTED", "system",
+                    result.isAccepted() ? "accepted" : "rejected");
+        }
+        store.lastLiveWeatherPollAt = weatherBatch.getReceivedAt();
+        store.liveWeatherDiagnostics.clear();
+        store.liveWeatherDiagnostics.addAll(weatherBatch.getDiagnostics());
+        return ProductDtos.WeatherLivePollSummary.builder()
+                .accepted(weatherBatch.isAccepted())
+                .sourceId(weatherBatch.getSourceId())
+                .receivedAt(weatherBatch.getReceivedAt())
+                .envelopeCount(weatherBatch.getPollResult() == null ? 0 : weatherBatch.getPollResult().getEnvelopes().size())
+                .acceptedCount(feedBatch.acceptedCount())
+                .patternCount(weatherPatternService.patternsFromFeedResults(feedBatch.getResults()).size())
+                .diagnostics(new ArrayList<>(weatherBatch.getDiagnostics()))
+                .feedBatch(feedBatch)
+                .build();
+    }
+
+    public List<ProductDtos.WeatherPatternSummary> weatherPatterns() {
+        return weatherPatternsInternal().stream()
+                .map(this::weatherPatternSummary)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public List<ProductDtos.WeatherEventSummary> weatherEvents() {
+        return weatherPatternService.events(weatherPatternsInternal(), affectedSourceRefs()).stream()
+                .map(this::weatherEventSummary)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public AirspaceFeatureCollection weatherPatternFeatures() {
+        return weatherPatternMapFeatureFactory.features(weatherPatternsInternal());
+    }
+
+    public List<ProductDtos.RouteWeatherPatternIntersectionSummary> routeSample(ProductDtos.WeatherPatternRouteSampleRequest request) {
+        ProductDtos.WeatherPatternRouteSampleRequest safe = request == null ? new ProductDtos.WeatherPatternRouteSampleRequest() : request;
+        WeatherPatternQuery query = new WeatherPatternQuery();
+        query.setRoute(safe.getRoute());
+        query.setLowerAltitudeFeet(safe.getLowerAltitudeFeet());
+        query.setUpperAltitudeFeet(safe.getUpperAltitudeFeet());
+        query.setCorridorNauticalMiles(safe.getCorridorNauticalMiles());
+        query.setStartTime(blank(safe.getStartTime()) ? null : parseTime(safe.getStartTime()));
+        query.setEndTime(blank(safe.getEndTime()) ? null : parseTime(safe.getEndTime()));
+        return weatherPatternService.routeSample(query, weatherPatternsInternal()).stream()
+                .map(this::routeWeatherPatternIntersectionSummary)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     public List<ProductDtos.FeedArtifactSummary> feedArtifacts() {
@@ -1117,6 +1246,101 @@ public class AirspaceProductService {
             coordinates.add(coordinate);
         }
         return coordinates;
+    }
+
+    private List<WeatherPattern> weatherPatternsInternal() {
+        List<OperationalFeedIngestResult> results = new ArrayList<>();
+        synchronized (store.feedArtifacts) {
+            results.addAll(store.feedArtifacts.values());
+        }
+        if (results.isEmpty() && usePersistence()) {
+            for (ProductDtos.FeedArtifactSummary artifact : feedArtifacts()) {
+                if (artifact.getRawPayload() == null) {
+                    continue;
+                }
+                OperationalFeedEnvelope envelope = OperationalFeedEnvelope.builder()
+                        .id(artifact.getId())
+                        .sourceId(artifact.getSourceId())
+                        .type(type(artifact.getType()))
+                        .receivedAt(artifact.getReceivedAt())
+                        .rawPayload(artifact.getRawPayload())
+                        .build();
+                results.add(feedIngestService.ingest(envelope));
+            }
+        }
+        return weatherPatternService.patternsFromFeedResults(results);
+    }
+
+    private ProductDtos.WeatherPatternSummary weatherPatternSummary(WeatherPattern pattern) {
+        return ProductDtos.WeatherPatternSummary.builder()
+                .id(pattern.getId())
+                .patternType(pattern.getType() == null ? null : pattern.getType().name())
+                .productFamily(pattern.getProductFamily())
+                .sourceFamily(pattern.getSourceFamily())
+                .sourceProductId(pattern.getSourceProductId())
+                .sourceUrl(pattern.getSourceUrl())
+                .geometryIntent(pattern.getGeometryIntent())
+                .issuedAt(pattern.getIssuedAt())
+                .receivedAt(pattern.getReceivedAt())
+                .validStart(pattern.getValidStart())
+                .validEnd(pattern.getValidEnd())
+                .forecastHour(pattern.getForecastHour())
+                .lowerAltitudeFeet(pattern.getLowerAltitudeFeet())
+                .upperAltitudeFeet(pattern.getUpperAltitudeFeet())
+                .movementBearingDegrees(pattern.getMovementBearingDegrees())
+                .movementSpeedKnots(pattern.getMovementSpeedKnots())
+                .severity(pattern.getSeverity())
+                .confidence(pattern.getConfidence())
+                .freshnessCategory(pattern.getFreshnessCategory())
+                .rationale(pattern.getRationale())
+                .rawText(pattern.getRawText())
+                .geometry(routeCoordinates(pattern.getGeometry()))
+                .sourceRefs(new ArrayList<>(pattern.getSourceRefs()))
+                .diagnostics(new ArrayList<>(pattern.getDiagnostics()))
+                .build();
+    }
+
+    private ProductDtos.WeatherEventSummary weatherEventSummary(WeatherPatternEvent event) {
+        return ProductDtos.WeatherEventSummary.builder()
+                .id(event.getId())
+                .eventType(event.getType() == null ? null : event.getType().name())
+                .label(event.getLabel())
+                .severity(event.getSeverity())
+                .confidence(event.getConfidence())
+                .validStart(event.getValidStart())
+                .validEnd(event.getValidEnd())
+                .affectedMissionCount(event.getAffectedMissionCount())
+                .productCount(event.getProductCount())
+                .pirepCount(event.getPirepCount())
+                .rationale(event.getRationale())
+                .sourceRefs(new ArrayList<>(event.getSourceRefs()))
+                .patternIds(new ArrayList<>(event.getPatternIds()))
+                .representativeGeometry(routeCoordinates(event.getRepresentativeGeometry()))
+                .build();
+    }
+
+    private ProductDtos.RouteWeatherPatternIntersectionSummary routeWeatherPatternIntersectionSummary(RouteWeatherPatternIntersection intersection) {
+        return ProductDtos.RouteWeatherPatternIntersectionSummary.builder()
+                .patternId(intersection.getPatternId())
+                .patternType(intersection.getPatternType() == null ? null : intersection.getPatternType().name())
+                .severity(intersection.getSeverity())
+                .confidence(intersection.getConfidence())
+                .timeOverlap(intersection.isTimeOverlap())
+                .altitudeOverlap(intersection.isAltitudeOverlap())
+                .geometryOverlap(intersection.isGeometryOverlap())
+                .segmentIndex(intersection.getSegmentIndex())
+                .nearestDistanceNauticalMiles(intersection.getNearestDistanceNauticalMiles())
+                .rationale(intersection.getRationale())
+                .sourceRefs(new ArrayList<>(intersection.getSourceRefs()))
+                .build();
+    }
+
+    private List<String> affectedSourceRefs() {
+        List<String> refs = new ArrayList<>();
+        for (ProductDtos.AffectedMissionSummary affected : affectedMissions(null, 250)) {
+            refs.addAll(affected.getSourceRefs());
+        }
+        return distinct(refs);
     }
 
     public ProductDtos.DecisionSummary decision(String id) {

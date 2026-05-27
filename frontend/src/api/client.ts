@@ -28,7 +28,13 @@ import type {
   ScenarioFixtureRequest,
   CoordinationDraftSummary,
   UserSummary,
-  WeatherSourceSummary
+  WeatherSourceSummary,
+  WeatherLiveStatusSummary,
+  WeatherLivePollSummary,
+  WeatherPatternSummary,
+  WeatherEventSummary,
+  WeatherPatternRouteSampleRequest,
+  RouteWeatherPatternIntersectionSummary
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
@@ -94,6 +100,14 @@ export const api = {
     const query = params.toString();
     return request<AffectedMissionSummary[]>(`/api/weather/affected-missions${query ? `?${query}` : ''}`);
   },
+  weatherLiveStatus: () => request<WeatherLiveStatusSummary>('/api/weather/live/status'),
+  pollLiveWeather: (body: { products?: string[]; hoursBeforeNow?: number; maxResults?: number } = {}) =>
+    request<WeatherLivePollSummary>('/api/weather/live/poll', { method: 'POST', body: JSON.stringify(body) }),
+  weatherPatterns: () => request<WeatherPatternSummary[]>('/api/weather/patterns'),
+  weatherPatternFeatures: () => request<FeatureCollection>('/api/weather/patterns/features'),
+  weatherEvents: () => request<WeatherEventSummary[]>('/api/weather/events'),
+  sampleWeatherRoute: (body: WeatherPatternRouteSampleRequest) =>
+    request<RouteWeatherPatternIntersectionSummary[]>('/api/weather/route-sample', { method: 'POST', body: JSON.stringify(body) }),
   missionRouteImpact: (id: string, reservationId?: string) =>
     request<RouteImpactSummary>(`/api/missions/${id}/route-impact${reservationId ? `?reservationId=${encodeURIComponent(reservationId)}` : ''}`),
   relevantPireps: (id: string, body: PirepRelevanceRequest) =>
