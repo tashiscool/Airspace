@@ -34,6 +34,22 @@ Airspace tackles that as a cooperative aviation decision loop:
 
 The acceptance target for the prototype is: a new SIGMET/PIREP/feed artifact should identify affected active missions locally in under 5 seconds, show a per-mission verdict badge, expose route impacts and source artifacts, support a coordination draft, and generate a printable pilot handoff brief.
 
+## Public-Interest Release
+
+Airspace is released as a donation-only public-interest safety prototype by **LeosSoftwareLLC**.
+
+- **License:** [AGPL-3.0-or-later](LICENSE.md), chosen to keep network-service modifications public.
+- **Governance:** [GOVERNANCE.md](GOVERNANCE.md), including anti-capture rules for core safety logic.
+- **Public use and AI recreation policy:** [PUBLIC_USE_AND_AI_POLICY.md](PUBLIC_USE_AND_AI_POLICY.md), requiring disclosure and source publication for use, deployment, reference implementation, or LLM-assisted recreation.
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md), including tests, fixture expectations, and certification-language guardrails.
+- **Safety notice:** [SAFETY.md](SAFETY.md), clarifying that Airspace is not certified, not operational authority, and not a replacement for official FAA/NWS/ATC systems.
+- **Whitepaper:** [docs/SAFETY_WHITEPAPER.md](docs/SAFETY_WHITEPAPER.md), a concise explanation of the safety problem, prototype approach, claims, and review questions.
+- **Evaluation guide:** [docs/EVALUATION_GUIDE.md](docs/EVALUATION_GUIDE.md), local run steps and reviewer checklist.
+- **Demo script:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md), a 3-5 minute walkthrough script for a public review video.
+- **Outreach templates:** [docs/PUBLIC_REVIEW_OUTREACH.md](docs/PUBLIC_REVIEW_OUTREACH.md), short messages for safety researchers, operators, and public-interest reviewers.
+
+The preferred path is public review and collaboration, not contractor capture. Anyone using Airspace, adapting it, or using LLM/code-generation systems against the code, docs, screenshots, fixtures, schemas, prompts, or workflows to recreate similar software is expected to disclose that use and publish the resulting implementation source. Feedback should focus on safety usefulness, missing scenarios, misleading guidance, parser gaps, route-impact assumptions, traceability, and what would need calibration before any real operational use.
+
 ### Competitive Positioning
 
 The European-style benchmark is a live weather rerouting console: affected flights turn red, operators compare the original route against alternatives, and the system estimates extra distance, delay, fuel, and cost. Airspace now includes that prototype-grade reroute comparison surface, but the product goal is broader: **weather rerouting plus FAA-style operational fusion**.
@@ -453,6 +469,27 @@ Not implemented as production integrations:
 - Live database/KVM connectivity.
 - Operational alert dissemination.
 - Production deployment, monitoring, or infrastructure automation.
+- Any authority to issue clearances, dispatch aircraft, replace official weather/NOTAM sources, or mutate operational records without human review.
+
+## Public Review Path
+
+If you want to help without turning this into proprietary contractor software:
+
+1. Read [SAFETY.md](SAFETY.md) and [docs/SAFETY_WHITEPAPER.md](docs/SAFETY_WHITEPAPER.md).
+2. Run the local demo from [docs/EVALUATION_GUIDE.md](docs/EVALUATION_GUIDE.md).
+3. Walk through the video outline in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+4. File issues with concrete fixtures, screenshots, trace output, or operational concerns.
+5. Contribute under [CONTRIBUTING.md](CONTRIBUTING.md), preserving source refs, diagnostics, replayability, and public availability.
+
+Most useful review topics:
+
+- source artifacts missing from guidance,
+- NOTAM/weather/PIREP/CARF source-family confusion,
+- route-impact or reroute assumptions that would mislead an operator,
+- PIREP aging/relevance cases,
+- weather parser edge cases,
+- decision trace or pilot brief wording that overstates authority,
+- realistic scenarios that should be added to `src/test/resources`.
 
 ## Repository Notes From Recent Work
 
