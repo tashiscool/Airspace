@@ -16,6 +16,7 @@ public class WeatherPatternMapFeatureFactory {
         List<AirspaceFeature> features = new ArrayList<>();
         if (patterns != null) {
             for (WeatherPattern pattern : patterns) {
+                if (!hasGeometry(pattern)) continue;
                 features.add(feature(pattern));
             }
         }
@@ -58,7 +59,7 @@ public class WeatherPatternMapFeatureFactory {
     private AirspaceGeometry geometry(WeatherPattern pattern) {
         List<GeoCoordinate> points = pattern.getGeometry();
         if (points == null || points.isEmpty()) {
-            return AirspaceGeometry.builder().type("GeometryCollection").coordinates(new ArrayList<>()).build();
+            return null;
         }
         if (points.size() == 1) {
             return AirspaceGeometry.builder().type("Point").coordinates(position(points.get(0))).build();
@@ -76,6 +77,10 @@ public class WeatherPatternMapFeatureFactory {
         List<List<List<Double>>> polygon = new ArrayList<>();
         polygon.add(ring);
         return AirspaceGeometry.builder().type("Polygon").coordinates(polygon).build();
+    }
+
+    private boolean hasGeometry(WeatherPattern pattern) {
+        return pattern != null && pattern.getGeometry() != null && !pattern.getGeometry().isEmpty();
     }
 
     private String displayLayer(WeatherPatternType type) {

@@ -278,6 +278,7 @@ The screenshots below are organized around that safety loop:
 - **Messaging and Feed:** show retained USNS/weather/PIREP traffic, parsed transaction details, diagnostics, and downstream artifact IDs.
 - **Decision Summary, Trace, and Map:** show the replayable engine action alongside the mission-context route action, confidence, blocking constraints, route predictions, route comparison, rule trace, source refs, audit/replay, selected reroute candidate overlays, and geospatial source context.
 - **NOTAM and Weather/PIREP:** keep NOTAM constraints separate from reservations while weather products and PIREPs drive route-blockage, altitude-change, delay, event drilldown, and coordination guidance.
+- **Weather Pattern Mapping:** shows configuration-gated live AWC status, deterministic pattern/event grouping, route/corridor-style sampling surfaces, source-cited pattern overlays, and map filters for source family, confidence, freshness, altitude, and movement metadata.
 
 ![Login](/docs/screenshots/01-login.png)
 
@@ -308,6 +309,10 @@ The screenshots below are organized around that safety loop:
 | NOTAM Constraints | Weather And PIREPs |
 | --- | --- |
 | ![NOTAM Constraints](/docs/screenshots/14-notam-constraints.png) | ![Weather And PIREPs](/docs/screenshots/15-weather-pirep.png) |
+
+| Weather Pattern Events | Weather Pattern Map Filters |
+| --- | --- |
+| ![Weather Pattern Events](/docs/screenshots/20-weather-pattern-events.png) | ![Weather Pattern Map Filters](/docs/screenshots/21-weather-pattern-map-filters.png) |
 
 | Config / Reference Data | Agentic System Observability |
 | --- | --- |

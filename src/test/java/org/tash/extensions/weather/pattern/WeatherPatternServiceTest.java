@@ -6,6 +6,7 @@ import org.tash.extensions.feed.OperationalFeedBatchResult;
 import org.tash.extensions.feed.OperationalFeedEnvelope;
 import org.tash.extensions.feed.OperationalFeedIngestService;
 import org.tash.extensions.feed.OperationalFeedType;
+import org.tash.extensions.visualization.AirspaceFeatureCollection;
 
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -48,6 +49,23 @@ class WeatherPatternServiceTest {
         assertEquals("STATION_GUIDANCE", pattern.getGeometryIntent());
         assertTrue(pattern.getGeometry().isEmpty());
         assertTrue(pattern.getDiagnostics().stream().anyMatch(d -> d.contains("MISSING_GEOMETRY")));
+    }
+
+    @Test
+    void mapFeaturesExcludeNonGeometricStationGuidance() {
+        OperationalFeedBatchResult batch = ingest(
+                envelope("METAR KJFK 200000Z 18012KT 1/2SM TSRA BKN004",
+                        OperationalFeedType.WEATHER,
+                        metadata("metar", null)),
+                envelope("SIGMET CONV SEV VALID 201200/201800 3000N15000W 3000N14900W 3100N14900W FL240-260",
+                        OperationalFeedType.WEATHER,
+                        metadata("airsigmet", "{\"type\":\"Polygon\",\"coordinates\":[[[-150,30,0],[-149,30,0],[-149,31,0],[-150,30,0]]]}")));
+
+        AirspaceFeatureCollection features = new WeatherPatternMapFeatureFactory()
+                .features(service.patternsFromFeedResults(batch.getResults()));
+
+        assertEquals(1, features.getFeatures().size());
+        assertEquals("Polygon", features.getFeatures().get(0).getGeometry().getType());
     }
 
     @Test

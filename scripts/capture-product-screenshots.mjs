@@ -148,6 +148,30 @@ async function seedProductDemo() {
       rawPayload: usnsText
     })
   });
+  await api('/api/feed/ingest', {
+    method: 'POST',
+    body: JSON.stringify({
+      sourceId: 'README-DEMO-AWC-SIGMET',
+      type: 'WEATHER',
+      rawPayload: 'SIGMET README 1 VALID 211200/211800 FROM 3000N15000W TO 3100N14900W TO 3050N14850W EMBD TS MOV E 25KT TOP FL450 INTSF'
+    })
+  });
+  await api('/api/feed/ingest', {
+    method: 'POST',
+    body: JSON.stringify({
+      sourceId: 'README-DEMO-AWC-PIREP',
+      type: 'PIREP',
+      rawPayload: 'UA /OV 3050N14950W/TM 1215/FL240/TP B738/TB SEV/RM URGENT WEATHER PATTERN SAMPLE'
+    })
+  });
+  await api('/api/feed/ingest', {
+    method: 'POST',
+    body: JSON.stringify({
+      sourceId: 'README-DEMO-AWC-METAR',
+      type: 'WEATHER',
+      rawPayload: 'METAR KJFK 211200Z 18012G22KT 1/2SM +TSRA BKN004 OVC010 18/16 A2992'
+    })
+  });
 
   await api('/api/reference/import/apply', {
     method: 'POST',
@@ -180,7 +204,7 @@ async function seedProductDemo() {
 }
 
 async function screenshot(page, name) {
-  await page.waitForLoadState('networkidle').catch(() => undefined);
+  await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined);
   await page.waitForTimeout(350);
   await page.locator('body').waitFor({ state: 'visible', timeout: 10_000 });
   await page.screenshot({ path: path.join(screenshotDir, name), fullPage: true });
@@ -190,7 +214,7 @@ async function clickIfVisible(page, text) {
   const locator = page.getByRole('button', { name: text }).first();
   if (await locator.isVisible().catch(() => false) && await locator.isEnabled().catch(() => false)) {
     await locator.click();
-    await page.waitForLoadState('networkidle').catch(() => undefined);
+    await page.waitForLoadState('networkidle', { timeout: 3_000 }).catch(() => undefined);
   }
 }
 
@@ -256,13 +280,20 @@ await page.goto(`${frontendUrl}/notams`);
 await screenshot(page, '14-notam-constraints.png');
 
 await page.goto(`${frontendUrl}/weather`);
-await page.locator('.map-layer-group').first().getByRole('button', { name: 'Weather', exact: true }).click().catch(() => undefined);
-await page.locator('.weather-event-card', { hasText: 'Hurricane / Convection' }).first().click().catch(() => undefined);
+await page.locator('.map-layer-group').first().getByRole('button', { name: 'Weather', exact: true }).click({ timeout: 1_000 }).catch(() => undefined);
+await page.locator('.weather-event-card', { hasText: 'Hurricane / Convection' }).first().click({ timeout: 1_000 }).catch(() => undefined);
 await clickIfVisible(page, 'Affected Missions');
-await page.locator('.guidance-card', { hasText: 'Convective SIGMET' }).first().click().catch(() => undefined);
+await page.locator('.guidance-card', { hasText: 'Convective SIGMET' }).first().click({ timeout: 1_000 }).catch(() => undefined);
 await page.waitForTimeout(500);
 await clickIfVisible(page, 'Fit Selected');
 await screenshot(page, '15-weather-pirep.png');
+await page.locator('.weather-event-drilldown').first().scrollIntoViewIfNeeded({ timeout: 1_000 }).catch(() => undefined);
+await screenshot(page, '20-weather-pattern-events.png');
+await page.locator('select[aria-label="Source family filter"]').selectOption('WEATHER', { timeout: 1_000 }).catch(() => undefined);
+await page.locator('input[placeholder="min confidence %"]').fill('50', { timeout: 1_000 }).catch(() => undefined);
+await clickIfVisible(page, 'Movement Projection');
+await page.locator('.map-feature-browser').scrollIntoViewIfNeeded({ timeout: 1_000 }).catch(() => undefined);
+await screenshot(page, '21-weather-pattern-map-filters.png');
 
 await page.goto(`${frontendUrl}/config`);
 await screenshot(page, '16-config-reference.png');
