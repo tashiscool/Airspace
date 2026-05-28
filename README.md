@@ -34,6 +34,30 @@ Airspace tackles that as a cooperative aviation decision loop:
 
 The acceptance target for the prototype is: a new SIGMET/PIREP/feed artifact should identify affected active missions locally in under 5 seconds, show a per-mission verdict badge, expose route impacts and source artifacts, support a coordination draft, and generate a printable pilot handoff brief.
 
+### Example Scenario: RVR / LVO / SMGCS Terminology Mismatch
+
+One concrete reason Airspace has a USNS/NOTAM subsystem is to support low-visibility operational clarity. In a scenario where runway visual range is reported at 1000 feet and an international crew asks whether "LVO" or "LVP" is in force, a U.S. airport may use local/FAA terminology such as SMGCS or airport-specific low-visibility procedures instead of the exact phrase the crew used. The safety problem is not only the weather; it is that weather state, airport procedure state, operator minima, and ATC phraseology can fail to line up quickly enough.
+
+Airspace is intended to make that ambiguity visible:
+
+```text
+Inputs:
+- USNS/NADIN/WMSCR traffic containing DOM/FDC/ICAO/Canadian NOTAMs
+- RVR/RVRT/RVRM/RVRR equipment or runway-visibility NOTAM text
+- METAR/SPECI weather with low visibility or RVR groups
+- Airport/reference procedure profile terms such as SMGCS, LVO, LVP
+- Mission/reservation/runway/route context
+
+Expected guidance:
+- Classify NOTAMs as procedural constraints, not ALTRV reservations
+- Flag low-visibility/RVR relevance and source the raw messages
+- Preserve both FAA/local and ICAO/operator terminology
+- Ask for coordination/confirmation when procedure state is ambiguous
+- Produce CAUTION/DELAY-style guidance until the applicable local low-vis protections are confirmed
+```
+
+The current engine and workbench support this prototype path by recognizing `RVR`, `RVRT`, `RVRM`, `RVRR`, `SMGCS`, `LVO`, `LVP`, and low-visibility wording in domestic NOTAM reduction, preserving source refs and warnings, surfacing low-vis/RVR notices in Feed and NOTAM views, and keeping these constraints distinct from CARF/ALTRV reservations. This is decision-support and coordination context only; official airport procedures, ATC instructions, company minima, and pilot authority remain authoritative.
+
 ## Public-Interest Release
 
 Airspace is released as a donation-only public-interest safety prototype by **LeosSoftwareLLC**.
@@ -93,6 +117,7 @@ CarfAnalysisResult result = service.parseValidateMap(rawCarfOrAltrvText);
 - Batch-oriented parse diagnostics and routing outcomes.
 - Domestic NOTAM parser support for DOM1 record-shape behavior, cancellations, edits, comments, WEF/TIL, PERM/EST, 10/12-digit date forms, keyword defaults, unofficial/Canadian-crossover cases, and malformed-duration diagnostics.
 - DOM2 semantic classification is implemented as a second-stage reducer with facility family, condition/action, q23/q45 where known, reducer rule IDs, recognized contractions, and fallback warnings while preserving accepted raw records.
+- RVR/RVRT/RVRM/RVRR, SMGCS, LVO/LVP, and low-visibility procedure wording are retained as procedural coordination constraints, including DOM2-compatible rejection of malformed `SVC <runway> RVR ...` records that omit the `RWY` keyword. This is meant to support runway-visibility/low-visibility terminology mismatch cases without turning NOTAMs into ALTRV reservations.
 - ICAO/Canadian NOTAM field parsing retains NOTAMN/NOTAMR/NOTAMC/NOTAMJ Q/A/B/C/D/E/F/G metadata even when no route-usable geometry exists; geometry-capable NOTAMs still map to native airspace restrictions and non-geometric records retain diagnostics instead of becoming fake map features.
 - NOTAM access-policy abstractions and in-memory reference data.
 

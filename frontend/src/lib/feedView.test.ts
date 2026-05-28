@@ -56,6 +56,29 @@ describe('feed view helpers', () => {
     expect(transactionMetadataNotice(ambiguous)).toContain('semantic reduction is ambiguous');
   });
 
+  it('surfaces low-visibility and RVR domestic NOTAMs as procedure coordination constraints', () => {
+    const rvr = tx({
+      type: 'DOMESTIC',
+      domesticNotamKeyword: 'SVC',
+      domesticNotamQ23: 'FT',
+      domesticNotamSemanticFacilityFamily: 'SVC',
+      domesticNotamSemanticCondition: 'RVR',
+      domesticNotamSemanticAction: 'UNAVAILABLE',
+      domesticNotamReducerRuleId: 'DOM2.SVC.RVR'
+    });
+    const smgcs = tx({
+      type: 'DOMESTIC',
+      domesticNotamKeyword: 'SVC',
+      domesticNotamSemanticFacilityFamily: 'SVC',
+      domesticNotamSemanticCondition: 'LOW_VISIBILITY_PROCEDURE',
+      domesticNotamReducerRuleId: 'DOM2.SVC.LOW_VISIBILITY_PROCEDURE'
+    });
+
+    expect(transactionFieldLabel(rvr)).toBe('SVC · SVC · RVR · DOM2.SVC.RVR · FT');
+    expect(transactionMetadataNotice(rvr)).toContain('Low-visibility/RVR NOTAM');
+    expect(transactionMetadataNotice(smgcs)).toContain('ICAO/operator terminology');
+  });
+
   it('formats service request and table commands separately from NOTAM constraints', () => {
     const request = tx({
       type: 'SERVICE_REQUEST',

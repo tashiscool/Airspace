@@ -35,6 +35,9 @@ export function transactionMetadataNotice(row: FeedTransactionSummary): string {
     if (row.domesticNotamReducerRuleId === 'DOM2.UNMATCHED') {
       return 'Domestic NOTAM record retained, but semantic reduction is ambiguous; review raw text and diagnostics.';
     }
+    if (isLowVisibilityDomesticNotam(row)) {
+      return 'Low-visibility/RVR NOTAM retained as an operational constraint; confirm local FAA procedure names and ICAO/operator terminology before using it for departure or taxi guidance.';
+    }
     return 'Domestic NOTAM constraint includes DOM1 record metadata and DOM2 semantic reducer output.';
   }
   if (!row.notamType && !row.notamQCode) return 'No NOTAM field metadata retained.';
@@ -90,4 +93,14 @@ function domesticNotamLabel(row: FeedTransactionSummary): string {
     row.domesticNotamUnofficial ? 'UNOFFICIAL' : undefined
   ].filter(Boolean);
   return parts.length ? parts.join(' · ') : 'DOMESTIC NOTAM';
+}
+
+function isLowVisibilityDomesticNotam(row: FeedTransactionSummary): boolean {
+  return row.domesticNotamReducerRuleId === 'DOM2.SVC.RVR'
+    || row.domesticNotamReducerRuleId === 'DOM2.SVC.LOW_VISIBILITY_PROCEDURE'
+    || row.domesticNotamSemanticCondition === 'RVR'
+    || row.domesticNotamSemanticCondition === 'RVRM'
+    || row.domesticNotamSemanticCondition === 'RVRR'
+    || row.domesticNotamSemanticCondition === 'RVRT'
+    || row.domesticNotamSemanticCondition === 'LOW_VISIBILITY_PROCEDURE';
 }

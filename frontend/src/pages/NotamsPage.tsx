@@ -35,6 +35,7 @@ export function NotamsPage() {
         <StatusBadge value={`${rows.length} NOTAM-LIKE`} />
       </div>
       <div className="notice-strip"><ShieldAlert size={15} /> A NOTAM may affect deconfliction and decisions, but only CARF/ALTRV source families become reservations.</div>
+      <div className="notice-strip"><ShieldAlert size={15} /> RVR, SMGCS, LVO, and low-visibility procedure traffic is treated as procedural constraint context: Airspace should help operators reconcile local FAA terms with ICAO/operator language, not hide the ambiguity in raw text.</div>
       <div className="notice-stack">
         <QueryNotice query={messages} label="Messages" />
         <ErrorNotice error={search.error} title="NOTAM search unavailable" />

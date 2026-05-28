@@ -29,7 +29,11 @@ public class DomesticRunwayEquipmentParser {
 
     public DomesticRunwayEquipmentStatus parse(String rawText) {
         DomesticNotamRecord record = domesticNotamParser.parse(rawText);
-        if (!"RWY".equals(record.getKeyword())) {
+        boolean runwayKeyword = "RWY".equals(record.getKeyword());
+        boolean serviceRunwayVisualRange = "SVC".equals(record.getKeyword())
+                && record.getText() != null
+                && record.getText().toUpperCase(Locale.US).matches(".*\\b(?:RVR|RVRM|RVRR|RVRT)\\b.*");
+        if (!runwayKeyword && !serviceRunwayVisualRange) {
             throw new IllegalArgumentException("Domestic NOTAM is not a runway equipment status");
         }
 
@@ -103,6 +107,9 @@ public class DomesticRunwayEquipmentParser {
         }
         if (upper.matches(".*\\bMARKINGS\\b.*")) {
             equipment.add(DomesticRunwayEquipmentStatus.Equipment.RUNWAY_MARKINGS);
+        }
+        if (upper.matches(".*\\b(?:RVR|RVRM|RVRR|RVRT)\\b.*")) {
+            equipment.add(DomesticRunwayEquipmentStatus.Equipment.RUNWAY_VISUAL_RANGE);
         }
         return equipment;
     }

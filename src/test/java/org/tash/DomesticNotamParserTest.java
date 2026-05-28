@@ -204,6 +204,36 @@ class DomesticNotamParserTest {
     }
 
     @Test
+    void classifiesRvrAndLowVisibilityProcedureNotamsAsCoordinationRelevant() {
+        DomesticNotamParser parser = new DomesticNotamParser();
+
+        DomesticNotamParseResult rvr = parser.parseDetailed(domestic("SVC RWY 04L RVRT OTS"));
+        DomesticNotamParseResult lowVisibility = parser.parseDetailed(domestic("SVC SMGCS LOW VISIBILITY PROC IN USE"));
+
+        assertTrue(rvr.isAccepted(), rvr.getRejectionReason());
+        assertEquals("DOM2.SVC.RVR", rvr.getReducerRuleId());
+        assertEquals("RVRT", rvr.getSemanticCondition());
+        assertEquals("FT", rvr.getQ23());
+        assertTrue(rvr.getRecognizedContractions().contains("RVRT=runway visual range touchdown"));
+        assertTrue(rvr.getWarnings().stream().anyMatch(warning -> warning.contains("low-visibility departure")));
+
+        assertTrue(lowVisibility.isAccepted(), lowVisibility.getRejectionReason());
+        assertEquals("DOM2.SVC.LOW_VISIBILITY_PROCEDURE", lowVisibility.getReducerRuleId());
+        assertEquals("LOW_VISIBILITY_PROCEDURE", lowVisibility.getSemanticCondition());
+        assertTrue(lowVisibility.getRecognizedContractions().contains("SMGCS=surface movement guidance and control system"));
+        assertTrue(lowVisibility.getWarnings().stream().anyMatch(warning -> warning.contains("FAA/ICAO")));
+    }
+
+    @Test
+    void rejectsLegacyDom2MalformedServiceRvrWithoutRunwayKeyword() {
+        DomesticNotamParseResult result = new DomesticNotamParser().parseDetailed(
+                "!DCA LDN SVC 12/30 RVR OTS 1012211200-1012211300");
+
+        assertFalse(result.isAccepted());
+        assertTrue(result.getRejectionReason().contains("RWY <id> RVR"));
+    }
+
+    @Test
     void semanticFallbackKeepsAcceptedRecordWithDiagnosticWarning() {
         DomesticNotamParseResult result = new DomesticNotamParser().parseDetailed(
                 domestic("RAMP UNUSUAL LEGACY TEXT"));

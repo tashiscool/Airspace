@@ -45,4 +45,14 @@ class DomesticRunwayEquipmentParserTest {
         assertTrue(nonstandard.getStatuses().contains(DomesticRunwayEquipmentStatus.Status.NONSTANDARD));
         assertTrue(nonstandard.getEquipment().contains(DomesticRunwayEquipmentStatus.Equipment.DISTANCE_REMAINING_MARKER));
     }
+
+    @Test
+    void parsesRunwayVisualRangeServiceOutageRows() {
+        DomesticRunwayEquipmentStatus status = parser.parse(
+                "!JFK 01/777 JFK SVC RWY 04L RVR OTS 2605281200-2605281800");
+
+        assertEquals("04L", status.getRunway());
+        assertTrue(status.getEquipment().contains(DomesticRunwayEquipmentStatus.Equipment.RUNWAY_VISUAL_RANGE));
+        assertTrue(status.getStatuses().contains(DomesticRunwayEquipmentStatus.Status.OUT_OF_SERVICE));
+    }
 }

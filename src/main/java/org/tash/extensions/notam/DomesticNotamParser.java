@@ -47,6 +47,9 @@ public class DomesticNotamParser {
                     Pattern.CASE_INSENSITIVE);
     private static final Pattern MALFORMED_WEF =
             Pattern.compile("\\bWEF\\s+(?!\\d{10}\\b|\\d{12}\\b)(\\S+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MALFORMED_SERVICE_RVR =
+            Pattern.compile("^\\s*(?:RWY\\s+)?[0-9]{1,2}[A-Z]?(?:/[0-9]{1,2}[A-Z]?)?\\s+RVR[TM R]?\\b",
+                    Pattern.CASE_INSENSITIVE);
     private static final Pattern COMMENT = Pattern.compile("\\^\\^\\s*(.*)$", Pattern.DOTALL);
 
     public DomesticNotamRecord parse(String rawText) {
@@ -164,6 +167,7 @@ public class DomesticNotamParser {
 
         String body = join(tokens, index);
         rejectMalformedEffectiveDuration(body);
+        rejectMalformedServiceRvr(keyword, body);
         TimeWindow timeWindow = extractTimeWindow(body);
         String cleanBody = removeTimeWindow(body).trim();
 
@@ -186,6 +190,17 @@ public class DomesticNotamParser {
         Matcher malformedWef = MALFORMED_WEF.matcher(body);
         if (malformedWef.find()) {
             throw new IllegalArgumentException("Invalid WEF date: " + malformedWef.group(1));
+        }
+    }
+
+    private void rejectMalformedServiceRvr(String keyword, String body) {
+        if (!"SVC".equalsIgnoreCase(keyword == null ? "" : keyword)) {
+            return;
+        }
+        String normalized = body == null ? "" : body.replaceAll("\\s+", " ").trim();
+        Matcher malformed = MALFORMED_SERVICE_RVR.matcher(normalized);
+        if (malformed.find() && !normalized.toUpperCase().startsWith("RWY ")) {
+            throw new IllegalArgumentException("Invalid SVC RVR NOTAM: runway visual range equipment must identify runway as 'RWY <id> RVR ...'");
         }
     }
 

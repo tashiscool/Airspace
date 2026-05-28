@@ -112,9 +112,17 @@ public class DomesticQCodeClassifier {
             return semantic("SVC", "LLWAS", action(normalized), "WL", null, "DOM2.SVC.LLWAS",
                     "DOM2 low-level wind shear alert reducer", recognizedContractions, warnings);
         }
-        if (contains(normalized, "RVR")) {
-            return semantic("SVC", "RVR", action(normalized), "FT", null, "DOM2.SVC.RVR",
-                    "DOM2 runway visual range reducer", recognizedContractions, warnings);
+        if (containsAny(normalized, "RVR", "RVRM", "RVRR", "RVRT")) {
+            warnings.add("Runway visual range service NOTAM may affect low-visibility departure, taxi, and coordination checks.");
+            return semantic("SVC", firstPresent(normalized, "RVRT", "RVRM", "RVRR", "RVR"), action(normalized), "FT", null,
+                    "DOM2.SVC.RVR", "DOM2 runway visual range reducer", recognizedContractions, warnings);
+        }
+        if (containsAny(normalized, "SMGCS", "LVO", "LVP")
+                || (contains(normalized, "LOW") && containsAny(normalized, "VIS", "VISIBILITY"))) {
+            warnings.add("Low-visibility procedure terminology retained for FAA/ICAO/airport-ops coordination review.");
+            return semantic("SVC", "LOW_VISIBILITY_PROCEDURE", action(normalized), "FA", null,
+                    "DOM2.SVC.LOW_VISIBILITY_PROCEDURE", "DOM2 low-visibility procedure reducer",
+                    recognizedContractions, warnings);
         }
         if (contains(normalized, "PCL")) {
             String q23 = "RWY".equals(keyword) && containsAny(normalized, "LGT", "LGTS", "LIGHT", "LIGHTS") ? "LE" : null;

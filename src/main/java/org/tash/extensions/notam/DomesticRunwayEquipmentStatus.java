@@ -14,7 +14,8 @@ public class DomesticRunwayEquipmentStatus {
         DISTANCE_REMAINING_SIGN,
         DISTANCE_REMAINING_MARKER,
         RUNWAY_LIGHTS,
-        RUNWAY_MARKINGS
+        RUNWAY_MARKINGS,
+        RUNWAY_VISUAL_RANGE
     }
 
     public enum Status {

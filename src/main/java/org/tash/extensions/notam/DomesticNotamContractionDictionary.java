@@ -80,6 +80,14 @@ public class DomesticNotamContractionDictionary {
         put(values, "SNOW", "snow");
         put(values, "GUARD", "guard");
         put(values, "FT", "feet");
+        put(values, "RVR", "runway visual range");
+        put(values, "RVRM", "runway visual range midpoint");
+        put(values, "RVRR", "runway visual range rollout");
+        put(values, "RVRT", "runway visual range touchdown");
+        put(values, "VIS", "visibility");
+        put(values, "SMGCS", "surface movement guidance and control system");
+        put(values, "LVO", "low visibility operations");
+        put(values, "LVP", "low visibility procedures");
         put(values, "APRON", "apron");
         put(values, "RAMP", "ramp");
         return values;
