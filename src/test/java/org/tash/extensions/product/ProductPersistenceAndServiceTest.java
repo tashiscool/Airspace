@@ -604,6 +604,56 @@ class ProductPersistenceAndServiceTest {
         assertNotNull(brief.getDecisionTraceSummary());
     }
 
+    @Test
+    void missionVerdictEscalatesProceduralNotamsIntoOperatorGuidance() {
+        AirspaceProductService service = new AirspaceProductService(new ReservationWorkflowService(new InMemoryReservationWorkflowRepository()));
+        ProductDtos.MissionRequest missionRequest = new ProductDtos.MissionRequest();
+        missionRequest.setMissionNumber("LOWVIS-OPS");
+        missionRequest.setTitle("Low visibility procedure mission");
+        ProductDtos.MissionSummary mission = service.createMission(missionRequest);
+
+        ProductDtos.MessageRequest lowVisibility = new ProductDtos.MessageRequest();
+        lowVisibility.setMissionId(mission.getId());
+        lowVisibility.setFamily("DOM");
+        lowVisibility.setDirection("INBOUND");
+        lowVisibility.setSubject("JFK low visibility procedure");
+        lowVisibility.setRawText("!DCA JFK SVC SMGCS LOW VISIBILITY PROC IN USE 2605281200-2605281800");
+        service.sendMessage(lowVisibility);
+
+        ProductDtos.MessageRequest approach = new ProductDtos.MessageRequest();
+        approach.setMissionId(mission.getId());
+        approach.setFamily("DOM");
+        approach.setDirection("INBOUND");
+        approach.setSubject("JFK approach capability");
+        approach.setRawText("!DCA JFK NAV ILS RWY 04L CAT II NA 2605281200-2605281800");
+        service.sendMessage(approach);
+
+        ProductDtos.MessageRequest friction = new ProductDtos.MessageRequest();
+        friction.setMissionId(mission.getId());
+        friction.setFamily("DOM");
+        friction.setDirection("INBOUND");
+        friction.setSubject("JFK runway friction");
+        friction.setRawText("!DCA JFK RWY 04L BA POOR MU 20 2605281200-2605281800");
+        service.sendMessage(friction);
+
+        ProductDtos.MissionWeatherVerdictSummary verdict = service.missionWeatherVerdict(mission.getId());
+        ProductDtos.PilotBriefSummary brief = service.pilotBrief(mission.getId(), null);
+
+        assertEquals("DELAY", verdict.getAction());
+        assertEquals("HIGH", verdict.getPriority());
+        assertTrue(verdict.getSummary().contains("procedure"));
+        assertTrue(verdict.getRecommendedAction().contains("procedure state"));
+        assertTrue(verdict.getDiagnostics().stream().anyMatch(item -> item.contains("Airport procedure profile")));
+        assertTrue(verdict.getSources().stream().anyMatch(source -> "PROCEDURE".equals(source.getSeverity())
+                && source.getRationale().contains("SMGCS")));
+        assertTrue(verdict.getSources().stream().anyMatch(source -> "MINIMA".equals(source.getSeverity())
+                && source.getRationale().toLowerCase(java.util.Locale.US).contains("approach capability")));
+        assertTrue(verdict.getSources().stream().anyMatch(source -> "SURFACE_CRITICAL".equals(source.getSeverity())
+                && source.getRationale().contains("braking")));
+        assertTrue(brief.getPrintableText().contains("procedure state"));
+        assertTrue(brief.getPrintableText().contains("SOURCE DRIVERS"));
+    }
+
     private AuthDtos.LoginRequest login(String username, String password) {
         AuthDtos.LoginRequest request = new AuthDtos.LoginRequest();
         request.setUsername(username);

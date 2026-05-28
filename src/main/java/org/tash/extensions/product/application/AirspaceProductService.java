@@ -696,6 +696,10 @@ public class AirspaceProductService {
         List<String> diagnostics = new ArrayList<>();
         for (ProductDtos.MessageSummary message : weather) {
             sources.add(sourceSummary(message, guidanceAction(message), guidanceRationale(message)));
+            String profile = airportProcedureProfileDiagnostic(message);
+            if (!blank(profile) && !diagnostics.contains(profile)) {
+                diagnostics.add(profile);
+            }
         }
         ProductDtos.RouteImpactSummary impact = routeImpact(missionId, null);
         String action = strongestAction(impact, sources);
@@ -715,7 +719,7 @@ public class AirspaceProductService {
                 .stale(stale)
                 .summary(sources.isEmpty()
                         ? "No active weather, PIREP, or NOTAM source artifacts are linked to this mission."
-                        : sources.size() + " source artifact(s); " + impact.getRationale())
+                        : missionVerdictSummary(sources, impact))
                 .recommendedAction(recommendedActionFor(action))
                 .sources(sources)
                 .diagnostics(diagnostics)
@@ -2023,6 +2027,10 @@ public class AirspaceProductService {
         String family = value(message.getFamily(), "").toUpperCase(Locale.US);
         String text = (String.valueOf(message.getSubject()) + " " + String.valueOf(message.getRawText())).toUpperCase(Locale.US);
         if (isNotamTraffic(family, message.getRawText(), message.getSubject())) {
+            if (isLowVisibilityProcedureText(text)) return "PROCEDURE";
+            if (isCriticalSurfaceFrictionText(text)) return "SURFACE_CRITICAL";
+            if (isSurfaceFrictionText(text)) return "SURFACE";
+            if (isApproachCapabilityText(text)) return "MINIMA";
             return text.contains("CLSD") || text.contains("CLOSED") || text.contains("PROHIBIT")
                     || text.contains("RESTRICT") || text.contains("TFR") ? "SEVERE" : "MODERATE";
         }
@@ -2036,6 +2044,18 @@ public class AirspaceProductService {
     private String guidanceRationale(ProductDtos.MessageSummary message) {
         String text = (String.valueOf(message.getFamily()) + " " + String.valueOf(message.getRawText())).toUpperCase(Locale.US);
         if (isNotamTraffic(message.getFamily(), message.getRawText(), message.getSubject())) {
+            if (isLowVisibilityProcedureText(text)) {
+                return "Low-visibility/RVR procedure state requires coordination. " + airportProcedureProfileText(text);
+            }
+            if (isApproachCapabilityText(text)) {
+                return "Approach capability or minima may be degraded by landing-aid, category, or lighting status; review runway-specific arrival/departure guidance.";
+            }
+            if (isCriticalSurfaceFrictionText(text)) {
+                return "Critical runway surface/braking action or MU friction value may affect takeoff and landing performance; review performance limits before release.";
+            }
+            if (isSurfaceFrictionText(text)) {
+                return "Runway surface/friction condition may affect takeoff and landing performance; review braking action, contamination, and runway availability.";
+            }
             return "NOTAM constraint is retained separately from CARF/ALTRV reservations and must be reviewed against route, altitude, and timing before release.";
         }
         if (text.contains("SIGMET") || text.contains("CONV")) {
@@ -2053,16 +2073,83 @@ public class AirspaceProductService {
         return "Weather source retained for operational fusion and replay.";
     }
 
+    private String missionVerdictSummary(List<ProductDtos.WeatherSourceSummary> sources,
+                                         ProductDtos.RouteImpactSummary impact) {
+        String procedure = sources.stream().anyMatch(source -> "PROCEDURE".equals(source.getSeverity()))
+                ? " Low-visibility procedure confirmation is required." : "";
+        String minima = sources.stream().anyMatch(source -> "MINIMA".equals(source.getSeverity()))
+                ? " Approach/minima capability is degraded or ambiguous." : "";
+        String surface = sources.stream().anyMatch(source -> source.getSeverity() != null
+                && source.getSeverity().startsWith("SURFACE"))
+                ? " Runway surface/friction requires performance review." : "";
+        return sources.size() + " source artifact(s); " + impact.getRationale() + procedure + minima + surface;
+    }
+
+    private boolean isLowVisibilityProcedureText(String text) {
+        return containsAny(text, " RVR ", " RVRT ", " RVRM ", " RVRR ", " SMGCS ", " LVO ", " LVP ")
+                || (containsAny(text, " LOW VIS ", " LOW VISIBILITY ") && containsAny(text, " PROC ", " PROCEDURE ", " OPS ", " OPERATIONS "));
+    }
+
+    private boolean isApproachCapabilityText(String text) {
+        return containsAny(text, " ILS ", " MLS ", " LDA ", " LOC ", " LLZ ", " GLIDEPATH ", " GLIDE PATH ",
+                " PAPI ", " VASI ", " ALSF ", " MALS ", " MALSR ", " REIL ", " RAIL ", " RCLL ")
+                && containsAny(text, " OTS ", " UNAVBL ", " NA ", " NOTAUTH ", " NOT AUTH ", " CAT ", " CLSD ", " CLOSED ");
+    }
+
+    private boolean isSurfaceFrictionText(String text) {
+        return containsAny(text, " BA ", " BRAF ", " BRAN ", " BRAP ", " MU ", " ICE ", " SLUSH ", " SNOW ", " WET ");
+    }
+
+    private boolean isCriticalSurfaceFrictionText(String text) {
+        if (containsAny(text, " BA NIL ", " BA POOR ", " BRAN ", " BRAP ")) {
+            return true;
+        }
+        Matcher matcher = Pattern.compile("\\bMU\\s*(\\d{1,2})\\b").matcher(text);
+        return matcher.find() && Integer.parseInt(matcher.group(1)) <= 25;
+    }
+
+    private String airportProcedureProfileDiagnostic(ProductDtos.MessageSummary message) {
+        String text = (String.valueOf(message.getSubject()) + " " + String.valueOf(message.getRawText())).toUpperCase(Locale.US);
+        if (!isLowVisibilityProcedureText(text)) {
+            return null;
+        }
+        return "Airport procedure profile: " + airportProcedureProfileText(text);
+    }
+
+    private String airportProcedureProfileText(String text) {
+        if (containsAny(text, " JFK ", " KJFK ")) {
+            return "JFK low-visibility profile requires operators to reconcile ICAO LVO/LVP phrasing with local FAA/SMGCS or airport-specific procedure terminology before departure or taxi guidance.";
+        }
+        if (containsAny(text, " LVO ", " LVP ", " SMGCS ", " LOW VIS ", " LOW VISIBILITY ")) {
+            return "Confirm the local low-visibility procedure equivalent, controlling runway status, and active airport-ops protections before release.";
+        }
+        return "Confirm airport procedure state before release.";
+    }
+
     private String strongestAction(ProductDtos.RouteImpactSummary impact, List<ProductDtos.WeatherSourceSummary> sources) {
         if ("BLOCKED".equals(impact.getAction())) return "BLOCKED";
         if ("REROUTE".equals(impact.getAction()) || "AVOID".equals(impact.getAction())) return impact.getAction();
+        if (sources.stream().anyMatch(source -> "PROCEDURE".equals(source.getSeverity())
+                || "SURFACE_CRITICAL".equals(source.getSeverity()))) return "DELAY";
         if (sources.stream().anyMatch(source -> "SEVERE".equals(source.getSeverity()))) return "AVOID";
-        if (sources.stream().anyMatch(source -> "MODERATE".equals(source.getSeverity()) || "OBSERVED".equals(source.getSeverity()))) return "CAUTION";
+        if (sources.stream().anyMatch(source -> "MODERATE".equals(source.getSeverity())
+                || "OBSERVED".equals(source.getSeverity())
+                || "MINIMA".equals(source.getSeverity())
+                || "SURFACE".equals(source.getSeverity()))) return "CAUTION";
         return sources.isEmpty() ? "CLEAR" : "MONITOR";
     }
 
+    private boolean containsAny(String text, String... tokens) {
+        for (String token : tokens) {
+            if (text != null && text.contains(token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private String priorityFor(String action, List<ProductDtos.WeatherSourceSummary> sources) {
-        if ("BLOCKED".equals(action) || "AVOID".equals(action) || "REROUTE".equals(action)) return "HIGH";
+        if ("BLOCKED".equals(action) || "AVOID".equals(action) || "REROUTE".equals(action) || "DELAY".equals(action)) return "HIGH";
         if ("CAUTION".equals(action) || sources.stream().anyMatch(ProductDtos.WeatherSourceSummary::isStale)) return "MEDIUM";
         return "LOW";
     }
@@ -2074,6 +2161,8 @@ public class AirspaceProductService {
             case "REROUTE":
             case "AVOID":
                 return "Coordinate reroute or delay with weather desk, traffic manager, and mission owner.";
+            case "DELAY":
+                return "Delay release until procedure state, runway surface, or airport capability is confirmed with tower/airport ops.";
             case "CAUTION":
                 return "Brief crew and review altitude/route exposure before release.";
             case "MONITOR":
