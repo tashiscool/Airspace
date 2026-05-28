@@ -119,9 +119,18 @@ public class DomesticQCodeClassifier {
                     "DOM2 low-level wind shear alert reducer", recognizedContractions, warnings);
         }
         if (containsAny(normalized, "RVR", "RVRM", "RVRR", "RVRT")) {
-            warnings.add("Runway visual range service NOTAM may affect low-visibility departure, taxi, and coordination checks.");
-            return semantic("SVC", firstPresent(normalized, "RVRT", "RVRM", "RVRR", "RVR"), action(normalized), "FT", null,
-                    "DOM2.SVC.RVR", "DOM2 runway visual range reducer", recognizedContractions, warnings);
+            warnings.add("Runway visual range equipment/service NOTAM may affect low-visibility departure, taxi, and coordination checks.");
+            String condition = firstPresent(normalized, "RVRT", "RVRM", "RVRR", "RVR");
+            if ("AD".equals(keyword) && contains(normalized, "ALL")) {
+                return semantic("AD", "RVR_ALL", action(normalized), "FT", null,
+                        "DOM2.AD.RVR_ALL", "DOM2 aerodrome all-RVR reducer", recognizedContractions, warnings);
+            }
+            if ("RWY".equals(keyword) || contains(normalized, "RWY")) {
+                return semantic("RWY", condition, action(normalized), "FT", null,
+                        "DOM2.RWY.RVR", "DOM2 runway visual range reducer", recognizedContractions, warnings);
+            }
+            return semantic("SVC", condition, action(normalized), "FT", null,
+                    "DOM2.SVC.RVR", "DOM2 legacy service runway visual range reducer", recognizedContractions, warnings);
         }
         if (containsAny(normalized, "SMGCS", "LVO", "LVP")
                 || (contains(normalized, "LOW") && containsAny(normalized, "VIS", "VISIBILITY"))) {
@@ -202,7 +211,7 @@ public class DomesticQCodeClassifier {
         if (containsAny(text, "CLSD", "CLOSED", "UNSAFE")) {
             return "CLOSED";
         }
-        if (containsAny(text, "OTS", "UNAVBL", "UNABL", "UNUSBL", "UNREL", "UNRELBL", "UNMON", "UNMNT")) {
+        if (containsAny(text, "OTS", "UNAVBL", "UNABL", "UNUSBL", "UNREL", "UNRELBL", "UNMON", "UNMNT", "U S")) {
             return "UNAVAILABLE";
         }
         if (containsAny(text, "RTS", "AVBL", "AVAILABLE")) {

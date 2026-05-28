@@ -207,15 +207,31 @@ class DomesticNotamParserTest {
     void classifiesRvrAndLowVisibilityProcedureNotamsAsCoordinationRelevant() {
         DomesticNotamParser parser = new DomesticNotamParser();
 
-        DomesticNotamParseResult rvr = parser.parseDetailed(domestic("SVC RWY 04L RVRT OTS"));
+        DomesticNotamParseResult rvr = parser.parseDetailed(domestic("RWY 04L RVRT U/S"));
+        DomesticNotamParseResult rvrMid = parser.parseDetailed(domestic("RWY 04L RVRM U/S"));
+        DomesticNotamParseResult rvrRollout = parser.parseDetailed(domestic("RWY 04L RVRR U/S"));
+        DomesticNotamParseResult rvrAll = parser.parseDetailed(domestic("AD AP RVR ALL U/S"));
+        DomesticNotamParseResult legacySvcRvr = parser.parseDetailed(domestic("SVC RWY 04L RVRT OTS"));
+        DomesticNotamParseResult compatibilitySvcRvr = parser.parseDetailed(domestic("SVC RVR ALL OTS"));
         DomesticNotamParseResult lowVisibility = parser.parseDetailed(domestic("SVC SMGCS LOW VISIBILITY PROC IN USE"));
 
         assertTrue(rvr.isAccepted(), rvr.getRejectionReason());
-        assertEquals("DOM2.SVC.RVR", rvr.getReducerRuleId());
+        assertEquals("DOM2.RWY.RVR", rvr.getReducerRuleId());
+        assertEquals("RWY", rvr.getSemanticFacilityFamily());
         assertEquals("RVRT", rvr.getSemanticCondition());
+        assertEquals("UNAVAILABLE", rvr.getSemanticAction());
         assertEquals("FT", rvr.getQ23());
         assertTrue(rvr.getRecognizedContractions().contains("RVRT=runway visual range touchdown"));
         assertTrue(rvr.getWarnings().stream().anyMatch(warning -> warning.contains("low-visibility departure")));
+        assertEquals("RVRM", rvrMid.getSemanticCondition());
+        assertEquals("RVRR", rvrRollout.getSemanticCondition());
+        assertEquals("DOM2.AD.RVR_ALL", rvrAll.getReducerRuleId());
+        assertEquals("AD", rvrAll.getSemanticFacilityFamily());
+        assertEquals("RVR_ALL", rvrAll.getSemanticCondition());
+        assertEquals("DOM2.RWY.RVR", legacySvcRvr.getReducerRuleId());
+        assertEquals("RWY", legacySvcRvr.getSemanticFacilityFamily());
+        assertEquals("DOM2.SVC.RVR", compatibilitySvcRvr.getReducerRuleId());
+        assertEquals("SVC", compatibilitySvcRvr.getSemanticFacilityFamily());
 
         assertTrue(lowVisibility.isAccepted(), lowVisibility.getRejectionReason());
         assertEquals("DOM2.SVC.LOW_VISIBILITY_PROCEDURE", lowVisibility.getReducerRuleId());

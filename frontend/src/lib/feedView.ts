@@ -103,7 +103,10 @@ function domesticNotamLabel(row: FeedTransactionSummary): string {
 
 function isLowVisibilityDomesticNotam(row: FeedTransactionSummary): boolean {
   return row.domesticNotamReducerRuleId === 'DOM2.SVC.RVR'
+    || row.domesticNotamReducerRuleId === 'DOM2.RWY.RVR'
+    || row.domesticNotamReducerRuleId === 'DOM2.AD.RVR_ALL'
     || row.domesticNotamReducerRuleId === 'DOM2.SVC.LOW_VISIBILITY_PROCEDURE'
+    || row.domesticNotamSemanticCondition === 'RVR_ALL'
     || row.domesticNotamSemanticCondition === 'RVR'
     || row.domesticNotamSemanticCondition === 'RVRM'
     || row.domesticNotamSemanticCondition === 'RVRR'

@@ -19,7 +19,7 @@ This maps the FAA safety problem to the current Airspace product:
 
 ## Low-Visibility Procedure Scenario
 
-Airspace now treats RVR and low-visibility procedure messages as first-class procedural context, not just raw NOTAM text. The domestic NOTAM reducer recognizes `RVR`, `RVRM`, `RVRR`, `RVRT`, `SMGCS`, `LVO`, `LVP`, and low-visibility wording, preserves the DOM2 reducer rule, and emits review warnings when a record may affect departure, taxi, FAA/ICAO terminology reconciliation, or airport-ops coordination.
+Airspace now treats RVR and low-visibility procedure messages as first-class procedural context, not just raw NOTAM text. The domestic NOTAM reducer recognizes `RVR`, `RVRM`, `RVRR`, `RVRT`, `SMGCS`, `LVO`, `LVP`, and low-visibility wording, emits canonical runway/aerodrome RVR reducer IDs where applicable, preserves legacy service-style RVR compatibility, and emits review warnings when a record may affect departure, taxi, FAA/ICAO terminology reconciliation, or airport-ops coordination.
 
 This is the system behavior needed for cases like an international crew asking about "LVO/LVP" while the local U.S. operating language may be SMGCS or another airport-specific low-visibility procedure. The product should make the ambiguity visible and source-cited:
 

@@ -80,6 +80,32 @@ describe('feed view helpers', () => {
     expect(transactionMetadataNotice(smgcs)).toContain('ICAO/operator terminology');
   });
 
+  it('recognizes canonical runway and aerodrome RVR reducer outputs as low-visibility constraints', () => {
+    const runway = tx({
+      type: 'DOMESTIC',
+      domesticNotamKeyword: 'RWY',
+      domesticNotamQ23: 'FT',
+      domesticNotamSemanticFacilityFamily: 'RWY',
+      domesticNotamSemanticCondition: 'RVRT',
+      domesticNotamSemanticAction: 'UNAVAILABLE',
+      domesticNotamReducerRuleId: 'DOM2.RWY.RVR'
+    });
+    const aerodrome = tx({
+      type: 'DOMESTIC',
+      domesticNotamKeyword: 'AD',
+      domesticNotamQ23: 'FT',
+      domesticNotamSemanticFacilityFamily: 'AD',
+      domesticNotamSemanticCondition: 'RVR_ALL',
+      domesticNotamSemanticAction: 'UNAVAILABLE',
+      domesticNotamReducerRuleId: 'DOM2.AD.RVR_ALL'
+    });
+
+    expect(transactionFieldLabel(runway)).toBe('RWY · RWY · RVRT · DOM2.RWY.RVR · FT');
+    expect(transactionMetadataNotice(runway)).toContain('Low-visibility/RVR NOTAM');
+    expect(transactionFieldLabel(aerodrome)).toBe('AD · AD · RVR_ALL · DOM2.AD.RVR_ALL · FT');
+    expect(transactionMetadataNotice(aerodrome)).toContain('Low-visibility/RVR NOTAM');
+  });
+
   it('surfaces approach-minima and runway-friction domestic NOTAMs as safety constraints', () => {
     const approach = tx({
       type: 'DOMESTIC',
