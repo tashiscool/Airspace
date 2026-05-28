@@ -76,6 +76,7 @@ describe('feed view helpers', () => {
 
     expect(transactionFieldLabel(rvr)).toBe('SVC · SVC · RVR · DOM2.SVC.RVR · FT');
     expect(transactionMetadataNotice(rvr)).toContain('Low-visibility/RVR NOTAM');
+    expect(transactionMetadataNotice(rvr)).toContain('authorized sources');
     expect(transactionMetadataNotice(smgcs)).toContain('ICAO/operator terminology');
   });
 

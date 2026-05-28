@@ -2045,18 +2045,18 @@ public class AirspaceProductService {
         String text = (String.valueOf(message.getFamily()) + " " + String.valueOf(message.getRawText())).toUpperCase(Locale.US);
         if (isNotamTraffic(message.getFamily(), message.getRawText(), message.getSubject())) {
             if (isLowVisibilityProcedureText(text)) {
-                return "Low-visibility/RVR procedure state requires coordination. " + airportProcedureProfileText(text);
+                return "Advisory low-visibility/RVR procedure confirmation needed. " + airportProcedureProfileText(text);
             }
             if (isApproachCapabilityText(text)) {
-                return "Approach capability or minima may be degraded by landing-aid, category, or lighting status; review runway-specific arrival/departure guidance.";
+                return "Approach capability or minima may be degraded by landing-aid, category, or lighting status; confirm runway-specific arrival/departure guidance with authorized sources.";
             }
             if (isCriticalSurfaceFrictionText(text)) {
-                return "Critical runway surface/braking action or MU friction value may affect takeoff and landing performance; review performance limits before release.";
+                return "Critical runway surface/braking action or MU friction value may affect takeoff and landing performance; confirm operator performance limits and runway condition sources.";
             }
             if (isSurfaceFrictionText(text)) {
-                return "Runway surface/friction condition may affect takeoff and landing performance; review braking action, contamination, and runway availability.";
+                return "Runway surface/friction condition may affect takeoff and landing performance; review braking action, contamination, and runway availability with current official sources.";
             }
-            return "NOTAM constraint is retained separately from CARF/ALTRV reservations and must be reviewed against route, altitude, and timing before release.";
+            return "NOTAM constraint is retained separately from CARF/ALTRV reservations for route, altitude, timing, and operator review.";
         }
         if (text.contains("SIGMET") || text.contains("CONV")) {
             return "Convective weather can close route corridors and reduce sector capacity.";
@@ -2076,12 +2076,12 @@ public class AirspaceProductService {
     private String missionVerdictSummary(List<ProductDtos.WeatherSourceSummary> sources,
                                          ProductDtos.RouteImpactSummary impact) {
         String procedure = sources.stream().anyMatch(source -> "PROCEDURE".equals(source.getSeverity()))
-                ? " Low-visibility procedure confirmation is required." : "";
+                ? " Low-visibility procedure confirmation is advised." : "";
         String minima = sources.stream().anyMatch(source -> "MINIMA".equals(source.getSeverity()))
-                ? " Approach/minima capability is degraded or ambiguous." : "";
+                ? " Approach/minima capability may be degraded or ambiguous." : "";
         String surface = sources.stream().anyMatch(source -> source.getSeverity() != null
                 && source.getSeverity().startsWith("SURFACE"))
-                ? " Runway surface/friction requires performance review." : "";
+                ? " Runway surface/friction needs operator performance review." : "";
         return sources.size() + " source artifact(s); " + impact.getRationale() + procedure + minima + surface;
     }
 
@@ -2118,12 +2118,12 @@ public class AirspaceProductService {
 
     private String airportProcedureProfileText(String text) {
         if (containsAny(text, " JFK ", " KJFK ")) {
-            return "JFK low-visibility profile requires operators to reconcile ICAO LVO/LVP phrasing with local FAA/SMGCS or airport-specific procedure terminology before departure or taxi guidance.";
+            return "JFK low-visibility profile may involve FAA/SMGCS or airport-specific terminology rather than the exact ICAO/operator LVO/LVP phrase; confirm the active local equivalent before using this advisory for departure or taxi planning.";
         }
         if (containsAny(text, " LVO ", " LVP ", " SMGCS ", " LOW VIS ", " LOW VISIBILITY ")) {
-            return "Confirm the local low-visibility procedure equivalent, controlling runway status, and active airport-ops protections before release.";
+            return "Confirm the local low-visibility procedure equivalent, controlling runway status, and active airport-ops protections with authorized local sources.";
         }
-        return "Confirm airport procedure state before release.";
+        return "Confirm airport procedure state with authorized local sources.";
     }
 
     private String strongestAction(ProductDtos.RouteImpactSummary impact, List<ProductDtos.WeatherSourceSummary> sources) {
@@ -2162,9 +2162,9 @@ public class AirspaceProductService {
             case "AVOID":
                 return "Coordinate reroute or delay with weather desk, traffic manager, and mission owner.";
             case "DELAY":
-                return "Delay release until procedure state, runway surface, or airport capability is confirmed with tower/airport ops.";
+                return "Advisory: hold or coordinate release planning until procedure state, runway surface, or airport capability is confirmed by tower, airport ops, company guidance, or other authorized sources.";
             case "CAUTION":
-                return "Brief crew and review altitude/route exposure before release.";
+                return "Brief crew and review altitude/route exposure with current operational sources.";
             case "MONITOR":
                 return "Monitor next weather update and reassess if hazard moves toward route.";
             default:

@@ -53,16 +53,16 @@ Expected guidance:
 - Flag low-visibility/RVR relevance and source the raw messages
 - Preserve both FAA/local and ICAO/operator terminology
 - Ask for coordination/confirmation when procedure state is ambiguous
-- Produce CAUTION/DELAY-style guidance until the applicable local low-vis protections are confirmed
+- Produce advisory CAUTION/DELAY-style guidance until authorized local, company, airport-ops, or ATC sources confirm the applicable low-vis protections
 ```
 
 The current engine and workbench support this prototype path by recognizing `RVR`, `RVRT`, `RVRM`, `RVRR`, `SMGCS`, `LVO`, `LVP`, and low-visibility wording in domestic NOTAM reduction, preserving source refs and warnings, surfacing low-vis/RVR notices in Feed and NOTAM views, and keeping these constraints distinct from CARF/ALTRV reservations. This is decision-support and coordination context only; official airport procedures, ATC instructions, company minima, and pilot authority remain authoritative.
 
 Airspace also escalates related NOTAM families into mission guidance instead of leaving them buried in message tables:
 
-- low-visibility/RVR procedure ambiguity can drive `DELAY` guidance until local procedure state is confirmed,
-- approach/minima and approach-lighting NOTAMs are surfaced as arrival/departure capability constraints,
-- runway braking action, MU/friction, snow, ice, slush, and surface contamination are surfaced as performance-review constraints,
+- low-visibility/RVR procedure ambiguity can drive an advisory `DELAY / CONFIRM PROCEDURE STATE` posture until local procedure state is confirmed by authorized sources,
+- approach/minima and approach-lighting NOTAMs are surfaced as arrival/departure capability review constraints,
+- runway braking action, MU/friction, snow, ice, slush, and surface contamination are surfaced as operator performance-review constraints,
 - pilot briefs and coordination drafts inherit those source refs and rationale.
 
 ## Public-Interest Release

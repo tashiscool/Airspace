@@ -36,13 +36,13 @@ export function transactionMetadataNotice(row: FeedTransactionSummary): string {
       return 'Domestic NOTAM record retained, but semantic reduction is ambiguous; review raw text and diagnostics.';
     }
     if (isLowVisibilityDomesticNotam(row)) {
-      return 'Low-visibility/RVR NOTAM retained as an operational constraint; confirm local FAA procedure names and ICAO/operator terminology before using it for departure or taxi guidance.';
+      return 'Advisory: Low-visibility/RVR NOTAM retained as an operational constraint; confirm local FAA procedure names, airport protections, and ICAO/operator terminology with authorized sources before using it for departure or taxi planning.';
     }
     if (isApproachMinimaDomesticNotam(row)) {
-      return 'Approach/minima NOTAM retained as an operational constraint; review landing-aid, lighting, category, and runway visual acquisition impacts before using it for arrival/departure guidance.';
+      return 'Approach/minima NOTAM retained as an operational constraint; confirm landing-aid, lighting, category, and runway visual acquisition impacts with current official sources.';
     }
     if (isSurfaceFrictionDomesticNotam(row)) {
-      return 'Runway surface/friction NOTAM retained as an operational constraint; review braking action, friction coefficient, and takeoff/landing performance impact.';
+      return 'Runway surface/friction NOTAM retained as an operational constraint; review braking action, friction coefficient, and takeoff/landing performance impact against operator limits.';
     }
     return 'Domestic NOTAM constraint includes DOM1 record metadata and DOM2 semantic reducer output.';
   }

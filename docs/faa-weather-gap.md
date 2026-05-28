@@ -27,15 +27,15 @@ This is the system behavior needed for cases like an international crew asking a
 - local/FAA procedure terminology,
 - operator or ICAO terminology used in the request,
 - runway/airport NOTAM context,
-- a coordination prompt to confirm the applicable local equivalent before departure/taxi guidance.
+- a coordination prompt to confirm the applicable local equivalent before departure/taxi planning.
 
 The frontend feed and NOTAM views surface these records as low-visibility/RVR operational constraints while keeping them distinct from CARF/ALTRV reservations. This remains decision-support and coordination context, not a certified replacement for official airport procedures, ATC phraseology, company minima, or pilot authority.
 
 The mission-level guidance path now also escalates procedure-adjacent NOTAMs:
 
-- low-visibility/RVR ambiguity can produce `DELAY` guidance until procedure state is confirmed,
+- low-visibility/RVR ambiguity can produce advisory `DELAY / CONFIRM PROCEDURE STATE` guidance until procedure state is confirmed by authorized sources,
 - approach/minima or approach-lighting outages produce capability-review guidance,
-- braking action, MU/friction, snow, ice, slush, and surface contamination produce takeoff/landing performance-review guidance.
+- braking action, MU/friction, snow, ice, slush, and surface contamination produce operator takeoff/landing performance-review guidance.
 
 Those source artifacts flow through affected-mission queues, coordination drafts, and pilot briefs with retained source refs.
 

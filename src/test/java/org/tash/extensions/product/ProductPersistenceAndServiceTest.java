@@ -642,7 +642,10 @@ class ProductPersistenceAndServiceTest {
         assertEquals("DELAY", verdict.getAction());
         assertEquals("HIGH", verdict.getPriority());
         assertTrue(verdict.getSummary().contains("procedure"));
+        assertTrue(verdict.getSummary().contains("advised"));
+        assertTrue(verdict.getRecommendedAction().contains("Advisory"));
         assertTrue(verdict.getRecommendedAction().contains("procedure state"));
+        assertTrue(verdict.getRecommendedAction().contains("authorized sources"));
         assertTrue(verdict.getDiagnostics().stream().anyMatch(item -> item.contains("Airport procedure profile")));
         assertTrue(verdict.getSources().stream().anyMatch(source -> "PROCEDURE".equals(source.getSeverity())
                 && source.getRationale().contains("SMGCS")));
