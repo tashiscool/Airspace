@@ -15,7 +15,8 @@ public class DomesticSurfaceConditionParser {
     private static final Set<String> CONDITION_MARKERS = new HashSet<>(Arrays.asList(
             "THN", "PTCHY", "LOOSE", "COMPACT", "COMPACTED", "PACKED", "SN", "SNOW", "ICE",
             "FROST", "SLUSH", "IR", "SIR", "LSR", "PSR", "WSR", "WTR", "BERM", "BERMS", "PILE",
-            "PILES", "SNOWPILE", "SNOWPILES", "TURNAROUND", "TURNAROUNDS"
+            "PILES", "SNOWPILE", "SNOWPILES", "TURNAROUND", "TURNAROUNDS", "BA", "BRAF", "BRAN",
+            "BRAP", "MU"
     ));
     private static final Pattern HEIGHT_BEFORE_BERM =
             Pattern.compile("(\\d+(?:\\.\\d+)?|1/2|1/4)\\s*(IN|FT)\\s+BERMS?\\b", Pattern.CASE_INSENSITIVE);
@@ -91,6 +92,12 @@ public class DomesticSurfaceConditionParser {
         }
         if (text.matches(".*\\bDEICED\\s+LIQUID\\b.*")) {
             hazards.add(DomesticSurfaceCondition.Hazard.DEICED_LIQUID);
+        }
+        if (text.matches(".*\\b(?:BA|BRAF|BRAN|BRAP)\\b.*")) {
+            hazards.add(DomesticSurfaceCondition.Hazard.BRAKING_ACTION);
+        }
+        if (text.matches(".*\\bMU\\b.*")) {
+            hazards.add(DomesticSurfaceCondition.Hazard.FRICTION_COEFFICIENT);
         }
         return hazards;
     }

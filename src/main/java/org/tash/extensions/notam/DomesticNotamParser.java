@@ -50,6 +50,14 @@ public class DomesticNotamParser {
     private static final Pattern MALFORMED_SERVICE_RVR =
             Pattern.compile("^\\s*(?:RWY\\s+)?[0-9]{1,2}[A-Z]?(?:/[0-9]{1,2}[A-Z]?)?\\s+RVR[TM R]?\\b",
                     Pattern.CASE_INSENSITIVE);
+    private static final Pattern MALFORMED_RUNWAY_NOW =
+            Pattern.compile("^\\s*NOW\\s+[0-9]{1,2}[A-Z]?(?:/[0-9]{1,2}[A-Z]?)?\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MALFORMED_RUNWAY_WARNING_BARE_OBJECT =
+            Pattern.compile("\\b(?:WARNING|PAEW|WIP)\\b.*\\b(?:OF|ABV|BLW|BELOW|BTN|BTWN)\\s+[0-9]{1,2}[A-Z]?(?:/[0-9]{1,2}[A-Z]?)?\\s*/\\s*(?:TWY|TAXIWAY)\\b",
+                    Pattern.CASE_INSENSITIVE);
+    private static final Pattern MALFORMED_NAV_RUNWAY_LANDING_AID =
+            Pattern.compile("^\\s*RWY\\s+(?:ILS|MLS|LDA|LOC|LLZ|DME|GLIDEPATH|GLIDE\\s+PATH)\\b",
+                    Pattern.CASE_INSENSITIVE);
     private static final Pattern COMMENT = Pattern.compile("\\^\\^\\s*(.*)$", Pattern.DOTALL);
 
     public DomesticNotamRecord parse(String rawText) {
@@ -168,6 +176,9 @@ public class DomesticNotamParser {
         String body = join(tokens, index);
         rejectMalformedEffectiveDuration(body);
         rejectMalformedServiceRvr(keyword, body);
+        rejectMalformedRunwayObject(keyword, body);
+        rejectMalformedNavRunwayLandingAid(keyword, body);
+        rejectAirportSnowWithoutRunwayContext(keyword, body);
         TimeWindow timeWindow = extractTimeWindow(body);
         String cleanBody = removeTimeWindow(body).trim();
 
@@ -201,6 +212,41 @@ public class DomesticNotamParser {
         Matcher malformed = MALFORMED_SERVICE_RVR.matcher(normalized);
         if (malformed.find() && !normalized.toUpperCase().startsWith("RWY ")) {
             throw new IllegalArgumentException("Invalid SVC RVR NOTAM: runway visual range equipment must identify runway as 'RWY <id> RVR ...'");
+        }
+    }
+
+    private void rejectMalformedRunwayObject(String keyword, String body) {
+        if (!"RWY".equalsIgnoreCase(keyword == null ? "" : keyword)) {
+            return;
+        }
+        String normalized = body == null ? "" : body.replaceAll("\\s+", " ").trim();
+        if (MALFORMED_RUNWAY_NOW.matcher(normalized).find()) {
+            throw new IllegalArgumentException("Invalid runway NOTAM: state-change rows must identify runway as 'RWY <id>', not bare 'NOW <id>'");
+        }
+        if (MALFORMED_RUNWAY_WARNING_BARE_OBJECT.matcher(normalized).find()) {
+            throw new IllegalArgumentException("Invalid runway NOTAM: warning rows must identify each runway/taxiway object explicitly");
+        }
+    }
+
+    private void rejectMalformedNavRunwayLandingAid(String keyword, String body) {
+        if (!"NAV".equalsIgnoreCase(keyword == null ? "" : keyword)) {
+            return;
+        }
+        String normalized = body == null ? "" : body.replaceAll("\\s+", " ").trim();
+        if (MALFORMED_NAV_RUNWAY_LANDING_AID.matcher(normalized).find()) {
+            throw new IllegalArgumentException("Invalid NAV NOTAM: landing aid rows must name the landing aid before runway context");
+        }
+    }
+
+    private void rejectAirportSnowWithoutRunwayContext(String keyword, String body) {
+        if (!"AD".equalsIgnoreCase(keyword == null ? "" : keyword)) {
+            return;
+        }
+        String normalized = (" " + (body == null ? "" : body).toUpperCase().replaceAll("[^A-Z0-9]+", " ") + " ")
+                .replaceAll("\\s+", " ");
+        boolean hasSurfaceCondition = normalized.matches(".*\\b(SNOW|SN|ICE|SLUSH|FROST|BERM|WINDROWS|MU|BA)\\b.*");
+        if (hasSurfaceCondition && !normalized.contains(" RWY ")) {
+            throw new IllegalArgumentException("Snow/surface condition NOTAM must include runway context");
         }
     }
 

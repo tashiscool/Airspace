@@ -18,7 +18,9 @@ public class DomesticSurfaceCondition {
         SLUSH,
         FROST,
         WATER,
-        DEICED_LIQUID
+        DEICED_LIQUID,
+        BRAKING_ACTION,
+        FRICTION_COEFFICIENT
     }
 
     private DomesticNotamRecord.Type type;

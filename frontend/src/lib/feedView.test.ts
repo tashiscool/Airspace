@@ -79,6 +79,26 @@ describe('feed view helpers', () => {
     expect(transactionMetadataNotice(smgcs)).toContain('ICAO/operator terminology');
   });
 
+  it('surfaces approach-minima and runway-friction domestic NOTAMs as safety constraints', () => {
+    const approach = tx({
+      type: 'DOMESTIC',
+      domesticNotamKeyword: 'NAV',
+      domesticNotamSemanticFacilityFamily: 'NAV',
+      domesticNotamSemanticCondition: 'APPROACH_MINIMA',
+      domesticNotamReducerRuleId: 'DOM2.NAV.APPROACH_MINIMA'
+    });
+    const friction = tx({
+      type: 'DOMESTIC',
+      domesticNotamKeyword: 'RWY',
+      domesticNotamSemanticFacilityFamily: 'RWY',
+      domesticNotamSemanticCondition: 'FRICTION',
+      domesticNotamReducerRuleId: 'DOM2.SURFACE.FRICTION'
+    });
+
+    expect(transactionMetadataNotice(approach).toLowerCase()).toContain('approach/minima');
+    expect(transactionMetadataNotice(friction).toLowerCase()).toContain('runway surface/friction');
+  });
+
   it('formats service request and table commands separately from NOTAM constraints', () => {
     const request = tx({
       type: 'SERVICE_REQUEST',

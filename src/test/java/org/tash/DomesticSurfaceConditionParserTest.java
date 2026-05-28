@@ -47,4 +47,14 @@ class DomesticSurfaceConditionParserTest {
         assertEquals(15, condition.getSnowPileHeightFeet(), 0.0001);
         assertNotNull(condition.getEffectiveEnd());
     }
+
+    @Test
+    void parsesBrakingActionAndFrictionCoefficientRows() {
+        String row = "!JFK 01/004 JFK RWY 04L BA POOR MU 20 1101011200-1101011300";
+        DomesticSurfaceCondition condition = parser.parse(row);
+
+        assertEquals("04L", condition.getAffectedSurface());
+        assertTrue(condition.getHazards().contains(DomesticSurfaceCondition.Hazard.BRAKING_ACTION));
+        assertTrue(condition.getHazards().contains(DomesticSurfaceCondition.Hazard.FRICTION_COEFFICIENT));
+    }
 }

@@ -38,6 +38,12 @@ export function transactionMetadataNotice(row: FeedTransactionSummary): string {
     if (isLowVisibilityDomesticNotam(row)) {
       return 'Low-visibility/RVR NOTAM retained as an operational constraint; confirm local FAA procedure names and ICAO/operator terminology before using it for departure or taxi guidance.';
     }
+    if (isApproachMinimaDomesticNotam(row)) {
+      return 'Approach/minima NOTAM retained as an operational constraint; review landing-aid, lighting, category, and runway visual acquisition impacts before using it for arrival/departure guidance.';
+    }
+    if (isSurfaceFrictionDomesticNotam(row)) {
+      return 'Runway surface/friction NOTAM retained as an operational constraint; review braking action, friction coefficient, and takeoff/landing performance impact.';
+    }
     return 'Domestic NOTAM constraint includes DOM1 record metadata and DOM2 semantic reducer output.';
   }
   if (!row.notamType && !row.notamQCode) return 'No NOTAM field metadata retained.';
@@ -103,4 +109,16 @@ function isLowVisibilityDomesticNotam(row: FeedTransactionSummary): boolean {
     || row.domesticNotamSemanticCondition === 'RVRR'
     || row.domesticNotamSemanticCondition === 'RVRT'
     || row.domesticNotamSemanticCondition === 'LOW_VISIBILITY_PROCEDURE';
+}
+
+function isApproachMinimaDomesticNotam(row: FeedTransactionSummary): boolean {
+  return row.domesticNotamReducerRuleId === 'DOM2.NAV.APPROACH_MINIMA'
+    || row.domesticNotamReducerRuleId === 'DOM2.LIGHTING.APPROACH'
+    || row.domesticNotamSemanticCondition === 'APPROACH_MINIMA'
+    || row.domesticNotamSemanticCondition === 'APPROACH_LIGHTING';
+}
+
+function isSurfaceFrictionDomesticNotam(row: FeedTransactionSummary): boolean {
+  return row.domesticNotamReducerRuleId === 'DOM2.SURFACE.FRICTION'
+    || row.domesticNotamSemanticCondition === 'FRICTION';
 }

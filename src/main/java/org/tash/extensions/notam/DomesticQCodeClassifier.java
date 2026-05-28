@@ -36,6 +36,12 @@ public class DomesticQCodeClassifier {
         List<String> warnings = new ArrayList<>();
 
         if ("NAV".equals(keyword)) {
+            if (containsAny(normalized, "ILS", "MLS", "LDA", "LOC", "LLZ", "GLIDEPATH", "GLIDE", "DME")
+                    && containsAny(normalized, "CAT", "NA", "NOTAUTH", "NOT", "AUTH")) {
+                warnings.add("Approach landing-aid or category authorization NOTAM may affect approach capability and minima.");
+                return semantic("NAV", "APPROACH_MINIMA", action(normalized), "IC", null,
+                        "DOM2.NAV.APPROACH_MINIMA", "DOM2 approach minima reducer", recognizedContractions, warnings);
+            }
             if (contains(normalized, "VORTAC")) {
                 return semantic("NAV", "VORTAC", action(normalized), "NT", null, "DOM2.NAV.VORTAC",
                         "DOM2 navaid VORTAC reducer", recognizedContractions, warnings);
@@ -129,6 +135,11 @@ public class DomesticQCodeClassifier {
             return semantic(surfaceFamily(keyword, normalized), "PILOT_CONTROLLED_LIGHTING", action(normalized), q23, "XX",
                     "DOM2.LIGHTING.PCL", "DOM2 pilot-controlled lighting reducer", recognizedContractions, warnings);
         }
+        if (containsAny(normalized, "ALSF", "MALS", "MALSR", "PAPI", "VASI", "REIL", "RAIL", "RCLL")) {
+            warnings.add("Approach or runway lighting NOTAM may affect approach/landing minima and runway visual acquisition.");
+            return semantic(surfaceFamily(keyword, normalized), "APPROACH_LIGHTING", action(normalized), "LE", null,
+                    "DOM2.LIGHTING.APPROACH", "DOM2 approach/runway lighting reducer", recognizedContractions, warnings);
+        }
         if (isSurfaceFamily(keyword)) {
             if (containsAny(normalized, "CLSD", "CLOSED", "UNSAFE")) {
                 return semantic(surfaceFamily(keyword, normalized), "CLOSURE", action(normalized), "LC", null,
@@ -137,6 +148,11 @@ public class DomesticQCodeClassifier {
             if (containsAny(normalized, "PAEW", "WIP", "WARNING")) {
                 return semantic(surfaceFamily(keyword, normalized), "WARNING", "WARNING", "LW", null,
                         "DOM2.SURFACE.WARNING", "DOM2 surface warning reducer", recognizedContractions, warnings);
+            }
+            if (containsAny(normalized, "BA", "BRAF", "BRAN", "BRAP", "MU")) {
+                warnings.add("Runway surface friction/braking-action NOTAM may affect takeoff and landing performance.");
+                return semantic(surfaceFamily(keyword, normalized), "FRICTION", "WARNING", "LS", null,
+                        "DOM2.SURFACE.FRICTION", "DOM2 runway friction/braking reducer", recognizedContractions, warnings);
             }
             if (containsAny(normalized, "SNOW", "SN", "ICE", "SLUSH", "WET", "FROST", "BERM", "RUTS", "WINDROWS")) {
                 String condition = firstPresent(normalized, "SNOW", "SN", "ICE", "SLUSH", "WET", "FROST", "BERM", "RUTS", "WINDROWS");

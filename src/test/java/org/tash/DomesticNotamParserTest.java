@@ -234,6 +234,70 @@ class DomesticNotamParserTest {
     }
 
     @Test
+    void rejectsLegacyDom2MalformedBareRunwayObjectRows() {
+        DomesticNotamParser parser = new DomesticNotamParser();
+
+        DomesticNotamParseResult runwayNowBareId = parser.parseDetailed(
+                "!DCA LDN RWY NOW 12/30 1012211200-1012211300");
+        DomesticNotamParseResult runwayWarningBareId = parser.parseDetailed(
+                "!DCA LDN RWY WARNING EAST OF 12/30/TWY A 1012211200-1012211300");
+
+        assertFalse(runwayNowBareId.isAccepted());
+        assertTrue(runwayNowBareId.getRejectionReason().contains("RWY <id>"));
+        assertFalse(runwayWarningBareId.isAccepted());
+        assertTrue(runwayWarningBareId.getRejectionReason().contains("runway/taxiway object"));
+    }
+
+    @Test
+    void rejectsLegacyDom2MalformedNavRunwayLandingAidRows() {
+        DomesticNotamParser parser = new DomesticNotamParser();
+
+        DomesticNotamParseResult malformedIls = parser.parseDetailed(
+                "!DCA LDN NAV RWY ILS OTS 1012211200-1012211300");
+        DomesticNotamParseResult malformedCat = parser.parseDetailed(
+                "!DCA LDN NAV RWY ILS CAT II NA 1012211200-1012211300");
+
+        assertFalse(malformedIls.isAccepted());
+        assertTrue(malformedIls.getRejectionReason().contains("landing aid"));
+        assertFalse(malformedCat.isAccepted());
+        assertTrue(malformedCat.getRejectionReason().contains("landing aid"));
+    }
+
+    @Test
+    void classifiesApproachMinimaLightingAndSurfaceFrictionAsOperationalSafetyConstraints() {
+        DomesticNotamParser parser = new DomesticNotamParser();
+
+        DomesticNotamParseResult ilsCat = parser.parseDetailed(domestic("NAV ILS RWY 04L CAT II NA"));
+        DomesticNotamParseResult papi = parser.parseDetailed(domestic("RWY 04L PAPI OTS"));
+        DomesticNotamParseResult braking = parser.parseDetailed(domestic("RWY 04L BA POOR MU 20"));
+
+        assertTrue(ilsCat.isAccepted(), ilsCat.getRejectionReason());
+        assertEquals("DOM2.NAV.APPROACH_MINIMA", ilsCat.getReducerRuleId());
+        assertEquals("APPROACH_MINIMA", ilsCat.getSemanticCondition());
+        assertTrue(ilsCat.getWarnings().stream().anyMatch(warning -> warning.contains("approach capability")));
+
+        assertTrue(papi.isAccepted(), papi.getRejectionReason());
+        assertEquals("DOM2.LIGHTING.APPROACH", papi.getReducerRuleId());
+        assertEquals("APPROACH_LIGHTING", papi.getSemanticCondition());
+        assertTrue(papi.getWarnings().stream().anyMatch(warning -> warning.contains("approach/landing minima")));
+
+        assertTrue(braking.isAccepted(), braking.getRejectionReason());
+        assertEquals("DOM2.SURFACE.FRICTION", braking.getReducerRuleId());
+        assertEquals("FRICTION", braking.getSemanticCondition());
+        assertTrue(braking.getRecognizedContractions().contains("BA=braking action"));
+        assertTrue(braking.getRecognizedContractions().contains("MU=friction coefficient"));
+    }
+
+    @Test
+    void rejectsAirportSnowConditionWithoutRunwayContext() {
+        DomesticNotamParseResult result = new DomesticNotamParser().parseDetailed(
+                "!DCA LDN AD SNOW ICE SLUSH 1012211200-1012211300");
+
+        assertFalse(result.isAccepted());
+        assertTrue(result.getRejectionReason().contains("Snow/surface condition"));
+    }
+
+    @Test
     void semanticFallbackKeepsAcceptedRecordWithDiagnosticWarning() {
         DomesticNotamParseResult result = new DomesticNotamParser().parseDetailed(
                 domestic("RAMP UNUSUAL LEGACY TEXT"));
