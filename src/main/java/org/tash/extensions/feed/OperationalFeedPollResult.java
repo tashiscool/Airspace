@@ -15,6 +15,8 @@ public class OperationalFeedPollResult {
     private final List<OperationalFeedEnvelope> envelopes = new ArrayList<>();
     @Builder.Default
     private final List<String> diagnostics = new ArrayList<>();
+    @Builder.Default
+    private final List<OperationalFeedDiagnostic> typedDiagnostics = new ArrayList<>();
 
     public List<OperationalFeedEnvelope> getEnvelopes() {
         return Collections.unmodifiableList(envelopes);
@@ -22,5 +24,9 @@ public class OperationalFeedPollResult {
 
     public List<String> getDiagnostics() {
         return Collections.unmodifiableList(diagnostics);
+    }
+
+    public List<OperationalFeedDiagnostic> getTypedDiagnostics() {
+        return Collections.unmodifiableList(typedDiagnostics);
     }
 }

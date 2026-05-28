@@ -268,18 +268,27 @@ class ProductPersistenceAndServiceTest {
     @Test
     void localFeedAdaptersReferenceSyncAndCalibrationSeamsAreReadyForProductionAdapters() {
         OperationalFeedIngestService ingest = new OperationalFeedIngestService();
-        assertEquals(1, ingest.ingest(new LocalUsnsTrafficAdapter("nadinsim",
-                Collections.singletonList("!ABC ABC RWY CLSD 200000-200300")).poll()).getResults().size());
-        assertEquals(1, ingest.ingest(new LocalWeatherFeedAdapter("wxs",
-                Collections.singletonList("METAR KJFK 200000Z 18012KT 2SM RA BKN010")).poll()).getResults().size());
+        var usnsPoll = new LocalUsnsTrafficAdapter("nadinsim",
+                Collections.singletonList("!ABC ABC RWY CLSD 200000-200300")).poll();
+        assertEquals(1, ingest.ingest(usnsPoll).getResults().size());
+        assertEquals(org.tash.extensions.feed.OperationalFeedAuthorityMode.LOCAL_FIXTURE,
+                usnsPoll.getTypedDiagnostics().get(0).getAuthorityMode());
+        var weatherPoll = new LocalWeatherFeedAdapter("wxs",
+                Collections.singletonList("METAR KJFK 200000Z 18012KT 2SM RA BKN010")).poll();
+        assertEquals(1, ingest.ingest(weatherPoll).getResults().size());
+        assertEquals("LOCAL_REPLAY", weatherPoll.getTypedDiagnostics().get(0).getCode());
 
         ReferenceDataSyncResult sync = new LocalReferenceDataSyncAdapter().preview(
                 "type,identifier,latitude,longitude,altitudeFeet,source,version\n"
                         + "NAVAID,JFK,40.6398,-73.7789,13,local,v1\n"
-                        + "NAVAID,JFK,40.6398,-73.7789,13,local,v1");
+                        + "NAVAID,JFK,40.6398,-73.7789,13,local,v1\n"
+                        + "AIRPORT_PROCEDURE_PROFILE,KJFK,40.6398,-73.7789,13,airport-ops,2026-05,"
+                        + "effectiveAt=2026-05-28T00:00:00Z,rvrComponents=TDZ|MID|ROLLOUT,localProcedure=SMGCS");
         assertTrue(sync.isAccepted());
-        assertEquals(2, sync.getRecords().size());
+        assertEquals(3, sync.getRecords().size());
         assertFalse(sync.getWarnings().isEmpty());
+        assertTrue(sync.getRecords().get(2).getMetadataJson().contains("rvrComponents"));
+        assertTrue(sync.getRecords().get(2).getMetadataJson().contains("effectiveAt"));
 
         CwapCalibrationDataset dataset = CwapCalibrationDataset.builder()
                 .id("cwaf-fixture")

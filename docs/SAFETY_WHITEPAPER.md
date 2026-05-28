@@ -50,7 +50,7 @@ Airspace uses a deterministic, replayable decision loop:
 - A CARF/ALTRV parser and reservation mapper with route/event/area metadata.
 - USNS-style message classification for CARF, NOTAM, service, weather, and PIREP traffic.
 - NOTAM parsing and retention as constraints distinct from ALTRV reservations.
-- Weather product modeling for turbulence, icing, convection, ceiling, visibility, SIGMET/AIRMET, METAR/TAF, CWAP/CWAF-like products, PIREPs, confidence, validity, and movement.
+- Weather product modeling for turbulence, icing, convection, ceiling, visibility, SIGMET/AIRMET, METAR/TAF, CWAP-style/CWAF-like products, PIREPs, confidence, validity, and movement.
 - Route-impact and route-avoidance summaries with affected segments, source refs, confidence, and deterministic cost/route comparison seams.
 - Mission-scoped PIREP relevance by route, altitude, recency, and staleness.
 - ATC/weather coordination drafts generated from exact source artifacts.

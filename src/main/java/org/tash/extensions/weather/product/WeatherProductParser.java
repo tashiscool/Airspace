@@ -80,14 +80,17 @@ public class WeatherProductParser {
             return result(accepted, false, null, report, type, text, warnings, errors, diagnostics, sourceSpans);
         }
         WeatherProduct product = parseProduct(text, upper, type, warnings, diagnostics, sourceSpans);
-        boolean requiresGeometry = type == WeatherProductType.SIGMET
-                || type == WeatherProductType.AIRMET
-                || type == WeatherProductType.NEXRAD_POLYGON;
+        boolean requiresGeometry = type == WeatherProductType.NEXRAD_POLYGON;
+        boolean retainsWithoutGeometry = type == WeatherProductType.SIGMET || type == WeatherProductType.AIRMET;
         boolean structured = isStructured(type, product);
         boolean classifiedOnly = type == WeatherProductType.GENERIC_FORECAST_HAZARD && !structured;
-        boolean accepted = product != null && !classifiedOnly && (!requiresGeometry || !product.getGeometry().isEmpty());
+        boolean accepted = product != null && !classifiedOnly
+                && (!requiresGeometry || !product.getGeometry().isEmpty())
+                || product != null && retainsWithoutGeometry;
         if (!accepted && requiresGeometry) {
             errors.add(type + " missing coordinate geometry");
+        } else if (product != null && retainsWithoutGeometry && product.getGeometry().isEmpty()) {
+            warnings.add(type + " retained without coordinate geometry");
         }
         return result(accepted, classifiedOnly || (!accepted && !requiresGeometry), product, null, type, text, warnings, errors,
                 diagnostics, sourceSpans);
@@ -241,7 +244,8 @@ public class WeatherProductParser {
     }
 
     private WeatherProductType classify(String upper) {
-        if (upper.startsWith("PIREP") || upper.startsWith("UA ") || upper.startsWith("UUA ") || upper.contains(" PIREP ")) {
+        if (upper.startsWith("PIREP") || upper.startsWith("AIREP") || upper.startsWith("ARS ")
+                || upper.startsWith("UA ") || upper.startsWith("UUA ") || upper.contains(" PIREP ")) {
             return WeatherProductType.PIREP_DERIVED;
         }
         if (upper.contains("CONVECTIVE SIGMET") || upper.contains("SIGMET")) return WeatherProductType.SIGMET;

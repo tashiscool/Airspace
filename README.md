@@ -26,7 +26,7 @@ Airspace tackles that as a cooperative aviation decision loop:
 | Safety gap | What Airspace ships today | Remaining boundary |
 |---|---|---|
 | Real-time cockpit/weather awareness | Weather and PIREP traffic appears in Mission Explorer, Weather, Mission, Decision, and Pilot Brief surfaces. Operators get weather deltas, freshness, affected missions, source chips, time-to-guidance metrics, and map overlays for coordinate-bearing products. | Local prototype only; no certified cockpit display or live avionics integration. |
-| Turbulence and icing prediction | Weather models and parsers represent turbulence, icing, convection, ceiling/visibility, SIGMET/AIRMET, METAR/TAF, CWAP/CWAF-like products, forecast slices, confidence, validity, movement, and PIREP-derived hazards. The UI highlights turbulence/icing observations and route/altitude guidance. | Deterministic prototype scoring; needs historical calibration against authoritative outcomes. |
+| Turbulence and icing prediction | Weather models and parsers represent turbulence, icing, convection, ceiling/visibility, SIGMET/AIRMET, METAR/TAF, CWAP-style/CWAF-like products, forecast slices, confidence, validity, movement, and PIREP-derived hazards. The UI highlights turbulence/icing observations and route/altitude guidance. | Deterministic prototype scoring; needs historical calibration against authoritative outcomes. |
 | Route avoidance | Route-impact APIs and UI panels expose impacted segments, blocking constraints, weather/PIREP/NOTAM/CARF source refs, action, confidence, and suggested avoidance candidates. The map keeps route impacts separate from reservations and NOTAMs. | Avoidance is a prototype suggestion path, not a certified NAS-scale routing solver. |
 | PIREPs | PIREPs are parsed and modeled separately from forecast products, with stale/duplicate/incomplete diagnostics, urgency, route/altitude relevance, aging/decay, and dedicated map/table behavior. | Needs operational calibration and live dissemination feedback from authoritative networks. |
 | ATC/weather coordination | Severe, urgent, stale, or low-confidence hazards produce coordination recommendations. Mission and Weather pages can open prefilled USNS/message drafts with mission, action, impact, and source refs. | Needs real recipient/position directory, live delivery confirmations, and operational staffing integration. |
@@ -138,8 +138,8 @@ UsnsIngestResult result = ingest.parse(rawUsnsMessage);
 
 ### Weather Decision Engine
 
-- Structured weather product model for convection, turbulence, icing, ceiling, visibility, SIGMET, AIRMET, METAR, TAF, NEXRAD/CWAP/CWAF-style advisories, PIREP-derived hazards, and generic forecast hazards.
-- Product-specific decoders for pragmatic METAR, TAF, SIGMET, AIRMET, CWAP/CWAF, and PIREP parsing.
+- Structured weather product model for convection, turbulence, icing, ceiling, visibility, SIGMET, AIRMET, METAR, TAF, NEXRAD/CWAP-style/CWAF-like advisories, PIREP-derived hazards, and generic forecast hazards.
+- Product-specific decoders for pragmatic METAR, TAF, SIGMET, AIRMET, CWAP-style/CWAF-like, and PIREP parsing.
 - Configuration-gated live NOAA/AWC polling through `LiveAviationWeatherAdapter`; live mode is disabled by default and keeps tests/offline demos network-free.
 - Deterministic weather-pattern mapping normalizes retained products into convection, turbulence, icing, wind shear, volcanic ash, ceiling/visibility, precipitation, PIREP cluster, terminal forecast, and generic advisory patterns with source refs, geometry intent, time/altitude windows, confidence, freshness, and diagnostics.
 - METAR/TAF products without usable route geometry remain station/time guidance artifacts; Airspace does not create fake polygons for non-geometric products.
@@ -458,7 +458,7 @@ src/test/resources/legacy/grammar-parity/
 src/test/resources/scenarios/weather-engine/
 ```
 
-Examples include CARF reservation text, head-on and lateral-separation regressions, navaid/fix fixtures, PTR-style examples, METAR/SPECI corpora, TAF corpora, SIGMET/AIRMET corpora, CWAP/CWAF examples, PIREP examples, and mixed USNS/CARF/NOTAM/weather scenarios.
+Examples include CARF reservation text, head-on and lateral-separation regressions, navaid/fix fixtures, PTR-style examples, METAR/SPECI corpora, TAF corpora, SIGMET/AIRMET corpora, CWAP-style/CWAF-like examples, PIREP examples, and mixed USNS/CARF/NOTAM/weather scenarios.
 
 The `legacy/grammar-parity` corpus pins the useful 2010 grammar behavior without importing old generated parser runtimes or `.llr` binaries. It covers ALTRV route-family phrases from `ALTRV.g`, stationary line-corridor geometry, radius/area/timing-triangle metadata, DOM1 domestic NOTAM record shapes, DOM2 semantic reducer cases, ICAO/Canadian NOTAM field extraction, and USNS/request/table/GENOT transaction families. These fixtures are behavior oracles only: Airspace keeps modern typed parser outputs, typed diagnostics, retained raw text, restart-safe feed/search metadata, GeoJSON source-family separation, and no fake geometry for non-geometric NOTAMs.
 

@@ -35,7 +35,7 @@ public class DomesticNotamParser {
 
     private static final Set<String> KEYWORDS = new HashSet<>(Arrays.asList(
             "AD", "AIRSPACE", "APRON", "COM", "NAV", "OBST", "RAMP", "RWY", "SVC", "TWY",
-            "ODP", "SID", "STAR", "CHART", "DATA", "IAP", "VFP", "ROUTE", "SPECIAL", "(O)"
+            "ODP", "SID", "STAR", "CHART", "DATA", "IAP", "VFP", "ROUTE", "SPECIAL", "SECURITY", "(O)"
     ));
     private static final Pattern DATE_RANGE =
             Pattern.compile("\\b(\\d{10}|\\d{12})\\s*-\\s*((?:\\d{10}|\\d{12})|PERM)(EST)?\\b", Pattern.CASE_INSENSITIVE);

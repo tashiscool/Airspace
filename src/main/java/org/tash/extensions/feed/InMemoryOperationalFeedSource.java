@@ -24,6 +24,12 @@ public class InMemoryOperationalFeedSource implements OperationalFeedSource {
         return OperationalFeedPollResult.builder()
                 .accepted(true)
                 .envelopes(new ArrayList<>(envelopes))
+                .typedDiagnostics(List.of(OperationalFeedDiagnostic.builder()
+                        .authorityMode(OperationalFeedAuthorityMode.LOCAL_FIXTURE)
+                        .code("LOCAL_REPLAY")
+                        .sourceId(sourceId)
+                        .message("Local replay/fixture feed source; not a confirmed live authoritative feed.")
+                        .build()))
                 .build();
     }
 }

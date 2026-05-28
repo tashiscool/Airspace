@@ -6,6 +6,11 @@ import org.tash.extensions.notam.DomesticNotamContractionDictionary;
 import org.tash.extensions.notam.DomesticNotamParseResult;
 import org.tash.extensions.notam.DomesticNotamRecord;
 import org.tash.extensions.notam.GlobalAccountKeywordResolver;
+import org.tash.extensions.notam.LowVisibilityProcedureAssessment;
+import org.tash.extensions.notam.LowVisibilityProcedureAssessmentService;
+import org.tash.extensions.notam.LowVisibilityProcedureProfile;
+import org.tash.extensions.weather.product.WeatherProductParseResult;
+import org.tash.extensions.weather.product.WeatherProductParser;
 
 import java.nio.file.Path;
 import java.time.ZoneOffset;
@@ -13,6 +18,7 @@ import java.time.ZonedDateTime;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -302,6 +308,83 @@ class DomesticNotamParserTest {
         assertEquals("FRICTION", braking.getSemanticCondition());
         assertTrue(braking.getRecognizedContractions().contains("BA=braking action"));
         assertTrue(braking.getRecognizedContractions().contains("MU=friction coefficient"));
+    }
+
+    @Test
+    void classifiesExpandedDomesticKeywordFamiliesAsTypedConstraints() {
+        DomesticNotamParser parser = new DomesticNotamParser();
+        Map<String, String> examples = new LinkedHashMap<>();
+        examples.put("AD", "AD AP CLSD");
+        examples.put("COM", "COM REMOTE COM OUTLET OTS");
+        examples.put("IAP", "IAP RNAV RWY 04L NA");
+        examples.put("ROUTE", "ROUTE J60 CHANGED");
+        examples.put("SPECIAL", "SPECIAL MILITARY ACTIVITY");
+        examples.put("SECURITY", "SECURITY TFR IN EFFECT");
+        examples.put("ODP", "ODP RWY 04L AMDT");
+        examples.put("SID", "SID BETTE THREE NA");
+        examples.put("STAR", "STAR CAMRN FOUR NA");
+        examples.put("CHART", "CHART IAP PAGE UPDATED");
+        examples.put("DATA", "DATA DIGITAL OBSTACLE FILE UPDATED");
+
+        Map<String, String> expectedRulePrefix = new LinkedHashMap<>();
+        expectedRulePrefix.put("AD", "DOM2.AD.");
+        expectedRulePrefix.put("COM", "DOM2.COM.");
+        expectedRulePrefix.put("IAP", "DOM2.IAP.");
+        expectedRulePrefix.put("ROUTE", "DOM2.ROUTE.");
+        expectedRulePrefix.put("SPECIAL", "DOM2.SPECIAL.");
+        expectedRulePrefix.put("SECURITY", "DOM2.SECURITY.");
+        expectedRulePrefix.put("ODP", "DOM2.ODP.");
+        expectedRulePrefix.put("SID", "DOM2.SID.");
+        expectedRulePrefix.put("STAR", "DOM2.STAR.");
+        expectedRulePrefix.put("CHART", "DOM2.CHART.");
+        expectedRulePrefix.put("DATA", "DOM2.DATA.");
+
+        for (Map.Entry<String, String> entry : examples.entrySet()) {
+            DomesticNotamParseResult result = parser.parseDetailed(domestic(entry.getValue()));
+            assertTrue(result.isAccepted(), entry.getKey() + ": " + result.getRejectionReason());
+            assertTrue(result.getReducerRuleId().startsWith(expectedRulePrefix.get(entry.getKey())),
+                    entry.getKey() + " reduced to " + result.getReducerRuleId());
+            assertNotEquals("DOM2.UNMATCHED", result.getReducerRuleId());
+        }
+    }
+
+    @Test
+    void lowVisibilityAssessmentKeepsReportedRvrEquipmentAndProcedureTerminologySeparate() {
+        WeatherProductParseResult speci = new WeatherProductParser().parse(
+                "SPECI KJFK 281655Z 04005KT 1/8SM R04L/1000FT FG VV002 08/08 A2992 RMK AO2",
+                null);
+        DomesticNotamParseResult rvrEquipment = new DomesticNotamParser().parseDetailed(
+                "!DCA 05/777 JFK RWY 04L RVRT U/S 2605281200-2605281800");
+        DomesticNotamParseResult procedureText = new DomesticNotamParser().parseDetailed(
+                "!DCA 05/778 JFK SVC SMGCS LOW VISIBILITY PROC IN USE 2605281200-2605281800");
+        LowVisibilityProcedureProfile profile = LowVisibilityProcedureProfile.builder()
+                .airportId("KJFK")
+                .localProcedureName("SMGCS / airport low-visibility equivalent")
+                .faaTerminology("SMGCS")
+                .icaoTerminology("LVO/LVP")
+                .advisoryRvrThresholdFeet(1200)
+                .smgcsAvailable(true)
+                .lvpEquivalentAvailable(true)
+                .source("local-fixture")
+                .sourceVersion("2026-05")
+                .rvrComponents(List.of("TDZ", "MID", "ROLLOUT"))
+                .reviewAuthorities(List.of("ATIS", "TOWER_AIRPORT_OPS", "COMPANY_MINIMA", "LOCAL_AIRPORT_PROCEDURES"))
+                .build();
+
+        LowVisibilityProcedureAssessment assessment = new LowVisibilityProcedureAssessmentService()
+                .assess("KJFK", profile, List.of(speci), List.of(rvrEquipment, procedureText));
+
+        assertEquals(1000.0, assessment.getReportedRvrFeet());
+        assertEquals("RVRT UNAVAILABLE", assessment.getRvrEquipmentStatus());
+        assertTrue(assessment.getLowVisibilityProcedureTerminology().contains("SMGCS"));
+        assertEquals("DELAY", assessment.getRecommendedAction());
+        assertEquals("CONFIRM PROCEDURE STATE", assessment.getActionSublabel());
+        assertTrue(assessment.isSeparateArtifactsRetained());
+        assertTrue(assessment.getSourceRefs().stream().anyMatch(ref -> ref.startsWith("WEATHER:")));
+        assertTrue(assessment.getSourceRefs().stream().anyMatch(ref -> ref.startsWith("NOTAM:")));
+        assertTrue(assessment.getReviewMessages().stream().anyMatch(message -> message.contains("ATIS")));
+        assertTrue(assessment.getReviewMessages().stream().anyMatch(message -> message.contains("Tower/airport ops")));
+        assertTrue(assessment.getDiagnostics().stream().anyMatch(message -> message.contains("separate artifacts")));
     }
 
     @Test

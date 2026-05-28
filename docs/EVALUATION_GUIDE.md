@@ -141,6 +141,5 @@ When sending feedback, include:
 - Turbulence PIREP that is stale but still relevant.
 - NOTAM restriction overlapping weather but not a CARF/ALTRV reservation.
 - METAR/TAF low ceiling causing delay rather than reroute.
-- CWAP/CWAF-style moving storm with later forecast blockage.
+- CWAP-style/CWAF-like moving storm with later forecast blockage.
 - Malformed USNS batch where one weather transaction is rejected.
-

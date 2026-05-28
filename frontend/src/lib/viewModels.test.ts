@@ -119,6 +119,31 @@ G. TAS: 300 KTAS`;
     expect(verdict.sources.map((source) => source.id)).toEqual(['wx-1']);
   });
 
+  it('adds clarifying sublabels for advisory delay guidance', () => {
+    const metar = {
+      id: 'metar-1',
+      missionId: 'm1',
+      family: 'METAR',
+      direction: 'INBOUND',
+      status: 'ACCEPTED',
+      subject: 'KJFK low visibility',
+      rawText: 'METAR KJFK 281655Z 04005KT 1/2SM R04L/1000FT FG BKN004',
+      createdAt: new Date().toISOString()
+    };
+
+    const guidance = weatherGuidanceFromMessage(metar);
+    const verdict = missionWeatherVerdict('m1', [metar]);
+
+    expect(guidance).toMatchObject({
+      action: 'DELAY',
+      actionSublabel: 'CONFIRM PROCEDURE STATE'
+    });
+    expect(verdict).toMatchObject({
+      action: 'DELAY',
+      actionSublabel: 'CONFIRM PROCEDURE STATE'
+    });
+  });
+
   it('extracts aviation weather coordinates into map-ready weather features', () => {
     const features = weatherFeaturesFromMessages([
       {

@@ -79,6 +79,7 @@ export type WeatherGuidanceItem = {
   id: string;
   hazard: string;
   action: 'CLEAR' | 'MONITOR' | 'CAUTION' | 'DELAY' | 'ALTITUDE CHANGE' | 'AVOID' | 'REROUTE' | 'BLOCKED';
+  actionSublabel?: string;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
   coordination: string;
   rationale: string;
@@ -105,6 +106,7 @@ export type WeatherEventDrilldownGroup = {
 
 export type MissionWeatherVerdict = {
   action: WeatherGuidanceItem['action'];
+  actionSublabel?: string;
   priority: WeatherGuidanceItem['priority'];
   confidence: number;
   count: number;
@@ -384,6 +386,8 @@ export function weatherGuidanceFromMessage(message: MessageSummary): WeatherGuid
     };
   }
   if (family.includes('METAR') || family.includes('TAF') || raw.includes('BKN00') || raw.includes('OVC00') || raw.includes(' 1/2SM')) {
+    const lowVisibilityProcedure = /\b(RVR|RVRT|RVRM|RVRR|SMGCS|LVO|LVP)\b|\bR\d{2}[LCR]?\//.test(raw);
+    const surfaceCondition = /\b(BA NIL|BA POOR|MU\s?\d{1,2}|SLUSH|ICE|SNOW|WET)\b/.test(raw);
     return {
       id: message.id,
       missionId: message.missionId,
@@ -391,6 +395,10 @@ export function weatherGuidanceFromMessage(message: MessageSummary): WeatherGuid
       createdAt: message.createdAt,
       hazard: family.includes('TAF') ? 'Forecast ceiling/visibility' : 'Observed ceiling/visibility',
       action: raw.includes('1/2SM') || raw.includes('BKN004') ? 'DELAY' : 'MONITOR',
+      actionSublabel: lowVisibilityProcedure ? 'CONFIRM PROCEDURE STATE'
+        : surfaceCondition ? 'CONFIRM SURFACE CONDITION'
+          : raw.includes('BKN004') || raw.includes('1/2SM') ? 'CONFIRM CAPABILITY'
+            : undefined,
       priority: raw.includes('1/2SM') || raw.includes('BKN004') ? 'MEDIUM' : 'LOW',
       coordination: 'Terminal weather and route-release check',
       sourceFamily: family,
@@ -447,6 +455,7 @@ export function missionWeatherVerdict(missionId: string, messages: MessageSummar
   const top = ranked[0];
   return {
     action: top.action,
+    actionSublabel: top.actionSublabel,
     priority: top.priority,
     confidence: verdictConfidence(top, guidance),
     count: guidance.length,

@@ -22,6 +22,7 @@ export function WeatherVerdictStrip({ verdict, missionId }: { verdict: MissionWe
           <div className="verdict-heading">
             <span>Weather verdict</span>
             <StatusBadge value={verdict.action} />
+            {verdict.actionSublabel && <small className="action-sublabel">{verdict.actionSublabel}</small>}
             <small>{Math.round(verdict.confidence * 100)}% confidence</small>
           </div>
           <p>{verdict.summary}</p>

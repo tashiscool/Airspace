@@ -10,6 +10,7 @@ import {
   routeForWorkbenchRow,
   sourceFamilyForRow,
   sourceFamilyLabel,
+  selectionFromRow,
   writeAcceptedConflictReviews
 } from './workbenchState';
 import type { ExplorerRow } from './viewModels';
@@ -52,6 +53,31 @@ describe('workbench state helpers', () => {
       subtitle: 'INBOUND · SIGMET',
       preview: 'convective weather'
     })).toBe('WEATHER');
+  });
+
+  it('preserves documented source-family selections across major workbench surfaces', () => {
+    const rows: ExplorerRow[] = [
+      { ...reservation, family: 'MISSION', id: 'm1', missionId: 'm1', title: 'Mission M1', route: '/missions/m1' },
+      { ...reservation, family: 'RESERVATION', id: 'r1', reservationId: 'r1', route: '/missions/m1/reservations/r1' },
+      { ...reservation, family: 'MESSAGE', id: 'msg-wx', title: 'SIGMET weather', subtitle: 'SIGMET', preview: 'weather route impact', route: '/messages/msg-wx' },
+      { ...reservation, family: 'MESSAGE', id: 'msg-pirep', title: 'PIREP UA', subtitle: 'PIREP', preview: 'urgent PIREP', route: '/messages/msg-pirep' },
+      { ...reservation, family: 'NOTAM', id: 'notam-1', title: 'FDC NOTAM', subtitle: 'NOTAM constraint', route: '/notams' },
+      { ...reservation, family: 'FEED', id: 'feed-1', title: 'USNS feed', subtitle: 'USNS', preview: 'retained traffic', route: '/feed/feed-1' },
+      { ...reservation, family: 'DECISION', id: 'decision-1', title: 'Decision BLOCKED', route: '/decisions/decision-1' }
+    ];
+
+    expect(rows.map((row) => selectionFromRow(row).sourceFamily)).toEqual([
+      'CARF_ALTRV',
+      'CARF_ALTRV',
+      'WEATHER',
+      'PIREP',
+      'NOTAM',
+      'USNS',
+      'DECISION'
+    ]);
+    expect(selectionFromRow(rows[2]).messageId).toBe('msg-wx');
+    expect(selectionFromRow(rows[5]).feedArtifactId).toBe('feed-1');
+    expect(selectionFromRow(rows[6]).decisionId).toBe('decision-1');
   });
 
   it('marks conflict and rejected rows as attention rows', () => {

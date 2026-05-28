@@ -15,6 +15,7 @@ import org.tash.extensions.weather.product.WeatherDecoderResult;
 import org.tash.extensions.weather.product.WeatherProduct;
 import org.tash.extensions.weather.product.WeatherProductParseResult;
 import org.tash.extensions.weather.product.WeatherProductParser;
+import org.tash.extensions.weather.product.WeatherProductStalenessPolicy;
 import org.tash.extensions.weather.product.WeatherProductType;
 
 import java.io.IOException;
@@ -59,6 +60,106 @@ class WeatherEngineMaturityTest {
         assertTrue(expanded.stream().anyMatch(product -> product.getId().contains("#slice-")));
         assertTrue(expanded.stream().anyMatch(product -> product.getVisibilityStatuteMiles() != null
                 && product.getVisibilityStatuteMiles() <= 0.25));
+    }
+
+    @Test
+    void terminalMetarAndTafWithoutCoordinatesRemainNonGeometricGuidanceArtifacts() {
+        WeatherProductParseResult metar = new WeatherProductParser().parse(
+                "SPECI KJFK 281655Z 04005KT 1/8SM R04L/1000FT FG VV002 08/08 A2992 RMK AO2 RVRNO",
+                null);
+        WeatherProductParseResult taf = new WeatherProductParser().parse(
+                "TAF AMD KJFK 280000Z 2800/2906 1SM BR OVC004 TEMPO 2804/2808 1/2SM FG VV002",
+                null);
+
+        assertTrue(metar.isAccepted(), metar.getErrors().toString());
+        assertTrue(taf.isAccepted(), taf.getErrors().toString());
+        assertEquals(1000.0, metar.getProduct().getRunwayVisualRangeFeet());
+        assertTrue(metar.getProduct().getGeometry().isEmpty());
+        assertTrue(taf.getProduct().getGeometry().isEmpty());
+        assertTrue(metar.getWarnings().stream().anyMatch(warning -> warning.contains("non-geometric")));
+        assertFalse(taf.getProduct().getForecastSlices().isEmpty());
+    }
+
+    @Test
+    void documentedPirepAndAirepEdgeCasesRetainTypedDiagnostics() {
+        WeatherProductParser parser = new WeatherProductParser();
+        WeatherProductParseResult urgentOceanic = parser.parse(
+                "UUA /OV 3000N15000W/TM 2015/FL240/TP B789/TB SEV/RM OCEANIC POSITION",
+                null);
+        WeatherProductParseResult airepSmooth = parser.parse(
+                "AIREP /OV 3100N14900W/TM 2020/FL300/TP A359/TB SMOOTH/RM NEGATIVE TURBULENCE",
+                null);
+        WeatherProductParseResult missingAltitude = parser.parse(
+                "UA /OV 3200N14800W/TM 2030/TP B738/IC MOD/RM ALTITUDE FIELD OMITTED",
+                null);
+
+        assertTrue(urgentOceanic.isAccepted(), urgentOceanic.getErrors().toString());
+        assertTrue(urgentOceanic.getPirepReport().isUrgent());
+        assertEquals(24000.0, urgentOceanic.getPirepReport().getAltitudeFeet());
+        assertNotNull(urgentOceanic.getPirepReport().getLocation());
+
+        assertTrue(airepSmooth.isAccepted(), airepSmooth.getErrors().toString());
+        assertEquals(WeatherProductType.PIREP_DERIVED, airepSmooth.getClassifiedType());
+        assertTrue(airepSmooth.getPirepReport().getRemarks().contains("NEGATIVE TURBULENCE"));
+
+        assertFalse(missingAltitude.isAccepted());
+        assertTrue(missingAltitude.getDiagnostics().stream()
+                .anyMatch(diagnostic -> diagnostic.getMessage().contains("missing /FL altitude")));
+    }
+
+    @Test
+    void documentedSigmetAirmetCwaMissingGeometryCasesStayRetainedWithDiagnostics() {
+        WeatherProductParser parser = new WeatherProductParser();
+        WeatherProductParseResult gAirmet = parser.parse(
+                "G-AIRMET VALID 200000/200600 MOD ICE BLW FL180 MOV NE 20KT",
+                null);
+        WeatherProductParseResult cwsu = parser.parse(
+                "CWSU CWA 101 VALID 200000/200100 AREA TS TOP FL420 MOV E 30KT INTSF",
+                null);
+
+        assertTrue(gAirmet.isAccepted(), gAirmet.getErrors().toString());
+        assertEquals(WeatherProductType.AIRMET, gAirmet.getClassifiedType());
+        assertTrue(gAirmet.getProduct().getGeometry().isEmpty());
+        assertTrue(gAirmet.getDiagnostics().stream()
+                .anyMatch(diagnostic -> diagnostic.getMessage().contains("no coordinates")));
+
+        assertTrue(cwsu.isAccepted(), cwsu.getErrors().toString());
+        assertTrue(cwsu.getProduct().getGeometry().isEmpty());
+        assertTrue(cwsu.getProduct().getRawText().contains("CWSU"));
+        assertTrue(cwsu.getDiagnostics().stream()
+                .anyMatch(diagnostic -> diagnostic.getMessage().contains("no coordinates")));
+    }
+
+    @Test
+    void productStalenessPolicyDistinguishesTacticalCwaFromTafAndAirmetHorizons() {
+        ZonedDateTime received = ZonedDateTime.parse("2026-05-20T00:00:00Z");
+        WeatherProduct cwa = WeatherProduct.builder()
+                .id("cwa-1")
+                .type(WeatherProductType.NEXRAD_POLYGON)
+                .rawText("CWA 201 VALID 200000/200100 CONVECTIVE LINE TOP FL430")
+                .issuedAt(received)
+                .receivedAt(received)
+                .build();
+        WeatherProduct taf = WeatherProduct.builder()
+                .id("taf-1")
+                .type(WeatherProductType.TAF)
+                .rawText("TAF KJFK 200000Z 2000/2106 3SM BR BKN010")
+                .issuedAt(received)
+                .receivedAt(received)
+                .build();
+        WeatherProduct airmet = WeatherProduct.builder()
+                .id("airmet-1")
+                .type(WeatherProductType.AIRMET)
+                .rawText("G-AIRMET VALID 200000/200600 MOD ICE")
+                .issuedAt(received)
+                .receivedAt(received)
+                .build();
+        WeatherProductStalenessPolicy policy = new WeatherProductStalenessPolicy();
+
+        assertTrue(policy.isStale(cwa, received.plusMinutes(50)));
+        assertFalse(policy.isStale(taf, received.plusMinutes(50)));
+        assertFalse(policy.isStale(airmet, received.plusHours(3)));
+        assertTrue(policy.isStale(airmet, received.plusHours(5)));
     }
 
     @Test

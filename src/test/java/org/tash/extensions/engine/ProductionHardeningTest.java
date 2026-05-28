@@ -96,6 +96,50 @@ class ProductionHardeningTest {
     }
 
     @Test
+    void syntheticNasScaleIndexMatchesBruteForceWithFewerCandidates() {
+        List<OperationalConstraint> constraints = new java.util.ArrayList<>();
+        for (int i = 0; i < 2_000; i++) {
+            double lat = 20.0 + (i % 100) * 0.2;
+            double lon = -130.0 + (i / 100) * 0.2;
+            constraints.add(constraint("far-" + i, T0, T0.plusHours(4), 1000, 45000,
+                    Arrays.asList(point(lat, lon), point(lat + 0.02, lon + 0.02))));
+        }
+        OperationalConstraint onRoute = constraint("documented-route-weather", T0.plusMinutes(15), T0.plusHours(1),
+                23000, 27000, Arrays.asList(point(30, -150.05), point(30.05, -149.95)));
+        OperationalConstraint wrongAltitude = constraint("wrong-altitude", T0.plusMinutes(15), T0.plusHours(1),
+                1000, 5000, Arrays.asList(point(30, -150.05), point(30.05, -149.95)));
+        OperationalConstraint expired = constraint("expired-near-route", T0.minusHours(3), T0.minusHours(2),
+                23000, 27000, Arrays.asList(point(30, -150.05), point(30.05, -149.95)));
+        constraints.add(onRoute);
+        constraints.add(wrongAltitude);
+        constraints.add(expired);
+
+        RouteCorridor corridor = RouteCorridor.builder().points(route()).bufferNauticalMiles(20).build();
+        TimeWindow window = TimeWindow.builder().start(T0).end(T0.plusHours(2)).build();
+        AltitudeBand band = AltitudeBand.builder().lowerFeet(24000).upperFeet(26000).build();
+        ConstraintSpatialIndex index = new ConstraintSpatialIndex(constraints,
+                EngineConfig.builder().indexCellResolutionDegrees(0.10).build());
+
+        List<String> indexed = index.query(corridor, window, band, ProductValidityPolicy.CURRENT_ONLY)
+                .stream().map(OperationalConstraint::getId).sorted().toList();
+        List<String> bruteForce = constraints.stream()
+                .filter(c -> !c.getEndTime().isBefore(window.getStart()) && !c.getStartTime().isAfter(window.getEnd()))
+                .filter(c -> c.getUpperAltitudeFeet() >= band.getLowerFeet() && c.getLowerAltitudeFeet() <= band.getUpperFeet())
+                .filter(c -> c.getGeometry().stream().mapToDouble(GeoCoordinate::getLatitude).max().orElse(0) >= corridor.minLatitude())
+                .filter(c -> c.getGeometry().stream().mapToDouble(GeoCoordinate::getLatitude).min().orElse(0) <= corridor.maxLatitude())
+                .filter(c -> c.getGeometry().stream().mapToDouble(GeoCoordinate::getLongitude).max().orElse(0) >= corridor.minLongitude())
+                .filter(c -> c.getGeometry().stream().mapToDouble(GeoCoordinate::getLongitude).min().orElse(0) <= corridor.maxLongitude())
+                .map(OperationalConstraint::getId)
+                .sorted()
+                .toList();
+
+        assertEquals(bruteForce, indexed);
+        assertEquals(Collections.singletonList("documented-route-weather"), indexed);
+        assertTrue(index.candidateCount(corridor) < constraints.size() / 5,
+                "Index should prefilter documented synthetic NAS-scale corpus before geometry checks");
+    }
+
+    @Test
     void calibrationEnsembleLifecycleAndCapacityAffectRouteImpactDeterministically() {
         WeatherProduct highConfidence = weather("ENS-HI", HazardSeverity.SEVERE, 0.95);
         WeatherProduct lowConfidence = weather("ENS-LO", HazardSeverity.SEVERE, 0.45);

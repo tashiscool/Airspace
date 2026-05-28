@@ -2,6 +2,7 @@ package org.tash.extensions.product;
 
 import org.junit.jupiter.api.Test;
 import org.tash.extensions.feed.OperationalFeedBatchResult;
+import org.tash.extensions.engine.OperationalDecisionResult;
 import org.tash.extensions.messaging.MessageControlCharacters;
 import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.dto.ProductDtos;
@@ -147,6 +148,7 @@ class ProductReplayCorpusTest {
         contextualDecision.setMissionId(mission.getId());
         contextualDecision.setReservationId(reservationId);
         ProductDtos.DecisionSummary contextualSummary = service.evaluateDecision(contextualDecision);
+        OperationalDecisionResult reloadedResult = service.decisionResult(contextualSummary.getId());
         ProductDtos.PirepRelevanceRequest relevanceRequest = new ProductDtos.PirepRelevanceRequest();
         relevanceRequest.setReservationId(reservationId);
         relevanceRequest.setLowerAltitudeFeet(22000.0);
@@ -184,6 +186,8 @@ class ProductReplayCorpusTest {
         assertNotNull(contextualSummary.getRouteImpact());
         assertEquals(mission.getId(), contextualSummary.getRouteImpact().getMissionId());
         assertFalse(contextualSummary.getRouteImpact().getCandidateComparisons().isEmpty());
+        assertNotNull(reloadedResult);
+        assertNotNull(reloadedResult.getReplayBundle());
         assertTrue(pireps.getTotalPireps() >= 1);
         assertTrue(pireps.getAverageRelevanceScore() > 0.0);
         assertTrue(verdict.getSources().stream().anyMatch(source -> "FDC".equals(source.getFamily())

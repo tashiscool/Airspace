@@ -10,7 +10,7 @@ import java.util.Set;
  * CSV-like local reference-data adapter.
  *
  * Format:
- * type,identifier,latitude,longitude,altitudeFeet,source,sourceVersion
+ * type,identifier,latitude,longitude,altitudeFeet,source,sourceVersion[,key=value...]
  */
 public class LocalReferenceDataSyncAdapter implements ReferenceDataSyncAdapter {
     @Override
@@ -53,7 +53,7 @@ public class LocalReferenceDataSyncAdapter implements ReferenceDataSyncAdapter {
                         .altitudeFeet(cells.length > 4 && !cells[4].trim().isEmpty() ? Double.parseDouble(cells[4].trim()) : 0.0)
                         .source(cells.length > 5 && !cells[5].trim().isEmpty() ? cells[5].trim() : "reference-sync")
                         .sourceVersion(cells.length > 6 && !cells[6].trim().isEmpty() ? cells[6].trim() : "local")
-                        .metadataJson("{\"sourceVersion\":\"" + (cells.length > 6 ? cells[6].trim() : "local") + "\"}")
+                        .metadataJson(metadataJson(cells))
                         .build());
             } catch (NumberFormatException e) {
                 errors.add("Line " + (i + 1) + " has invalid latitude/longitude/altitude: " + e.getMessage());
@@ -72,5 +72,29 @@ public class LocalReferenceDataSyncAdapter implements ReferenceDataSyncAdapter {
             return fallback;
         }
         return value.trim().toUpperCase(Locale.US);
+    }
+
+    private String metadataJson(String[] cells) {
+        StringBuilder json = new StringBuilder("{\"sourceVersion\":\"")
+                .append(escape(cells.length > 6 && !cells[6].trim().isEmpty() ? cells[6].trim() : "local"))
+                .append("\"");
+        for (int i = 7; i < cells.length; i++) {
+            String cell = cells[i].trim();
+            if (cell.isEmpty()) {
+                continue;
+            }
+            int split = cell.indexOf('=');
+            if (split <= 0) {
+                json.append(",\"extra").append(i - 6).append("\":\"").append(escape(cell)).append("\"");
+                continue;
+            }
+            json.append(",\"").append(escape(cell.substring(0, split).trim())).append("\":\"")
+                    .append(escape(cell.substring(split + 1).trim())).append("\"");
+        }
+        return json.append('}').toString();
+    }
+
+    private String escape(String value) {
+        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }

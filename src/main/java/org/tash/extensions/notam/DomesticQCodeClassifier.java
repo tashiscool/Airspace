@@ -76,6 +76,72 @@ public class DomesticQCodeClassifier {
             }
         }
 
+        if ("COM".equals(keyword)) {
+            String condition = firstPresent(normalized, "FREQ", "FREQUENCY", "CPDLC", "DATA", "RADIO", "RCAG", "RCO");
+            return semantic("COM", condition == null ? "COMMUNICATION" : condition, action(normalized), "CA", null,
+                    "DOM2.COM." + (condition == null ? "GENERIC" : condition),
+                    "DOM2 communication service reducer", recognizedContractions, warnings);
+        }
+
+        if ("IAP".equals(keyword)) {
+            warnings.add("Instrument approach procedure NOTAM retained for approach capability and chart/package review.");
+            return semantic("IAP", "INSTRUMENT_APPROACH", action(normalized), "PI", null,
+                    "DOM2.IAP.PROCEDURE", "DOM2 instrument approach procedure reducer",
+                    recognizedContractions, warnings);
+        }
+
+        if ("ODP".equals(keyword) || "SID".equals(keyword) || "STAR".equals(keyword)
+                || "CHART".equals(keyword) || "DATA".equals(keyword)) {
+            String condition = "ODP".equals(keyword) ? "OBSTACLE_DEPARTURE"
+                    : "SID".equals(keyword) ? "STANDARD_INSTRUMENT_DEPARTURE"
+                    : "STAR".equals(keyword) ? "STANDARD_TERMINAL_ARRIVAL"
+                    : "CHART".equals(keyword) ? "CHARTING"
+                    : "AERONAUTICAL_DATA";
+            warnings.add(keyword + " NOTAM retained as procedure/data constraint; review current charting and operator package.");
+            return semantic(keyword, condition, action(normalized), "PD", null,
+                    "DOM2." + keyword + ".PROCEDURE_DATA", "DOM2 procedure/data reducer",
+                    recognizedContractions, warnings);
+        }
+
+        if ("ROUTE".equals(keyword)) {
+            return semantic("ROUTE", containsAny(normalized, "Q", "T", "J", "V") ? "ATS_ROUTE" : "ROUTE",
+                    action(normalized), "AR", null, "DOM2.ROUTE.ATS",
+                    "DOM2 ATS route reducer", recognizedContractions, warnings);
+        }
+
+        if ("SPECIAL".equals(keyword)) {
+            String condition = firstPresent(normalized, "CERAP", "FDC", "MIL", "MILITARY", "VIP", "EVENT");
+            return semantic("SPECIAL", condition == null ? "SPECIAL_NOTICE" : condition, action(normalized), "XX", null,
+                    "DOM2.SPECIAL." + (condition == null ? "NOTICE" : condition),
+                    "DOM2 special notice reducer", recognizedContractions, warnings);
+        }
+
+        if ("SECURITY".equals(keyword)) {
+            warnings.add("Security NOTAM retained as an operational constraint and source-family artifact; do not treat as CARF/ALTRV reservation.");
+            return semantic("SECURITY", "SECURITY_RESTRICTION", action(normalized), "RT", null,
+                    "DOM2.SECURITY.RESTRICTION", "DOM2 security restriction reducer",
+                    recognizedContractions, warnings);
+        }
+
+        if ("AD".equals(keyword)) {
+            if (containsAny(normalized, "RVR", "RVRM", "RVRR", "RVRT") && contains(normalized, "ALL")) {
+                warnings.add("Runway visual range equipment/service NOTAM may affect low-visibility departure, taxi, and coordination checks.");
+                return semantic("AD", "RVR_ALL", action(normalized), "FT", null,
+                        "DOM2.AD.RVR_ALL", "DOM2 aerodrome all-RVR reducer", recognizedContractions, warnings);
+            }
+            if (containsAny(normalized, "CLSD", "CLOSED")) {
+                return semantic("AD", "AERODROME_CLOSURE", action(normalized), "FA", null,
+                        "DOM2.AD.CLOSED", "DOM2 aerodrome closure reducer", recognizedContractions, warnings);
+            }
+            if (containsAny(normalized, "LOW", "VIS", "VISIBILITY", "SMGCS", "LVO", "LVP")) {
+                warnings.add("Aerodrome procedure/visibility NOTAM retained for local airport-ops review.");
+                return semantic("AD", "AERODROME_PROCEDURE", action(normalized), "FA", null,
+                        "DOM2.AD.PROCEDURE", "DOM2 aerodrome procedure reducer", recognizedContractions, warnings);
+            }
+            return semantic("AD", "AERODROME", action(normalized), "FA", null,
+                    "DOM2.AD.AERODROME", "DOM2 aerodrome reducer", recognizedContractions, warnings);
+        }
+
         if (contains(normalized, "GUARD") && containsAny(normalized, "LGT", "LGTS", "LIGHT", "LIGHTS")) {
             return semantic(surfaceFamily(keyword, normalized), "GUARD_LIGHTS", action(normalized), "LS", null,
                     "DOM2.LIGHTING.GUARD", "DOM2 guard lights reducer", recognizedContractions, warnings);
