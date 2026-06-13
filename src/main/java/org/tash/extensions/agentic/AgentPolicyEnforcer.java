@@ -28,16 +28,29 @@ public class AgentPolicyEnforcer {
                     && !recommendation.isHumanApprovalRequired()) {
                 diagnostics.add("Policy requires human approval for draft recommendation: " + recommendation.getId());
             }
+            if ((action.contains("SEND") || action.contains("TRANSMIT") || action.contains("APPROVE")
+                    || action.contains("CANCEL") || action.contains("SUBMIT") || action.contains("COMPLETE")
+                    || action.contains("DRAFT"))
+                    && recommendation.getHumanReviewMode() != HumanReviewMode.PUSH_APPROVAL) {
+                diagnostics.add("Policy requires PUSH_APPROVAL human-review mode for official/draft recommendation: " + recommendation.getId());
+            }
         }
         for (AgentToolCall toolCall : result.getToolCalls()) {
             String name = toolCall.getToolName() == null ? "" : toolCall.getToolName().toUpperCase(Locale.US);
+            String sideEffect = toolCall.getSideEffectLevel() == null ? "" : toolCall.getSideEffectLevel().toUpperCase(Locale.US);
             if (!safePolicy.isAllowExternalSend() && (name.contains("SEND") || name.contains("TRANSMIT"))) {
                 diagnostics.add("Policy blocks external-send tool call: " + toolCall.getId());
             }
             if (!safePolicy.isAllowOfficialStateMutation()
                     && (name.contains("APPROVE") || name.contains("CANCEL") || name.contains("SUBMIT")
-                    || name.contains("COMPLETE") || name.contains("MUTATE"))) {
+                    || name.contains("COMPLETE") || name.contains("MUTATE")
+                    || "MUTATING".equals(sideEffect))) {
                 diagnostics.add("Policy blocks official workflow mutation tool call: " + toolCall.getId());
+            }
+            if ("REQUIRES_APPROVAL".equals(sideEffect)
+                    && !safePolicy.isAllowExternalSend()
+                    && !safePolicy.isAllowOfficialStateMutation()) {
+                diagnostics.add("Policy blocks approval-required MCP tool call under draft-only policy: " + toolCall.getId());
             }
         }
         return diagnostics;

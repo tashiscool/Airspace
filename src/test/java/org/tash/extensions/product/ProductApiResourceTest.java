@@ -494,6 +494,84 @@ class ProductApiResourceTest {
                 .body("summary", org.hamcrest.Matchers.containsString("send is blocked"));
 
         given()
+                .when()
+                .get("/api/agents/mcp/servers")
+                .then()
+                .statusCode(200)
+                .body("find { it.id == 'airspace-first-party' }.enabled", equalTo(true))
+                .body("find { it.id == 'external-mcp' }.setupRequired", equalTo(true));
+
+        given()
+                .when()
+                .get("/api/agents/mcp/servers/airspace-first-party/tools")
+                .then()
+                .statusCode(200)
+                .body("find { it.id == 'airspace.mission.weather_verdict' }.sideEffectLevel", equalTo("READ_ONLY"))
+                .body("find { it.id == 'airspace.coordination.draft' }.sideEffectLevel", equalTo("DRAFT_ONLY"))
+                .body("find { it.id == 'airspace.coordination.draft' }.riskProfile.requiredHumanReviewMode", equalTo("PUSH_APPROVAL"));
+
+        given()
+                .when()
+                .get("/api/agents/risk-assessments")
+                .then()
+                .statusCode(200)
+                .body("find { it.subjectId == 'airspace.coordination.draft' }.riskProfile.worstCaseBlastRadius", org.hamcrest.Matchers.containsString("draft"))
+                .body("find { it.subjectId == 'external-mcp.configured_tool' }.diagnostics.size()", greaterThanOrEqualTo(1));
+
+        String mcpReceiptId = given()
+                .contentType("application/json")
+                .body("{\"serverId\":\"airspace-first-party\",\"toolId\":\"airspace.mission.weather_verdict\",\"arguments\":{\"missionId\":\"" + missionId + "\"}}")
+                .when()
+                .post("/api/agents/mcp/tools/call")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("ACCEPTED"))
+                .body("evidenceReceipt.inputHash", notNullValue())
+                .body("toolCall.evidenceReceiptId", notNullValue())
+                .extract()
+                .path("evidenceReceipt.id");
+
+        given()
+                .when()
+                .get("/api/agents/mcp/receipts?limit=5")
+                .then()
+                .statusCode(200)
+                .body("find { it.id == '" + mcpReceiptId + "' }.toolId", equalTo("airspace.mission.weather_verdict"));
+
+        given()
+                .contentType("application/json")
+                .body("{\"iterations\":3,\"agentRunRequest\":{\"agentType\":\"MISSION_RISK\",\"missionId\":\"" + missionId + "\",\"reservationId\":\"" + reservationId + "\",\"decisionId\":\"" + decisionId + "\"}}")
+                .when()
+                .post("/api/agents/evaluate/stability")
+                .then()
+                .statusCode(200)
+                .body("accepted", equalTo(true))
+                .body("metrics.find { it.id == 'cited_source_jaccard' }.accepted", equalTo(true));
+
+        String agentJobId = given()
+                .contentType("application/json")
+                .body("{\"actor\":\"planner\",\"agentRunRequest\":{\"agentType\":\"MISSION_RISK\",\"missionId\":\"" + missionId + "\",\"reservationId\":\"" + reservationId + "\",\"decisionId\":\"" + decisionId + "\",\"actor\":\"planner\"}}")
+                .when()
+                .post("/api/agents/jobs")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("SUCCEEDED"))
+                .body("toolCalls.size()", greaterThanOrEqualTo(1))
+                .body("receipts.size()", greaterThanOrEqualTo(1))
+                .body("runResult.reasoningEnvelope.availableTools.size()", greaterThanOrEqualTo(1))
+                .body("runResult.reasoningEnvelope.toolReceiptIds.size()", greaterThanOrEqualTo(1))
+                .extract()
+                .path("id");
+
+        given()
+                .when()
+                .get("/api/agents/jobs/" + agentJobId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(agentJobId))
+                .body("status", equalTo("SUCCEEDED"));
+
+        given()
                 .contentType("application/json")
                 .body("{\"previousDecisionId\":\"" + decisionId + "\",\"decisionId\":\"" + decisionId + "\",\"missionId\":\"" + missionId + "\"}")
                 .when()

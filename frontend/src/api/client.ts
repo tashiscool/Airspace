@@ -2,6 +2,11 @@ import type {
   AffectedMissionSummary,
   AgentRunRequest,
   AgentRunResult,
+  AgenticRiskAssessment,
+  AgentJobRequest,
+  AgentJobResult,
+  AgentStabilityRequest,
+  AgentStabilityResult,
   AgentStoreStatus,
   AgentTask,
   AgentTaskTransitionRequest,
@@ -12,6 +17,11 @@ import type {
   FeatureCollection,
   HistoryEventSummary,
   MessageSummary,
+  McpEvidenceReceipt,
+  McpServerDefinition,
+  McpToolDescriptor,
+  McpToolInvocationRequest,
+  McpToolInvocationResult,
   MissionDetail,
   MissionWeatherVerdictSummary,
   MissionSummary,
@@ -207,6 +217,20 @@ export const api = {
     request<AgentOperationalDelta[]>('/api/agents/delta', { method: 'POST', body: JSON.stringify(body) }),
   generateAgentScenario: (body: ScenarioFixtureRequest) =>
     request<ScenarioFixtureBundle>('/api/agents/scenario/generate', { method: 'POST', body: JSON.stringify(body) }),
+  evaluateAgentStability: (body: AgentStabilityRequest) =>
+    request<AgentStabilityResult>('/api/agents/evaluate/stability', { method: 'POST', body: JSON.stringify(body) }),
+  agentRiskAssessments: () => request<AgenticRiskAssessment[]>('/api/agents/risk-assessments'),
+  mcpServers: () => request<McpServerDefinition[]>('/api/agents/mcp/servers'),
+  mcpTools: (serverId: string) => request<McpToolDescriptor[]>(`/api/agents/mcp/servers/${encodeURIComponent(serverId)}/tools`),
+  callMcpTool: (body: McpToolInvocationRequest) =>
+    request<McpToolInvocationResult>('/api/agents/mcp/tools/call', { method: 'POST', body: JSON.stringify(body) }),
+  mcpReceipts: (limit?: number) =>
+    request<McpEvidenceReceipt[]>(`/api/agents/mcp/receipts${limit ? `?limit=${limit}` : ''}`),
+  enqueueAgentJob: (body: AgentJobRequest) =>
+    request<AgentJobResult>('/api/agents/jobs', { method: 'POST', body: JSON.stringify(body) }),
+  agentJobs: (limit?: number) =>
+    request<AgentJobResult[]>(`/api/agents/jobs${limit ? `?limit=${limit}` : ''}`),
+  agentJob: (id: string) => request<AgentJobResult>(`/api/agents/jobs/${id}`),
   agentStatus: () => request<AgentStoreStatus>('/api/agents/status'),
   agentMetrics: () => request<Record<string, number>>('/api/agents/metrics'),
   agentRuns: (limit?: number, filters?: { agentType?: string; missionId?: string; reservationId?: string; decisionId?: string; accepted?: boolean; sourceFamily?: string }) => {

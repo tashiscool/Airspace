@@ -15,12 +15,28 @@ import org.tash.extensions.agentic.AgentHistoryQuery;
 import org.tash.extensions.agentic.AgentRunRequest;
 import org.tash.extensions.agentic.AgentRunResult;
 import org.tash.extensions.agentic.AgentStoreStatus;
+import org.tash.extensions.agentic.AgenticRiskAssessment;
+import org.tash.extensions.agentic.AgenticRiskChecklistService;
 import org.tash.extensions.agentic.AgenticOperationsService;
 import org.tash.extensions.agentic.AgentOperationalDelta;
 import org.tash.extensions.agentic.OperationalDeltaService;
 import org.tash.extensions.agentic.ScenarioFixtureBundle;
 import org.tash.extensions.agentic.ScenarioFixtureGenerator;
 import org.tash.extensions.agentic.ScenarioFixtureRequest;
+import org.tash.extensions.agentic.mcp.CuratedMcpInvocationService;
+import org.tash.extensions.agentic.mcp.McpEvidenceReceipt;
+import org.tash.extensions.agentic.mcp.McpServerDefinition;
+import org.tash.extensions.agentic.mcp.McpToolDescriptor;
+import org.tash.extensions.agentic.mcp.McpToolInvocationRequest;
+import org.tash.extensions.agentic.mcp.McpToolInvocationResult;
+import org.tash.extensions.agentic.mcp.McpToolRegistry;
+import org.tash.extensions.agentic.queue.AgentJobConsumer;
+import org.tash.extensions.agentic.queue.AgentJobQueueService;
+import org.tash.extensions.agentic.queue.AgentJobRequest;
+import org.tash.extensions.agentic.queue.AgentJobResult;
+import org.tash.extensions.agentic.stability.AgentStabilityHarness;
+import org.tash.extensions.agentic.stability.AgentStabilityRequest;
+import org.tash.extensions.agentic.stability.AgentStabilityResult;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +51,18 @@ public class AgentResource {
     OperationalDeltaService operationalDeltaService;
     @Inject
     ScenarioFixtureGenerator scenarioFixtureGenerator;
+    @Inject
+    McpToolRegistry mcpToolRegistry;
+    @Inject
+    CuratedMcpInvocationService mcpInvocationService;
+    @Inject
+    AgentJobQueueService agentJobQueueService;
+    @Inject
+    AgentJobConsumer agentJobConsumer;
+    @Inject
+    AgentStabilityHarness agentStabilityHarness;
+    @Inject
+    AgenticRiskChecklistService agenticRiskChecklistService;
 
     @POST
     @Path("/run")
@@ -95,6 +123,60 @@ public class AgentResource {
     @Path("/scenario/generate")
     public ScenarioFixtureBundle scenario(ScenarioFixtureRequest request) {
         return scenarioFixtureGenerator.generate(request);
+    }
+
+    @GET
+    @Path("/mcp/servers")
+    public List<McpServerDefinition> mcpServers() {
+        return mcpToolRegistry.servers();
+    }
+
+    @GET
+    @Path("/mcp/servers/{serverId}/tools")
+    public List<McpToolDescriptor> mcpTools(@PathParam("serverId") String serverId) {
+        return mcpToolRegistry.tools(serverId);
+    }
+
+    @POST
+    @Path("/mcp/tools/call")
+    public McpToolInvocationResult callMcpTool(McpToolInvocationRequest request) {
+        return mcpInvocationService.call(request);
+    }
+
+    @GET
+    @Path("/mcp/receipts")
+    public List<McpEvidenceReceipt> mcpReceipts(@QueryParam("limit") Integer limit) {
+        return mcpInvocationService.receipts(limit);
+    }
+
+    @POST
+    @Path("/evaluate/stability")
+    public AgentStabilityResult evaluateStability(AgentStabilityRequest request) {
+        return agentStabilityHarness.evaluate(request);
+    }
+
+    @GET
+    @Path("/risk-assessments")
+    public List<AgenticRiskAssessment> riskAssessments() {
+        return agenticRiskChecklistService.assessments();
+    }
+
+    @POST
+    @Path("/jobs")
+    public AgentJobResult enqueueJob(AgentJobRequest request) {
+        return agentJobConsumer.enqueueAndMaybeRun(request);
+    }
+
+    @GET
+    @Path("/jobs")
+    public List<AgentJobResult> jobs(@QueryParam("limit") Integer limit) {
+        return agentJobQueueService.jobs(limit);
+    }
+
+    @GET
+    @Path("/jobs/{id}")
+    public AgentJobResult job(@PathParam("id") String id) {
+        return agentJobQueueService.job(id).orElseThrow(() -> new IllegalArgumentException("Unknown agent job: " + id));
     }
 
     @GET

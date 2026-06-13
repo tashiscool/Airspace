@@ -24,8 +24,11 @@ public class AgentEvaluationSummary {
     private int uncitedClaimCount;
     private int policyViolationCount;
     private double citationCoverage;
+    private boolean stabilityAccepted;
     @Builder.Default
     private Map<String, Integer> sourceFamilyCounts = new LinkedHashMap<>();
+    @Builder.Default
+    private List<String> stabilityWarnings = new ArrayList<>();
     @Builder.Default
     private List<String> warnings = new ArrayList<>();
     @Builder.Default

@@ -3,7 +3,19 @@ import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, ClipboardCheck, FileWarning, Radio, Route, ShieldCheck } from 'lucide-react';
 import { api } from '../api/client';
-import type { AgentFinding, AgentRecommendation, AgentRunResult, AgentTask } from '../types';
+import type {
+  AgentAssessment,
+  AgentFinding,
+  AgentJobResult,
+  AgentRecommendation,
+  AgentRunResult,
+  AgenticRiskAssessment,
+  AgentStabilityResult,
+  AgentTask,
+  McpEvidenceReceipt,
+  McpServerDefinition,
+  McpToolDescriptor
+} from '../types';
 import type { WorkbenchSelection } from '../lib/workbenchState';
 
 export function AgenticOpsPanel({ selection }: { selection: WorkbenchSelection }) {
@@ -37,7 +49,26 @@ export function AgenticOpsPanel({ selection }: { selection: WorkbenchSelection }
   });
   const storeStatus = useQuery({ queryKey: ['agentic', 'status'], queryFn: api.agentStatus, staleTime: 30_000 });
   const agentMetrics = useQuery({ queryKey: ['agentic', 'metrics'], queryFn: api.agentMetrics, staleTime: 30_000 });
+  const riskAssessments = useQuery({ queryKey: ['agentic', 'risk-assessments'], queryFn: api.agentRiskAssessments, staleTime: 60_000 });
+  const mcpServers = useQuery({ queryKey: ['agentic', 'mcp', 'servers'], queryFn: api.mcpServers, staleTime: 60_000 });
+  const mcpTools = useQuery({ queryKey: ['agentic', 'mcp', 'tools', 'airspace-first-party'], queryFn: () => api.mcpTools('airspace-first-party'), staleTime: 60_000 });
+  const mcpReceipts = useQuery({ queryKey: ['agentic', 'mcp', 'receipts'], queryFn: () => api.mcpReceipts(6), staleTime: 15_000 });
+  const agentJobs = useQuery({ queryKey: ['agentic', 'jobs'], queryFn: () => api.agentJobs(5), staleTime: 15_000 });
   const runAll = useMutation({ mutationFn: () => api.runAgent({ ...request, agentType: 'ALL' }) });
+  const queueJob = useMutation({
+    mutationFn: () => api.enqueueAgentJob({ actor: 'planner', agentRunRequest: { ...request, agentType: 'MISSION_RISK' } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agentic', 'jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['agentic', 'mcp', 'receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['agentic', 'runs'] });
+    }
+  });
+  const stability = useMutation({
+    mutationFn: () => api.evaluateAgentStability({
+      iterations: 3,
+      agentRunRequest: { ...request, agentType: 'MISSION_RISK' }
+    })
+  });
   const missionRisk = useMutation({ mutationFn: () => api.missionRiskAgent(request) });
   const reroute = useMutation({ mutationFn: () => api.rerouteAnalysisAgent(request) });
   const coordination = useMutation({ mutationFn: () => api.coordinationDraftAgent(request) });
@@ -50,7 +81,7 @@ export function AgenticOpsPanel({ selection }: { selection: WorkbenchSelection }
       queryClient.invalidateQueries({ queryKey: ['agentic', 'runs'] });
     }
   });
-  const result = replayAudit.data ?? runAll.data ?? missionRisk.data ?? reroute.data ?? coordination.data ?? integrity.data ?? weatherImpact.data;
+  const result = queueJob.data?.runResult ?? replayAudit.data ?? runAll.data ?? missionRisk.data ?? reroute.data ?? coordination.data ?? integrity.data ?? weatherImpact.data;
   const findingCount = result?.findings?.length ?? 0;
   const taskCount = result?.tasks?.length ?? 0;
   const recommendationCount = result?.recommendations?.length ?? 0;
@@ -68,6 +99,8 @@ export function AgenticOpsPanel({ selection }: { selection: WorkbenchSelection }
         <div className="agentic-panel-body">
           <div className="toolbar wrap">
             <button onClick={() => runAll.mutate()} disabled={runAll.isPending}><ShieldCheck size={14} /> Run all agents</button>
+            <button onClick={() => queueJob.mutate()} disabled={queueJob.isPending}><ShieldCheck size={14} /> Queue MCP evidence job</button>
+            <button onClick={() => stability.mutate()} disabled={stability.isPending}><ShieldCheck size={14} /> Stability check</button>
             <button onClick={() => missionRisk.mutate()} disabled={missionRisk.isPending}><Radio size={14} /> Mission risk</button>
             <button onClick={() => reroute.mutate()} disabled={reroute.isPending}><Route size={14} /> Reroute analysis</button>
             <button onClick={() => coordination.mutate()} disabled={coordination.isPending}><ClipboardCheck size={14} /> Draft coordination</button>
@@ -87,8 +120,15 @@ export function AgenticOpsPanel({ selection }: { selection: WorkbenchSelection }
             runHistory={runHistory.data}
             storeStatus={storeStatus.data}
             agentMetrics={agentMetrics.data}
+            riskAssessments={riskAssessments.data}
+            stabilityResult={stability.data}
+            mcpServers={mcpServers.data}
+            mcpTools={mcpTools.data}
+            mcpReceipts={mcpReceipts.data}
+            agentJobs={agentJobs.data}
+            latestJob={queueJob.data}
             onAcknowledgeTask={(id) => transitionTask.mutate(id)}
-            error={weatherImpact.error ?? runAll.error ?? missionRisk.error ?? reroute.error ?? coordination.error ?? integrity.error ?? replayAudit.error ?? taskHistory.error ?? runHistory.error ?? storeStatus.error ?? agentMetrics.error}
+            error={weatherImpact.error ?? runAll.error ?? queueJob.error ?? stability.error ?? missionRisk.error ?? reroute.error ?? coordination.error ?? integrity.error ?? replayAudit.error ?? taskHistory.error ?? runHistory.error ?? storeStatus.error ?? agentMetrics.error ?? riskAssessments.error ?? mcpServers.error ?? mcpTools.error ?? mcpReceipts.error ?? agentJobs.error}
           />
         </div>
       )}
@@ -102,6 +142,13 @@ function AgentResult({
   runHistory,
   storeStatus,
   agentMetrics,
+  riskAssessments,
+  stabilityResult,
+  mcpServers,
+  mcpTools,
+  mcpReceipts,
+  agentJobs,
+  latestJob,
   onAcknowledgeTask,
   error
 }: {
@@ -110,6 +157,13 @@ function AgentResult({
   runHistory?: AgentRunResult[];
   storeStatus?: { mode?: string; durable?: boolean; path?: string; runCount?: number; taskCount?: number; latestRunAt?: string };
   agentMetrics?: Record<string, number>;
+  riskAssessments?: AgenticRiskAssessment[];
+  stabilityResult?: AgentStabilityResult;
+  mcpServers?: McpServerDefinition[];
+  mcpTools?: McpToolDescriptor[];
+  mcpReceipts?: McpEvidenceReceipt[];
+  agentJobs?: AgentJobResult[];
+  latestJob?: AgentJobResult;
   onAcknowledgeTask: (id: string) => void;
   error?: Error | null;
 }) {
@@ -134,7 +188,17 @@ function AgentResult({
           <span className="status-badge">{item.action ?? 'REVIEW'}</span>
           <strong>{item.summary}</strong>
           <p>{item.rationale}</p>
-          {item.humanApprovalRequired && <small className="warning-text">Human approval required before official action.</small>}
+          <HumanReviewBadge mode={item.humanReviewMode} reason={item.humanReviewReason} approvalRequired={item.humanApprovalRequired} />
+          <CitationList items={item.citations} />
+        </>
+      )} />
+      <AgentColumn title="Assessments" items={result.assessments} render={(item: AgentAssessment) => (
+        <>
+          <span className={`status-badge ${String(item.humanReviewMode ?? '').toLowerCase()}`}>{item.verdict ?? 'ASSESSMENT'}</span>
+          <strong>{item.claim}</strong>
+          <p>{item.requiredHumanAction}</p>
+          {item.uncertainty && <small>{item.uncertainty}</small>}
+          {!!item.counterEvidence?.length && <small className="warning-text">{item.counterEvidence.slice(0, 2).join(' · ')}</small>}
           <CitationList items={item.citations} />
         </>
       )} />
@@ -171,11 +235,97 @@ function AgentResult({
           <span className={`status-badge ${String(item.priority ?? '').toLowerCase()}`}>{item.priority ?? 'INFO'}</span>
           <strong>{item.title}</strong>
           <p>{item.rationale}</p>
+          <HumanReviewBadge mode={item.humanReviewMode} reason={item.humanReviewReason} />
           {item.route && <a href={item.route}>Open workspace</a>}
           {item.status !== 'ACKNOWLEDGED' && <button className="mini-action" onClick={() => onAcknowledgeTask(item.id)}>Acknowledge</button>}
           <CitationList items={item.citations} />
         </>
       )} />
+      <div className="agent-card">
+        <h4>MCP Tool Plane</h4>
+        <p>MCP tools provide cited evidence and drafts; they do not authorize operational action.</p>
+        {(mcpServers ?? []).map((server) => (
+          <div className="agent-item" key={server.id}>
+            <span className={`status-badge ${server.enabled ? 'clear' : 'warning'}`}>{server.enabled ? 'ENABLED' : 'SETUP'}</span>
+            <strong>{server.name ?? server.id}</strong>
+            <p>{server.description}</p>
+            {server.setupRequired && <small className="warning-text">Setup required before invocation.</small>}
+          </div>
+        ))}
+        {(mcpTools ?? []).slice(0, 6).map((tool) => (
+          <div className="agent-item" key={tool.id}>
+            <span className={`status-badge ${String(tool.sideEffectLevel ?? '').toLowerCase()}`}>{tool.sideEffectLevel}</span>
+            <strong>{tool.id}</strong>
+            <p>{tool.description}</p>
+            {!!tool.requiredArguments?.length && <small>Required {tool.requiredArguments.join(', ')}</small>}
+            {tool.riskProfile?.worstCaseBlastRadius && <small>Blast radius: {tool.riskProfile.worstCaseBlastRadius}</small>}
+            {tool.riskProfile?.dataEgress && <small>Egress: {tool.riskProfile.dataEgress}</small>}
+            {tool.riskProfile?.rollbackPath && <small>Rollback: {tool.riskProfile.rollbackPath}</small>}
+          </div>
+        ))}
+      </div>
+      <div className="agent-card">
+        <h4>Risk Checklist</h4>
+        {(riskAssessments ?? []).slice(0, 6).map((risk) => (
+          <div className="agent-item" key={risk.id}>
+            <span className={`status-badge ${String(risk.riskProfile?.requiredHumanReviewMode ?? '').toLowerCase()}`}>{risk.riskProfile?.requiredHumanReviewMode ?? 'REVIEW'}</span>
+            <strong>{risk.subjectId}</strong>
+            <p>{risk.riskProfile?.worstCaseBlastRadius ?? risk.summary}</p>
+            <small>{risk.riskProfile?.toolProvenance ?? 'Tool provenance unavailable'}</small>
+            <small>{risk.riskProfile?.modelProvenance ?? 'Model provenance unavailable'}</small>
+            {!!risk.diagnostics?.length && <small className="warning-text">{risk.diagnostics.join(' · ')}</small>}
+          </div>
+        ))}
+        {(!riskAssessments || riskAssessments.length === 0) && <p className="empty-state compact">No risk assessments returned.</p>}
+      </div>
+      <div className="agent-card">
+        <h4>Stability Harness</h4>
+        {stabilityResult ? (
+          <>
+            <span className={`status-badge ${stabilityResult.accepted ? 'clear' : 'warning'}`}>{stabilityResult.accepted ? 'STABLE' : 'UNSTABLE'}</span>
+            <p>{stabilityResult.iterations ?? 0} run(s), {(stabilityResult.metrics ?? []).filter((metric) => metric.accepted).length}/{stabilityResult.metrics?.length ?? 0} metric(s) accepted.</p>
+            {(stabilityResult.metrics ?? []).slice(0, 6).map((metric) => (
+              <small key={metric.id} className={metric.accepted ? undefined : 'warning-text'}>
+                {metric.name}: {formatMetric(metric.value)} / {formatMetric(metric.threshold)}
+              </small>
+            ))}
+            {stabilityResult.diagnostics?.map((diagnostic) => <small key={diagnostic} className="warning-text">{diagnostic}</small>)}
+          </>
+        ) : (
+          <p className="empty-state compact">Run a stability check to compare repeated deterministic agent output.</p>
+        )}
+      </div>
+      <div className="agent-card">
+        <h4>Evidence Receipts</h4>
+        {(mcpReceipts ?? []).slice(0, 5).map((receipt) => (
+          <div className="agent-item" key={receipt.id}>
+            <span className={`status-badge ${String(receipt.status ?? '').toLowerCase()}`}>{receipt.status ?? 'RECEIPT'}</span>
+            <strong>{receipt.toolId}</strong>
+            <p>{receipt.policyDecision} · {receipt.redactionStatus} · {receipt.durationMillis ?? 0} ms</p>
+            <small>Input {receipt.inputHash?.slice(0, 12) ?? 'pending'} · Output {receipt.outputHash?.slice(0, 12) ?? 'pending'}</small>
+            <CitationList items={receipt.sourceRefs} />
+          </div>
+        ))}
+        {(!mcpReceipts || mcpReceipts.length === 0) && <p className="empty-state compact">No MCP evidence receipts yet.</p>}
+      </div>
+      <div className="agent-card">
+        <h4>Agent Jobs</h4>
+        {latestJob && (
+          <div className="agent-item">
+            <span className={`status-badge ${String(latestJob.status ?? '').toLowerCase()}`}>{latestJob.status}</span>
+            <strong>{latestJob.request?.agentRunRequest?.agentType ?? 'Queued agent'}</strong>
+            <p>{latestJob.toolCalls?.length ?? 0} tool call(s), {latestJob.receipts?.length ?? 0} receipt(s)</p>
+          </div>
+        )}
+        {(agentJobs ?? []).slice(0, 5).map((job) => (
+          <div className="agent-item" key={job.id}>
+            <span className={`status-badge ${String(job.status ?? '').toLowerCase()}`}>{job.status}</span>
+            <strong>{job.request?.agentRunRequest?.agentType ?? job.id}</strong>
+            <p>{job.toolCalls?.length ?? 0} tool call(s), {job.receipts?.length ?? 0} receipt(s)</p>
+          </div>
+        ))}
+        {(!agentJobs || agentJobs.length === 0) && <p className="empty-state compact">No agent jobs retained yet.</p>}
+      </div>
       <div className="agent-card loop-card">
         <h4>NextGen Loop</h4>
         {(result.operatingLoop ?? []).slice(0, 8).map((step) => (
@@ -202,6 +352,16 @@ function AgentResult({
           Reasoning {result.reasoningEnvelope?.reasoningMode ?? 'deterministic'} ·
           {` ${result.reasoningEnvelope?.modelId ?? 'no-model'}`}
         </small>
+        {!!result.reasoningEnvelope?.availableTools?.length && (
+          <small>Tools {result.reasoningEnvelope.availableTools.slice(0, 4).join(', ')}</small>
+        )}
+        {!!result.reasoningEnvelope?.blockedTools?.length && (
+          <small className="warning-text">Blocked/setup-required {result.reasoningEnvelope.blockedTools.slice(0, 3).join(', ')}</small>
+        )}
+        {!!result.reasoningEnvelope?.toolReceiptIds?.length && (
+          <small>Receipts {result.reasoningEnvelope.toolReceiptIds.slice(0, 4).join(', ')}</small>
+        )}
+        {result.reasoningEnvelope?.toolPolicySummary && <small>{result.reasoningEnvelope.toolPolicySummary}</small>}
         <small>
           Prompt {result.reasoningEnvelope?.promptVersion ?? 'n/a'} · Draft {result.reasoningEnvelope?.draftHash?.slice(0, 12) ?? 'pending'}
         </small>
@@ -217,10 +377,28 @@ function AgentResult({
         </small>
         {storeStatus?.path && <small>{storeStatus.path}</small>}
         {!storeStatus?.durable && <small className="warning-text">Agent history is memory-only unless `airspace.agentic.store.path` is configured.</small>}
+        {!!result.toolCalls?.length && <small>{result.toolCalls.length} MCP/tool receipt-backed call(s) attached.</small>}
         {result.diagnostics?.map((diagnostic) => <small key={diagnostic} className="warning-text">{diagnostic}</small>)}
       </div>
     </div>
   );
+}
+
+function HumanReviewBadge({ mode, reason, approvalRequired }: { mode?: string; reason?: string; approvalRequired?: boolean }) {
+  const safeMode = mode ?? (approvalRequired ? 'PUSH_APPROVAL' : 'REVIEW_ONLY');
+  return (
+    <>
+      <small className={safeMode === 'PUSH_APPROVAL' || safeMode === 'PULL_CLARIFICATION' ? 'warning-text' : undefined}>
+        HITL {safeMode.replace(/_/g, ' ').toLowerCase()}
+      </small>
+      {reason && <small>{reason}</small>}
+    </>
+  );
+}
+
+function formatMetric(value?: number) {
+  if (value == null || Number.isNaN(value)) return 'n/a';
+  return value >= 0.99 ? value.toFixed(2) : value.toFixed(3);
 }
 
 function AgentColumn<T extends { id: string }>({ title, items, render }: { title: string; items?: T[]; render: (item: T) => ReactNode }) {

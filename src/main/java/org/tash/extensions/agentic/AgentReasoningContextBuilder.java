@@ -1,6 +1,10 @@
 package org.tash.extensions.agentic;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.tash.extensions.agentic.mcp.AgentToolPlan;
+import org.tash.extensions.agentic.mcp.AgentToolPlanner;
+import org.tash.extensions.agentic.mcp.McpToolDescriptor;
 import org.tash.extensions.engine.CanonicalJson;
 
 import java.time.ZoneOffset;
@@ -11,6 +15,9 @@ import java.util.List;
 
 @ApplicationScoped
 public class AgentReasoningContextBuilder {
+    @Inject
+    AgentToolPlanner toolPlanner;
+
     public AgentReasoningEnvelope build(AgentRunRequest request, AgentRunResult draft, AgentPolicy policy) {
         AgentRunRequest safeRequest = request == null ? new AgentRunRequest() : request;
         AgentRunResult safeDraft = draft == null ? AgentRunResult.builder().id("missing-draft").agentType("UNKNOWN").build() : draft;
@@ -27,7 +34,9 @@ public class AgentReasoningContextBuilder {
         facts.add("Recommendations: " + safeDraft.getRecommendations().size());
         facts.add("Tasks: " + safeDraft.getTasks().size());
         facts.add("Deltas: " + safeDraft.getDeltas().size());
+        facts.add("Tool calls: " + safeDraft.getToolCalls().size());
         AgentPolicy safePolicy = policy == null ? AgentPolicy.builder().build() : policy;
+        AgentToolPlan toolPlan = planner().plan(safeRequest, safePolicy);
         return AgentReasoningEnvelope.builder()
                 .id(AgentSupport.id("reasoning", safeDraft.getId() + ":" + CanonicalJson.sha256(draftJson)))
                 .promptVersion("agentic-nextgen-v1")
@@ -46,8 +55,13 @@ public class AgentReasoningContextBuilder {
                         safePolicy.isAllowExternalSend() ? "No autonomous external send unless policy explicitly permits it" : "External sends prohibited",
                         safePolicy.isAllowOfficialStateMutation() ? "No official workflow mutation unless policy explicitly permits it" : "Official workflow mutation prohibited",
                         "Do not invent weather, route, NOTAM, PIREP, CARF, recipient, or cost facts",
-                        "Do not present assistant analysis as official clearance"))
+                        "Do not present assistant analysis as official clearance",
+                        "Only use curated MCP tools listed in availableTools; blockedTools are unavailable evidence, not permission to improvise"))
                 .citations(safeDraft.getCitations())
+                .availableTools(toolNames(toolPlan.getAvailableTools()))
+                .blockedTools(toolNames(toolPlan.getBlockedTools()))
+                .toolPolicySummary("MCP tools provide cited evidence and drafts only; official sends and workflow mutations remain human-approved.")
+                .toolReceiptIds(receiptIds(safeDraft))
                 .build();
     }
 
@@ -64,5 +78,31 @@ public class AgentReasoningContextBuilder {
 
     private String value(String value, String fallback) {
         return value == null || value.trim().isEmpty() ? fallback : value.trim();
+    }
+
+    private AgentToolPlanner planner() {
+        if (toolPlanner != null) {
+            return toolPlanner;
+        }
+        return new AgentToolPlanner();
+    }
+
+    private List<String> toolNames(List<McpToolDescriptor> tools) {
+        List<String> names = new ArrayList<>();
+        for (McpToolDescriptor tool : tools == null ? java.util.Collections.<McpToolDescriptor>emptyList() : tools) {
+            String suffix = tool.getSideEffectLevel() == null ? "" : " [" + tool.getSideEffectLevel().name() + "]";
+            names.add(tool.getId() + suffix);
+        }
+        return names;
+    }
+
+    private List<String> receiptIds(AgentRunResult result) {
+        List<String> ids = new ArrayList<>();
+        for (AgentToolCall call : result.getToolCalls()) {
+            if (call.getEvidenceReceiptId() != null && !call.getEvidenceReceiptId().trim().isEmpty()) {
+                ids.add(call.getEvidenceReceiptId());
+            }
+        }
+        return ids;
     }
 }

@@ -79,6 +79,22 @@ describe('product API client', () => {
     await api.replayAuditAgent({ decisionId: 'decision-1' });
     await api.agentDelta({ previousDecisionId: 'decision-0', decisionId: 'decision-1', missionId: 'mission-1' });
     await api.generateAgentScenario({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
+    await api.evaluateAgentStability({ iterations: 3, agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' } });
+    await api.agentRiskAssessments();
+    await api.mcpServers();
+    await api.mcpTools('airspace-first-party');
+    await api.callMcpTool({
+      serverId: 'airspace-first-party',
+      toolId: 'airspace.mission.weather_verdict',
+      arguments: { missionId: 'mission-1' }
+    });
+    await api.mcpReceipts(5);
+    await api.enqueueAgentJob({
+      actor: 'planner',
+      agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' }
+    });
+    await api.agentJobs(5);
+    await api.agentJob('job-1');
     await api.agentStatus();
     await api.agentMetrics();
     await api.agentRuns(5, { agentType: 'ALL', missionId: 'mission-1', accepted: true, sourceFamily: 'WEATHER' });
@@ -115,6 +131,15 @@ describe('product API client', () => {
       '/api/agents/replay-audit',
       '/api/agents/delta',
       '/api/agents/scenario/generate',
+      '/api/agents/evaluate/stability',
+      '/api/agents/risk-assessments',
+      '/api/agents/mcp/servers',
+      '/api/agents/mcp/servers/airspace-first-party/tools',
+      '/api/agents/mcp/tools/call',
+      '/api/agents/mcp/receipts?limit=5',
+      '/api/agents/jobs',
+      '/api/agents/jobs?limit=5',
+      '/api/agents/jobs/job-1',
       '/api/agents/status',
       '/api/agents/metrics',
       '/api/agents/runs?limit=5&agentType=ALL&missionId=mission-1&accepted=true&sourceFamily=WEATHER',
@@ -134,6 +159,9 @@ describe('product API client', () => {
     expect(bodyFor('/api/agents/reroute-analysis')).toMatchObject({ missionId: 'mission-1', reservationId: 'reservation-1' });
     expect(bodyFor('/api/agents/delta')).toMatchObject({ previousDecisionId: 'decision-0', decisionId: 'decision-1' });
     expect(bodyFor('/api/agents/scenario/generate')).toMatchObject({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
+    expect(bodyFor('/api/agents/evaluate/stability')).toMatchObject({ iterations: 3, agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' } });
+    expect(bodyFor('/api/agents/mcp/tools/call')).toMatchObject({ toolId: 'airspace.mission.weather_verdict' });
+    expect(bodyFor('/api/agents/jobs')).toMatchObject({ agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' } });
     expect(bodyFor('/api/agents/tasks/task-1/transition')).toMatchObject({ status: 'ACKNOWLEDGED', actor: 'planner' });
   });
 

@@ -15,6 +15,8 @@ public class AgentEvaluationService {
     AgentCitationValidator citationValidator;
     @Inject
     AgentPolicyEnforcer policyEnforcer;
+    @Inject
+    AgentAssessmentBuilder assessmentBuilder;
 
     public AgentEvaluationSummary evaluate(AgentRunResult result, AgentPolicy policy) {
         if (result == null) {
@@ -23,16 +25,18 @@ public class AgentEvaluationService {
                     .errors(java.util.Collections.singletonList("Agent result is missing"))
                     .build();
         }
+        AgentRunResult normalized = assessmentBuilder == null ? new AgentAssessmentBuilder().normalize(result) : assessmentBuilder.normalize(result);
         List<String> citationDiagnostics = citationValidator == null
                 ? java.util.Collections.emptyList()
-                : citationValidator.validate(result, policy);
+                : citationValidator.validate(normalized, policy);
         List<String> policyDiagnostics = policyEnforcer == null
                 ? java.util.Collections.emptyList()
-                : policyEnforcer.validate(result, policy);
-        int totalClaims = result.getFindings().size() + result.getRecommendations().size() + result.getTasks().size();
+                : policyEnforcer.validate(normalized, policy);
+        List<String> assessmentDiagnostics = validateAssessments(normalized);
+        int totalClaims = normalized.getFindings().size() + normalized.getRecommendations().size() + normalized.getTasks().size();
         int uncited = citationDiagnostics.size();
         int cited = Math.max(0, totalClaims - uncited);
-        Map<String, Integer> families = sourceFamilyCounts(result);
+        Map<String, Integer> families = sourceFamilyCounts(normalized);
         List<String> warnings = new ArrayList<>();
         if (families.isEmpty()) {
             warnings.add("No source families were represented in agent citations");
@@ -40,20 +44,51 @@ public class AgentEvaluationService {
         List<String> errors = new ArrayList<>();
         errors.addAll(citationDiagnostics);
         errors.addAll(policyDiagnostics);
+        errors.addAll(assessmentDiagnostics);
         return AgentEvaluationSummary.builder()
                 .accepted(errors.isEmpty())
-                .findingCount(result.getFindings().size())
-                .recommendationCount(result.getRecommendations().size())
-                .taskCount(result.getTasks().size())
-                .deltaCount(result.getDeltas().size())
+                .findingCount(normalized.getFindings().size())
+                .recommendationCount(normalized.getRecommendations().size())
+                .taskCount(normalized.getTasks().size())
+                .deltaCount(normalized.getDeltas().size())
                 .citedClaimCount(cited)
                 .uncitedClaimCount(uncited)
                 .policyViolationCount(policyDiagnostics.size())
                 .citationCoverage(totalClaims == 0 ? 1.0 : (double) cited / (double) totalClaims)
+                .stabilityAccepted(true)
                 .sourceFamilyCounts(families)
                 .warnings(warnings)
                 .errors(errors)
                 .build();
+    }
+
+    private List<String> validateAssessments(AgentRunResult result) {
+        List<String> diagnostics = new ArrayList<>();
+        if (result.getAssessments() == null || result.getAssessments().isEmpty()) {
+            if (!result.getFindings().isEmpty() || !result.getRecommendations().isEmpty() || !result.getTasks().isEmpty()) {
+                diagnostics.add("Agent assessments are missing fixed-shape claim/verdict envelopes");
+            }
+            return diagnostics;
+        }
+        for (AgentAssessment assessment : result.getAssessments()) {
+            String id = assessment.getId() == null ? "unknown" : assessment.getId();
+            if (assessment.getClaim() == null || assessment.getClaim().trim().isEmpty()) {
+                diagnostics.add("Agent assessment lacks claim: " + id);
+            }
+            if (assessment.getVerdict() == null || assessment.getVerdict().trim().isEmpty()) {
+                diagnostics.add("Agent assessment lacks verdict: " + id);
+            }
+            if (assessment.getUncertainty() == null || assessment.getUncertainty().trim().isEmpty()) {
+                diagnostics.add("Agent assessment lacks uncertainty: " + id);
+            }
+            if (assessment.getHumanReviewMode() == null) {
+                diagnostics.add("Agent assessment lacks human-review mode: " + id);
+            }
+            if (assessment.getCitations() == null || assessment.getCitations().isEmpty()) {
+                diagnostics.add("Agent assessment lacks citation: " + id);
+            }
+        }
+        return diagnostics;
     }
 
     private Map<String, Integer> sourceFamilyCounts(AgentRunResult result) {

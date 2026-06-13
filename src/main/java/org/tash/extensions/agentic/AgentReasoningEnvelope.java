@@ -29,4 +29,11 @@ public class AgentReasoningEnvelope {
     private List<String> prohibitedActions = new ArrayList<>();
     @Builder.Default
     private List<AgentSourceCitation> citations = new ArrayList<>();
+    @Builder.Default
+    private List<String> availableTools = new ArrayList<>();
+    @Builder.Default
+    private List<String> blockedTools = new ArrayList<>();
+    private String toolPolicySummary;
+    @Builder.Default
+    private List<String> toolReceiptIds = new ArrayList<>();
 }

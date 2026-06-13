@@ -20,6 +20,8 @@ public class AgentTask {
     private String assignedRole;
     private String route;
     private String rationale;
+    private HumanReviewMode humanReviewMode;
+    private String humanReviewReason;
     @Builder.Default
     private List<AgentSourceCitation> citations = new ArrayList<>();
 }

@@ -313,6 +313,8 @@ export type AgentRecommendation = {
   rationale?: string;
   confidence?: number;
   humanApprovalRequired?: boolean;
+  humanReviewMode?: HumanReviewMode;
+  humanReviewReason?: string;
   citations?: AgentSourceCitation[];
 };
 
@@ -324,6 +326,8 @@ export type AgentTask = {
   assignedRole?: string;
   route?: string;
   rationale?: string;
+  humanReviewMode?: HumanReviewMode;
+  humanReviewReason?: string;
   citations?: AgentSourceCitation[];
 };
 
@@ -349,9 +353,28 @@ export type AgentEvaluationSummary = {
   uncitedClaimCount?: number;
   policyViolationCount?: number;
   citationCoverage?: number;
+  stabilityAccepted?: boolean;
   sourceFamilyCounts?: Record<string, number>;
+  stabilityWarnings?: string[];
   warnings?: string[];
   errors?: string[];
+};
+
+export type HumanReviewMode = 'NONE' | 'REVIEW_ONLY' | 'PULL_CLARIFICATION' | 'PUSH_APPROVAL' | string;
+
+export type AgentAssessment = {
+  id: string;
+  schemaVersion?: string;
+  agentType?: string;
+  claim?: string;
+  verdict?: string;
+  confidence?: number;
+  evidence?: string[];
+  counterEvidence?: string[];
+  uncertainty?: string;
+  requiredHumanAction?: string;
+  humanReviewMode?: HumanReviewMode;
+  citations?: AgentSourceCitation[];
 };
 
 export type AgentReasoningEnvelope = {
@@ -366,6 +389,30 @@ export type AgentReasoningEnvelope = {
   requiredOutputRules?: string[];
   prohibitedActions?: string[];
   citations?: AgentSourceCitation[];
+  availableTools?: string[];
+  blockedTools?: string[];
+  toolPolicySummary?: string;
+  toolReceiptIds?: string[];
+};
+
+export type AgentToolCall = {
+  id?: string;
+  toolName?: string;
+  serverId?: string;
+  sideEffectLevel?: string;
+  status?: string;
+  startedAt?: string;
+  completedAt?: string;
+  arguments?: Record<string, unknown>;
+  resultSummary?: string;
+  evidenceReceiptId?: string;
+  inputHash?: string;
+  outputHash?: string;
+  redactionStatus?: string;
+  policyDecision?: string;
+  durationMillis?: number;
+  sourceRefs?: AgentSourceCitation[];
+  diagnostics?: string[];
 };
 
 export type AgentTraceAnswer = {
@@ -406,6 +453,158 @@ export type AgentRunRequest = {
   hazardOrDecisionId?: string;
   question?: string;
   actor?: string;
+  feedArtifactId?: string;
+  referenceType?: string;
+  referenceIdentifier?: string;
+  toolCalls?: AgentToolCall[];
+};
+
+export type AgenticRiskProfile = {
+  autonomyScope?: string;
+  toolSurface?: string;
+  worstCaseBlastRadius?: string;
+  permissionScope?: string;
+  dataEgress?: string;
+  poisonedDataExposure?: string;
+  auditAttribution?: string;
+  toolProvenance?: string;
+  modelProvenance?: string;
+  rollbackPath?: string;
+  costClass?: string;
+  slaClass?: string;
+  requiredHumanReviewMode?: HumanReviewMode;
+};
+
+export type AgenticRiskAssessment = {
+  id: string;
+  subjectType?: string;
+  subjectId?: string;
+  summary?: string;
+  riskProfile?: AgenticRiskProfile;
+  diagnostics?: string[];
+};
+
+export type AgentStabilityMetric = {
+  id: string;
+  name?: string;
+  value?: number;
+  threshold?: number;
+  accepted?: boolean;
+  details?: string;
+};
+
+export type AgentStabilityRequest = {
+  agentRunRequest?: AgentRunRequest;
+  iterations?: number;
+  minAgreement?: number;
+  minCitationJaccard?: number;
+  maxCountCoefficientOfVariation?: number;
+};
+
+export type AgentStabilityResult = {
+  id: string;
+  accepted?: boolean;
+  iterations?: number;
+  startedAt?: string;
+  completedAt?: string;
+  runIds?: string[];
+  metrics?: AgentStabilityMetric[];
+  diagnostics?: string[];
+};
+
+export type McpServerDefinition = {
+  id: string;
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+  external?: boolean;
+  local?: boolean;
+  setupRequired?: boolean;
+  credentialsRequired?: boolean;
+  transport?: string;
+  version?: string;
+  diagnostics?: string[];
+};
+
+export type McpToolDescriptor = {
+  id: string;
+  serverId?: string;
+  name?: string;
+  description?: string;
+  version?: string;
+  enabled?: boolean;
+  external?: boolean;
+  setupRequired?: boolean;
+  credentialsRequired?: boolean;
+  sideEffectLevel?: 'READ_ONLY' | 'DRAFT_ONLY' | 'REQUIRES_APPROVAL' | 'MUTATING' | string;
+  riskProfile?: AgenticRiskProfile;
+  requiredArguments?: string[];
+  argumentSchema?: Record<string, unknown>;
+  sourceFamilies?: string[];
+  diagnostics?: string[];
+};
+
+export type McpToolInvocationRequest = {
+  serverId?: string;
+  toolId?: string;
+  actor?: string;
+  externalConsent?: boolean;
+  arguments?: Record<string, unknown>;
+};
+
+export type McpEvidenceReceipt = {
+  id: string;
+  serverId?: string;
+  toolId?: string;
+  sideEffectLevel?: string;
+  status?: string;
+  policyDecision?: string;
+  redactionStatus?: string;
+  inputHash?: string;
+  outputHash?: string;
+  inputSummary?: string;
+  outputSummary?: string;
+  startedAt?: string;
+  completedAt?: string;
+  durationMillis?: number;
+  sourceRefs?: AgentSourceCitation[];
+  diagnostics?: string[];
+};
+
+export type McpToolInvocationResult = {
+  id?: string;
+  serverId?: string;
+  toolId?: string;
+  status?: string;
+  policyDecision?: string;
+  startedAt?: string;
+  completedAt?: string;
+  result?: unknown;
+  resultSummary?: string;
+  evidenceReceipt?: McpEvidenceReceipt;
+  toolCall?: AgentToolCall;
+  sourceRefs?: AgentSourceCitation[];
+  diagnostics?: string[];
+};
+
+export type AgentJobRequest = {
+  idempotencyKey?: string;
+  actor?: string;
+  agentRunRequest?: AgentRunRequest;
+  toolArguments?: Record<string, Record<string, unknown>>;
+};
+
+export type AgentJobResult = {
+  id: string;
+  status?: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'DENIED' | 'CANCELLED' | string;
+  request?: AgentJobRequest;
+  runResult?: AgentRunResult;
+  createdAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  toolCalls?: AgentToolCall[];
+  receipts?: McpEvidenceReceipt[];
+  diagnostics?: string[];
 };
 
 export type ScenarioFixtureRequest = {
@@ -450,6 +649,8 @@ export type AgentRunResult = {
   findings: AgentFinding[];
   recommendations: AgentRecommendation[];
   tasks: AgentTask[];
+  assessments?: AgentAssessment[];
+  toolCalls?: AgentToolCall[];
   citations: AgentSourceCitation[];
   deltas?: AgentOperationalDelta[];
   operatingLoop?: AgentOperatingLoopStep[];

@@ -5,6 +5,10 @@ import org.junit.jupiter.api.io.TempDir;
 import org.tash.extensions.messaging.MessageControlCharacters;
 import org.tash.extensions.product.application.AirspaceProductService;
 import org.tash.extensions.product.dto.ProductDtos;
+import org.tash.extensions.agentic.stability.AgentRunComparator;
+import org.tash.extensions.agentic.stability.AgentStabilityHarness;
+import org.tash.extensions.agentic.stability.AgentStabilityRequest;
+import org.tash.extensions.agentic.stability.AgentStabilityResult;
 import org.tash.extensions.workflow.InMemoryReservationWorkflowRepository;
 import org.tash.extensions.workflow.ReservationWorkflowService;
 
@@ -44,6 +48,11 @@ class AgenticOperationsServiceTest {
                 .anyMatch(action -> action.contains("External sends prohibited")));
         assertTrue(result.getReasoningEnvelope().getProhibitedActions().stream()
                 .anyMatch(action -> action.contains("Official workflow mutation prohibited")));
+        assertTrue(result.getReasoningEnvelope().getAvailableTools().stream()
+                .anyMatch(tool -> tool.contains("airspace.mission.route_impact")));
+        assertTrue(result.getReasoningEnvelope().getBlockedTools().stream()
+                .anyMatch(tool -> tool.contains("external-mcp")));
+        assertTrue(result.getReasoningEnvelope().getToolPolicySummary().contains("drafts only"));
         assertTrue(result.getEvaluation().isAccepted(), result.getEvaluation().getErrors().toString());
         assertEquals(0, result.getEvaluation().getUncitedClaimCount());
         assertTrue(result.getEvaluation().getCitationCoverage() >= 0.99);
@@ -56,7 +65,12 @@ class AgenticOperationsServiceTest {
         assertFalse(result.getFindings().isEmpty());
         assertFalse(result.getRecommendations().isEmpty());
         assertFalse(result.getTasks().isEmpty());
+        assertFalse(result.getAssessments().isEmpty());
         assertTrue(result.getRecommendations().stream().anyMatch(AgentRecommendation::isHumanApprovalRequired));
+        assertTrue(result.getRecommendations().stream().anyMatch(recommendation -> recommendation.getHumanReviewMode() == HumanReviewMode.PUSH_APPROVAL));
+        assertTrue(result.getTasks().stream().allMatch(task -> task.getHumanReviewMode() != null));
+        assertTrue(result.getAssessments().stream().allMatch(assessment -> assessment.getSchemaVersion().equals("agent-assessment-v1")));
+        assertTrue(result.getAssessments().stream().allMatch(assessment -> assessment.getHumanReviewMode() != null));
         assertTrue(result.getFindings().stream().allMatch(finding -> finding.getCitations() != null && !finding.getCitations().isEmpty()));
         assertFalse(service.runs(10).isEmpty());
         assertFalse(service.tasks(null, 10).isEmpty());
@@ -252,6 +266,8 @@ class AgenticOperationsServiceTest {
 
         assertTrue(coordination.getRecommendations().stream().allMatch(AgentRecommendation::isHumanApprovalRequired));
         assertTrue(reroute.getRecommendations().stream().allMatch(AgentRecommendation::isHumanApprovalRequired));
+        assertTrue(coordination.getRecommendations().stream().allMatch(recommendation -> recommendation.getHumanReviewMode() == HumanReviewMode.PUSH_APPROVAL));
+        assertTrue(reroute.getRecommendations().stream().allMatch(recommendation -> recommendation.getHumanReviewMode() == HumanReviewMode.PUSH_APPROVAL));
         assertTrue(coordination.getOperatingLoop().stream().anyMatch(step -> "COORDINATE".equals(step.getStage())));
         assertTrue(coordination.getSummary().contains("send is blocked"));
         assertFalse(reroute.getFindings().isEmpty());
@@ -259,6 +275,56 @@ class AgenticOperationsServiceTest {
         assertEquals("Why this reroute?", replay.getTraceAnswer().getQuestion());
         assertTrue(replay.getTraceAnswer().getAnswer().contains("Source refs"));
         assertFalse(replay.getTraceAnswer().getCitations().isEmpty());
+    }
+
+    @Test
+    void stabilityHarnessAcceptsDeterministicAgentsAndComparatorFlagsDrift() {
+        AirspaceProductService productService = seededProductService();
+        AgenticOperationsService service = wiredService(productService);
+        String missionId = productService.missions().get(0).getId();
+        AgentRunRequest request = new AgentRunRequest();
+        request.setAgentType("MISSION_RISK");
+        request.setMissionId(missionId);
+
+        AgentStabilityHarness harness = new AgentStabilityHarness(service, new AgentRunComparator());
+        AgentStabilityRequest stabilityRequest = AgentStabilityRequest.builder()
+                .agentRunRequest(request)
+                .iterations(3)
+                .build();
+        AgentStabilityResult result = harness.evaluate(stabilityRequest);
+
+        assertTrue(result.isAccepted(), result.getDiagnostics().toString());
+        assertEquals(3, result.getRunIds().size());
+        assertTrue(result.getMetrics().stream().anyMatch(metric -> "cited_source_jaccard".equals(metric.getId())
+                && metric.getValue() >= 0.95));
+
+        AgentRunResult first = AgentRunResult.builder()
+                .accepted(true)
+                .findings(java.util.Collections.singletonList(AgentFinding.builder()
+                        .id("f1")
+                        .category("WX")
+                        .severity("HIGH")
+                        .citations(java.util.Collections.singletonList(AgentSourceCitation.builder()
+                                .sourceFamily("WEATHER")
+                                .sourceId("wx-1")
+                                .build()))
+                        .build()))
+                .build();
+        AgentRunResult drifted = AgentRunResult.builder()
+                .accepted(true)
+                .findings(java.util.Collections.singletonList(AgentFinding.builder()
+                        .id("f2")
+                        .category("WX")
+                        .severity("HIGH")
+                        .citations(java.util.Collections.singletonList(AgentSourceCitation.builder()
+                                .sourceFamily("WEATHER")
+                                .sourceId("wx-2")
+                                .build()))
+                        .build()))
+                .build();
+
+        assertTrue(new AgentRunComparator().compare(java.util.Arrays.asList(first, drifted), 1.0, 0.95, 0.0).stream()
+                .anyMatch(metric -> "cited_source_jaccard".equals(metric.getId()) && !metric.isAccepted()));
     }
 
     @Test
@@ -584,6 +650,8 @@ class AgenticOperationsServiceTest {
         assertFalse(summary.isAccepted());
         assertTrue(summary.getCitationCoverage() < 1.0);
         assertTrue(summary.getPolicyViolationCount() >= 1);
+        assertTrue(summary.getErrors().stream().anyMatch(error -> error.contains("assessment lacks citation")
+                || error.contains("Assessment") || error.contains("assessment")));
         assertEquals(Integer.valueOf(1), summary.getSourceFamilyCounts().get("WEATHER"));
     }
 }

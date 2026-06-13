@@ -36,6 +36,8 @@ public class AgentRunResult {
     @Builder.Default
     private List<AgentToolCall> toolCalls = new ArrayList<>();
     @Builder.Default
+    private List<AgentAssessment> assessments = new ArrayList<>();
+    @Builder.Default
     private List<AgentSourceCitation> citations = new ArrayList<>();
     @Builder.Default
     private List<AgentOperationalDelta> deltas = new ArrayList<>();

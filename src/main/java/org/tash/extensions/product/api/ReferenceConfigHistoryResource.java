@@ -1,6 +1,7 @@
 package org.tash.extensions.product.api;
 
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -26,6 +27,12 @@ public class ReferenceConfigHistoryResource {
     AirspaceProductService productService;
     @Inject
     AgenticOperationsService agenticOperationsService;
+    @ConfigProperty(name = "airspace.agentic.mcp.enabled", defaultValue = "true")
+    boolean agenticMcpEnabled;
+    @ConfigProperty(name = "airspace.agentic.mcp.external.enabled", defaultValue = "false")
+    boolean externalMcpEnabled;
+    @ConfigProperty(name = "airspace.agentic.queue.auto-consume", defaultValue = "true")
+    boolean agenticQueueAutoConsume;
 
     @GET
     @Path("/reference/navaids")
@@ -72,6 +79,10 @@ public class ReferenceConfigHistoryResource {
         values.put("authModel", "local-rbac");
         values.put("agenticStore", agenticOperationsService.status().getMode());
         values.put("agenticStoreDurable", agenticOperationsService.status().isDurable());
+        values.put("agenticMcpEnabled", agenticMcpEnabled);
+        values.put("agenticExternalMcpEnabled", externalMcpEnabled);
+        values.put("agenticQueueAutoConsume", agenticQueueAutoConsume);
+        values.put("agenticAutonomyBoundary", "draft-only");
         values.put("enabledPillars", Arrays.asList("operations", "decision-engine", "weather-safety"));
         return values;
     }

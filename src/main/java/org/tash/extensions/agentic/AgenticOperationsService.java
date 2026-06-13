@@ -36,6 +36,8 @@ public class AgenticOperationsService {
     @Inject
     AgentEvaluationService evaluationService;
     @Inject
+    AgentAssessmentBuilder assessmentBuilder;
+    @Inject
     AgentReasoningContextBuilder reasoningContextBuilder;
     @Inject
     AgentAuditService auditService;
@@ -76,6 +78,7 @@ public class AgenticOperationsService {
                 result = runAll(safe);
                 break;
         }
+        result = mergeRequestToolCalls(safe, result);
         result = result.toBuilder()
                 .reasoningEnvelope(reasoningContextBuilder == null
                         ? new AgentReasoningContextBuilder().build(safe, result, policy)
@@ -223,6 +226,8 @@ public class AgenticOperationsService {
     }
 
     private AgentRunResult finalizeResult(AgentRunRequest request, AgentRunResult result, AgentPolicy policy) {
+        AgentAssessmentBuilder safeAssessmentBuilder = assessmentBuilder == null ? new AgentAssessmentBuilder() : assessmentBuilder;
+        result = safeAssessmentBuilder.normalize(result);
         AgentEvaluationSummary evaluation = evaluationService == null
                 ? fallbackEvaluation(result, policy)
                 : evaluationService.evaluate(result, policy);
@@ -251,6 +256,27 @@ public class AgenticOperationsService {
         return finalized;
     }
 
+    private AgentRunResult mergeRequestToolCalls(AgentRunRequest request, AgentRunResult result) {
+        if (request == null || request.getToolCalls() == null || request.getToolCalls().isEmpty()) {
+            return result;
+        }
+        List<AgentToolCall> calls = new ArrayList<>(result.getToolCalls());
+        calls.addAll(request.getToolCalls());
+        List<AgentSourceCitation> citations = new ArrayList<>(result.getCitations());
+        for (AgentToolCall call : request.getToolCalls()) {
+            if (call.getSourceRefs() != null) {
+                citations.addAll(call.getSourceRefs());
+            }
+        }
+        List<String> diagnostics = new ArrayList<>(result.getDiagnostics());
+        diagnostics.add("Attached " + request.getToolCalls().size() + " curated MCP evidence receipt(s) to agent run.");
+        return result.toBuilder()
+                .toolCalls(calls)
+                .citations(citations.isEmpty() ? result.getCitations() : citations)
+                .diagnostics(diagnostics)
+                .build();
+    }
+
     private AgentRunRequest withType(AgentRunRequest request, String type) {
         AgentRunRequest safe = request == null ? new AgentRunRequest() : request;
         safe.setAgentType(type);
@@ -273,6 +299,7 @@ public class AgenticOperationsService {
                 .uncitedClaimCount(uncited)
                 .policyViolationCount((int) errors.stream().filter(value -> value.toLowerCase(Locale.US).contains("policy")).count())
                 .citationCoverage(totalClaims == 0 ? 1.0 : (double) Math.max(0, totalClaims - uncited) / (double) totalClaims)
+                .stabilityAccepted(true)
                 .errors(errors)
                 .build();
     }

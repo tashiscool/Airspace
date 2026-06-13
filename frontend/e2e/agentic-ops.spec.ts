@@ -30,7 +30,8 @@ test('agentic operations smoke covers run, trace, task acknowledgment, coordinat
   await page.getByRole('button', { name: /Run all agents/i }).click();
   await expect(page.getByRole('heading', { name: 'Findings' })).toBeVisible();
   await expect(page.getByText(/Agentic operations review/i)).toBeVisible();
-  await expect(page.getByText(/Human approval required/i)).toBeVisible();
+  await expect(page.getByText(/HITL push approval/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Risk Checklist' })).toBeVisible();
 
   await page.getByPlaceholder(/Ask against decision trace/i).fill('Why this reroute?');
   await page.getByRole('button', { name: 'Ask trace' }).click();
@@ -73,6 +74,15 @@ async function respond(route: Route) {
   if (path === '/api/metrics') return json(route, { 'agentic.runs': 1, 'agentic.tasks': 1 });
   if (path === '/api/agents/status') return json(route, { mode: 'IN_MEMORY', durable: false, runCount: 1, taskCount: 1 });
   if (path === '/api/agents/metrics') return json(route, { 'agentic.runs.accepted': 1, 'agentic.policyViolations': 0 });
+  if (path === '/api/agents/risk-assessments') return json(route, riskAssessments());
+  if (path === '/api/agents/evaluate/stability') return json(route, stabilityResult());
+  if (path === '/api/agents/mcp/servers') return json(route, mcpServers());
+  if (path === '/api/agents/mcp/servers/airspace-first-party/tools') return json(route, mcpTools());
+  if (path === '/api/agents/mcp/receipts') return json(route, [mcpReceipt()]);
+  if (path === '/api/agents/jobs') {
+    if (method === 'POST') return json(route, agentJob());
+    return json(route, [agentJob()]);
+  }
   if (path === '/api/agents/runs') return json(route, [agentResult('ALL')]);
   if (path === '/api/agents/tasks') return json(route, [agentTask(taskStatus)]);
   if (path === '/api/agents/tasks/task-e2e/transition' && method === 'POST') {
@@ -160,7 +170,7 @@ function affectedMission() {
 }
 
 function agentTask(status: string) {
-  return { id: 'task-e2e', title: 'Review and approve coordination draft', status, priority: 'HIGH', assignedRole: 'planner', route: `/missions/${missionId}`, rationale: `${status.toLowerCase()} task from E2E`, citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] };
+  return { id: 'task-e2e', title: 'Review and approve coordination draft', status, priority: 'HIGH', assignedRole: 'planner', route: `/missions/${missionId}`, rationale: `${status.toLowerCase()} task from E2E`, humanReviewMode: 'PUSH_APPROVAL', humanReviewReason: 'Draft-only output requires approval.', citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] };
 }
 
 function agentResult(agentType: string, trace = false) {
@@ -175,15 +185,75 @@ function agentResult(agentType: string, trace = false) {
     accepted: true,
     generatedAt: '2026-05-22T00:00:00Z',
     findings: [{ id: 'finding-e2e', category: 'MISSION_RISK', severity: 'HIGH', message: 'Weather impact requires review.', citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] }],
-    recommendations: [{ id: 'rec-e2e', action: 'REROUTE', summary: 'Coordinate reroute', rationale: 'Avoid severe weather.', confidence: 0.84, humanApprovalRequired: true, citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] }],
+    recommendations: [{ id: 'rec-e2e', action: 'REROUTE', summary: 'Coordinate reroute', rationale: 'Avoid severe weather.', confidence: 0.84, humanApprovalRequired: true, humanReviewMode: 'PUSH_APPROVAL', humanReviewReason: 'Draft-only output requires approval.', citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] }],
     tasks: [agentTask('OPEN')],
+    assessments: [{ id: 'assessment-e2e', schemaVersion: 'agent-assessment-v1', claim: 'Weather impact requires review.', verdict: 'HIGH', confidence: 0.84, evidence: ['SIGMET:E2E'], counterEvidence: [], uncertainty: 'Bounded by cited local artifacts.', requiredHumanAction: 'Approve, edit, or reject draft.', humanReviewMode: 'PUSH_APPROVAL', citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] }],
     citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }],
+    toolCalls: [{ id: 'tool-e2e', toolName: 'airspace.mission.weather_verdict', serverId: 'airspace-first-party', sideEffectLevel: 'READ_ONLY', status: 'ACCEPTED', evidenceReceiptId: 'receipt-e2e' }],
     deltas: [{ id: 'delta-e2e', changeType: 'ACTION_CHANGED', sourceFamily: 'DECISION', sourceId: decisionId, previousValue: 'CAUTION', currentValue: 'REROUTE', severity: 'HIGH', citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] }],
     operatingLoop: [{ stage: 'OBSERVE', status: 'COMPLETE', summary: 'Observed weather and mission route.', citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] }],
     traceAnswer: trace ? { question: 'Why this reroute?', answer: 'Reroute because SIGMET:E2E intersects the route.', ruleIds: ['rule-route-blockage'], sourceRefs: ['SIGMET:E2E'], citations: [{ sourceFamily: 'SIGMET', sourceId: 'E2E' }] } : undefined,
     auditEnvelope: { inputHash: 'input-e2e', outputHash: 'output-e2e', policyVersion: 'agent-policy-v1' },
     evaluation: { accepted: true, citationCoverage: 1, policyViolationCount: 0, citedClaimCount: 3, uncitedClaimCount: 0 },
-    reasoningEnvelope: { reasoningMode: 'DETERMINISTIC_DRAFT_ONLY', modelId: 'deterministic-draft-only', promptVersion: 'agentic-nextgen-v1', draftHash: 'draft-e2e' },
+    reasoningEnvelope: { reasoningMode: 'DETERMINISTIC_DRAFT_ONLY', modelId: 'deterministic-draft-only', promptVersion: 'agentic-nextgen-v1', draftHash: 'draft-e2e', availableTools: ['airspace.mission.weather_verdict [READ_ONLY]'], blockedTools: ['external-mcp.configured_tool [REQUIRES_APPROVAL]'], toolPolicySummary: 'MCP tools provide cited evidence and drafts only.', toolReceiptIds: ['receipt-e2e'] },
     diagnostics: []
   };
+}
+
+function mcpServers() {
+  return [
+    { id: 'airspace-first-party', name: 'Airspace first-party tools', enabled: true, setupRequired: false, description: 'Local Airspace evidence and draft tools.' },
+    { id: 'external-mcp', name: 'External MCP servers', enabled: false, setupRequired: true, description: 'Setup required.' }
+  ];
+}
+
+function mcpTools() {
+  return [
+    { id: 'airspace.mission.weather_verdict', serverId: 'airspace-first-party', sideEffectLevel: 'READ_ONLY', description: 'Mission verdict.', requiredArguments: ['missionId'], riskProfile: riskProfile('REVIEW_ONLY') },
+    { id: 'airspace.coordination.draft', serverId: 'airspace-first-party', sideEffectLevel: 'DRAFT_ONLY', description: 'Draft coordination.', requiredArguments: ['missionId'], riskProfile: riskProfile('PUSH_APPROVAL') }
+  ];
+}
+
+function riskProfile(requiredHumanReviewMode: string) {
+  return {
+    worstCaseBlastRadius: requiredHumanReviewMode === 'PUSH_APPROVAL' ? 'A misleading draft could confuse an operator if approved without review.' : 'Incorrect local evidence summary.',
+    dataEgress: 'None by default.',
+    rollbackPath: 'Disable MCP catalog.',
+    toolProvenance: 'Airspace first-party Java tool.',
+    modelProvenance: 'Deterministic no-model invocation.',
+    requiredHumanReviewMode
+  };
+}
+
+function riskAssessments() {
+  return mcpTools().map((tool) => ({
+    id: `risk-${tool.id}`,
+    subjectType: 'MCP_TOOL',
+    subjectId: tool.id,
+    summary: `${tool.id} risk`,
+    riskProfile: tool.riskProfile,
+    diagnostics: []
+  }));
+}
+
+function stabilityResult() {
+  return {
+    id: 'stability-e2e',
+    accepted: true,
+    iterations: 3,
+    runIds: ['run-a', 'run-b', 'run-c'],
+    metrics: [
+      { id: 'accepted_agreement', name: 'Accepted/verdict agreement', value: 1, threshold: 1, accepted: true },
+      { id: 'cited_source_jaccard', name: 'Cited-source Jaccard', value: 1, threshold: 0.95, accepted: true }
+    ],
+    diagnostics: []
+  };
+}
+
+function mcpReceipt() {
+  return { id: 'receipt-e2e', serverId: 'airspace-first-party', toolId: 'airspace.mission.weather_verdict', status: 'ACCEPTED', policyDecision: 'ALLOWED_READ_ONLY', redactionStatus: 'CLEAN', inputHash: 'input-receipt', outputHash: 'output-receipt', durationMillis: 4, sourceRefs: [{ sourceFamily: 'MISSION', sourceId: missionId }] };
+}
+
+function agentJob() {
+  return { id: 'job-e2e', status: 'SUCCEEDED', request: { agentRunRequest: { agentType: 'MISSION_RISK', missionId } }, runResult: agentResult('MISSION_RISK'), toolCalls: [agentResult('MISSION_RISK').toolCalls[0]], receipts: [mcpReceipt()], diagnostics: [] };
 }
