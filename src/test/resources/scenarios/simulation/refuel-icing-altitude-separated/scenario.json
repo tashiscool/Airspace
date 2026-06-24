@@ -1,0 +1,12 @@
+{
+  "id": "refuel-icing-altitude-separated",
+  "name": "Refueling Corridor Icing Altitude Separation",
+  "expectedFinalAction": "MONITOR_OR_CLEAR_ABOVE_LAYER",
+  "expectedSourceFamilies": ["AIRMET", "PIREP", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "AIRMET", "payload": "AIRMET ZULU VALID 201200/201800 FROM 3000N15000W TO 3100N14900W MOD ICE BLW FL180", "expectedAction": "MONITOR" },
+    { "offsetMinutes": 10, "family": "PIREP", "payload": "UA /OV 3030N14950W/TM 1210/FL250/TP KC46/IC NEG/RM ABOVE ICING LAYER", "expectedAction": "MONITOR" }
+  ],
+  "kpiBounds": { "falseBlockCountMax": 0 },
+  "notes": "Negative/high-altitude PIREP should prevent a false blocked decision."
+}

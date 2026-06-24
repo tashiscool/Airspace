@@ -1,0 +1,12 @@
+{
+  "id": "runway-surface-contamination",
+  "name": "Runway Surface Contamination Review",
+  "expectedFinalAction": "DELAY_OR_CAUTION",
+  "expectedSourceFamilies": ["METAR", "NOTAM"],
+  "events": [
+    { "offsetMinutes": 0, "family": "METAR", "payload": "SPECI KJFK 201205Z 02012KT 1/2SM SN R04R/1800FT OVC004 M02/M04 A2988", "expectedAction": "CAUTION" },
+    { "offsetMinutes": 8, "family": "NOTAM", "payload": "!JFK 06/021 JFK RWY 04R BRAKING ACTION POOR MU 20 SLUSH", "expectedAction": "DELAY" }
+  ],
+  "kpiBounds": { "timeToGuidanceSecondsMax": 480 },
+  "notes": "Operator performance review context, not an aircraft takeoff-performance calculator."
+}

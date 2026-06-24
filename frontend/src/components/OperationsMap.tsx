@@ -12,6 +12,7 @@ import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style';
 import type { FeatureCollection } from '../types';
 import { DEFAULT_LAYOUT_PREFS, readWorkbenchJson, writeWorkbenchJson } from '../lib/workbenchState';
 import { featureDisplayLayer, featureMatchesAffectedContext, featurePassesFreshnessFilter, layerDefinition, layersForWorkbenchGroup, mapFeatureConfidence, mapFeatureFreshness, mapFeatureSeverity, mapFeatureSourceLink, mapFeatureSourceRefs, mapFeatureSummary, mapVisibleRiskCounts, MAP_LAYERS, type MapLayerId } from './mapLayers';
+import { MAP_RENDERERS, mapRendererById, type MapRendererId } from './mapRenderers';
 
 export function OperationsMap({
   features,
@@ -37,6 +38,10 @@ export function OperationsMap({
   const [sourceFamilyFilter, setSourceFamilyFilter] = useState('ALL');
   const [hideStaleWeather, setHideStaleWeather] = useState(false);
   const [showMovementProjection, setShowMovementProjection] = useState(true);
+  const [renderer, setRenderer] = useState<MapRendererId>(() => {
+    const stored = readWorkbenchJson('airspace.workbench.mapRenderer', { renderer: 'openlayers' as MapRendererId });
+    return MAP_RENDERERS.some((item) => item.id === stored.renderer) ? stored.renderer : 'openlayers';
+  });
   const [internalSelectedFeatureId, setInternalSelectedFeatureId] = useState<string | undefined>();
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [affectedMode, setAffectedMode] = useState(false);
@@ -84,6 +89,11 @@ export function OperationsMap({
   }, [enabledLayers]);
 
   useEffect(() => {
+    writeWorkbenchJson('airspace.workbench.mapRenderer', { renderer });
+  }, [renderer]);
+
+  useEffect(() => {
+    if (renderer !== 'openlayers') return;
     if (!ref.current) return;
     const source = new VectorSource();
     if (visibleFeatures) {
@@ -162,7 +172,7 @@ export function OperationsMap({
     });
     requestAnimationFrame(fitToFeatures);
     return () => map.setTarget(undefined);
-  }, [visibleFeatures, selectedFeatureId, fitRequest, affectedContext, affectedMode, hasAffectedContext]);
+  }, [visibleFeatures, selectedFeatureId, fitRequest, affectedContext, affectedMode, hasAffectedContext, renderer]);
 
   const counts = useMemo(() => {
     const result = new globalThis.Map<MapLayerId, number>();
@@ -225,6 +235,15 @@ export function OperationsMap({
       <div className="map-toolbar" aria-label="Map layers">
         <div className="map-layer-group">
           <span>Workbench</span>
+          <select
+            aria-label="Map renderer"
+            className="map-renderer-select"
+            value={renderer}
+            onChange={(event) => setRenderer(event.target.value as MapRendererId)}
+            title="Swap renderer without changing backend GeoJSON"
+          >
+            {MAP_RENDERERS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
           <button className="map-layer" onClick={fitAll} type="button">Fit All</button>
           <button className="map-layer" disabled={!selectedFeatureId} onClick={fitSelected} type="button">Fit Selected</button>
           <button className={showSelectedOnly ? 'map-layer active' : 'map-layer'} onClick={() => setShowSelectedOnly((value) => !value)} type="button">Selected Only</button>
@@ -306,33 +325,42 @@ export function OperationsMap({
         </button>
         <button className="map-layer" type="button" onClick={() => { setSourceFamilyFilter('ALL'); setMinConfidence(''); }}>All Sources</button>
       </div>
-      <div className="map-canvas">
-        <div className="map" ref={ref} />
-        <svg className="map-vector-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          {(visibleFeatures?.features ?? []).map((feature, index) => {
-            const layer = layerDefinition(featureDisplayLayer(feature));
-            const path = visibleFeatures ? svgPathForFeature(feature, visibleFeatures) : undefined;
-            if (!path) return null;
-            const isLine = String(feature.geometry?.type ?? '').toLowerCase() === 'linestring';
-            const id = featureKey(feature, index);
-            const selected = id === selectedFeatureId;
-            const affected = featureMatchesAffectedContext(feature, affectedContext, index);
-            const dim = affectedMode && hasAffectedContext && !affected ? 0.22 : 1;
-            return (
-              <path
-                key={id}
-                d={path}
-                fill={isLine ? 'none' : layer.fill}
-                stroke={layer.stroke}
-                strokeOpacity={dim}
-                fillOpacity={dim}
-                strokeWidth={selected || (affectedMode && affected) ? 2.1 : isLine ? 1.3 : 0.65}
-                vectorEffect="non-scaling-stroke"
-              />
-            );
-          })}
-        </svg>
-      </div>
+      {renderer === 'openlayers' ? (
+        <div className="map-canvas">
+          <div className="map" ref={ref} />
+          <svg className="map-vector-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            {(visibleFeatures?.features ?? []).map((feature, index) => {
+              const layer = layerDefinition(featureDisplayLayer(feature));
+              const path = visibleFeatures ? svgPathForFeature(feature, visibleFeatures) : undefined;
+              if (!path) return null;
+              const isLine = String(feature.geometry?.type ?? '').toLowerCase() === 'linestring';
+              const id = featureKey(feature, index);
+              const selected = id === selectedFeatureId;
+              const affected = featureMatchesAffectedContext(feature, affectedContext, index);
+              const dim = affectedMode && hasAffectedContext && !affected ? 0.22 : 1;
+              return (
+                <path
+                  key={id}
+                  d={path}
+                  fill={isLine ? 'none' : layer.fill}
+                  stroke={layer.stroke}
+                  strokeOpacity={dim}
+                  fillOpacity={dim}
+                  strokeWidth={selected || (affectedMode && affected) ? 2.1 : isLine ? 1.3 : 0.65}
+                  vectorEffect="non-scaling-stroke"
+                />
+              );
+            })}
+          </svg>
+        </div>
+      ) : (
+        <RendererAdapterPreview
+          renderer={renderer}
+          features={visibleFeatures}
+          selectedFeatureId={selectedFeatureId}
+          onSelect={selectFeature}
+        />
+      )}
       <div className="map-semantics">
         <div><strong>CARF/ALTRV</strong><span>Reservations, protected route volumes, timing metadata, conflicts.</span></div>
         <div><strong>NOTAM</strong><span>Restrictions and advisories stay separate from reservations.</span></div>
@@ -356,6 +384,42 @@ export function OperationsMap({
         {selectedFeature ? <FeatureProperties feature={selectedFeature} /> : <p className="muted">No visible features.</p>}
       </div>
     </section>
+  );
+}
+
+function RendererAdapterPreview({
+  renderer,
+  features,
+  selectedFeatureId,
+  onSelect
+}: {
+  renderer: MapRendererId;
+  features?: FeatureCollection;
+  selectedFeatureId?: string;
+  onSelect: (featureId: string | undefined) => void;
+}) {
+  const rendererInfo = mapRendererById(renderer);
+  return (
+    <div className="map-canvas map-adapter-preview">
+      <div className="adapter-banner">
+        <strong>{rendererInfo?.label}</strong>
+        <span>{rendererInfo?.state}</span>
+        <p>{rendererInfo.description} This adapter receives the same filtered GeoJSON as OpenLayers.</p>
+      </div>
+      <div className="adapter-feature-list">
+        {(features?.features ?? []).slice(0, 24).map((feature, index) => {
+          const key = featureKey(feature, index);
+          const summary = mapFeatureSummary(feature);
+          return (
+            <button key={key} type="button" className={key === selectedFeatureId ? 'adapter-feature active' : 'adapter-feature'} onClick={() => onSelect(key)}>
+              <span>{summary?.title ?? featureLabel(feature, index)}</span>
+              <small>{summary?.subtitle ?? featureDisplayLayer(feature)}</small>
+            </button>
+          );
+        })}
+        {!(features?.features ?? []).length && <p className="empty-state">No visible GeoJSON features for this renderer.</p>}
+      </div>
+    </div>
   );
 }
 

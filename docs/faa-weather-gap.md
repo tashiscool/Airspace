@@ -47,7 +47,10 @@ Those source artifacts flow through affected-mission queues, coordination drafts
 4. **What changed:** Weather and Mission Explorer should expose recent weather/PIREP/NOTAM deltas since the last brief.
 5. **PIREP relevance:** operators should be able to scope PIREPs to selected route corridor, altitude band, and recency.
 6. **Explainability:** every AVOID / REROUTE / BLOCKED decision should list exact weather, PIREP, NOTAM, CARF/ALTRV, and USNS source IDs in trace/audit surfaces.
-7. **Agentic review:** semi-autonomous agents may triage, explain, draft, and brief, but every operational claim must cite engine artifacts and official sends/state changes remain human-approved.
+7. **Agentic review:** semi-autonomous agents may triage, explain, draft, brief, red-team unsafe guidance, audit outcome metrics, review TMI recommendations, compare replay deltas, and monitor provider freshness, but every operational claim must cite engine artifacts and official sends/state changes remain human-approved.
+8. **Readiness visibility:** `/api/gaps`, `/api/gaps/release-gates`, `/api/providers/status`, `/api/calibration/reports`, and `/api/safety/dossier` must make prototype, public-review, integration, and operational-evaluation boundaries visible to both UI reviewers and automation.
+9. **Provider trust:** every live-ready provider must declare its source mode, credential requirement, consent scope, egress policy, freshness, diagnostics, and whether it is fixture-backed, public API, authenticated external, or authorized operational.
+10. **Calibration honesty:** fixture-backed calibration can exercise the scoring path, but the UI and API must identify uncalibrated coefficients and must not claim historical CWAP-style/CWAF-like, PIREP-aging, storm-lifecycle, or sector-demand validation without authoritative datasets.
 
 ## Copied Or Mimicked From `airspace-ops-console`
 
@@ -68,6 +71,7 @@ Those source artifacts flow through affected-mission queues, coordination drafts
 - Coordinate-from-hazard deep links into the real Airspace messaging page.
 - Printable pilot brief route for mission handoff, including grouped source-driver summaries, route-impact source-family chips, and clickable source artifacts back into the workbench.
 - Agentic Ops shell panel for cited weather-impact findings, mission-risk/reroute recommendations, coordination draft tasks, data-integrity warnings, and replay-audit hashes; this is assistant analysis over deterministic engine outputs, not an autonomous clearance authority.
+- Airspace Safety Lab workloads for unsafe-guidance red-team review, outcome-metrics auditing, scenario-generation drafts, TMI recommendation review, brief deltas, replay integrity, calibration curation, national demand stress review, collaborative-decision facilitation, and provider freshness; each result carries evidence receipts, policy guards, cost budget, and explicit no-send/no-official-mutation flags.
 - Agent run/task history and task acknowledgment APIs, so semi-autonomous review can behave like an operator queue rather than a transient chat response.
 - Typed operational deltas and policy enforcement for the agentic layer, so “what changed” is machine-readable and future model-backed agents cannot silently suggest external sends or official workflow mutation under the default safety policy.
 - Agent evaluation summaries for citation coverage, policy violations, source-family coverage, claim counts, and delta counts, making model-backed reasoning a measurable gate instead of a trust assumption.
@@ -76,9 +80,10 @@ Those source artifacts flow through affected-mission queues, coordination drafts
 
 ## Highest-Value Backlog
 
-1. Calibrate route blockage, turbulence, icing, confidence, and capacity-impact scoring against historical outcomes.
+1. Calibrate route blockage, turbulence, icing, confidence, and capacity-impact scoring against historical outcomes. The current `/api/calibration/run` path is fixture-backed and intentionally identifies uncalibrated coefficients.
 2. Expand product replay corpus with more real-world mixed USNS + CARF/ALTRV + NOTAM + METAR/TAF + SIGMET/AIRMET + PIREP cases; keep NOTAM constraints separate from reservations.
 3. Calibrate PIREP aging/decay coefficients and route-risk effect against operational outcomes.
-4. Add certified-feed adapter implementations when authoritative FAA/NWS/SWIM/KVM access is available.
-5. Harden live recipient/role mapping for coordinate-from-hazard delivery confirmations.
+4. Add certified/authorized feed adapter implementations when authoritative FAA/NWS/SWIM/KVM/FNS/NMS access, credentials, egress approval, and reviewer approval exist. The current provider APIs expose readiness and freshness but do not enable authorized operational feeds by default.
+5. Harden live recipient/role mapping for coordinate-from-hazard delivery confirmations. The current coordination approval/delivery endpoints record human-reviewed status and do not perform external sends.
 6. Continue validating backend source refs in `Decision.trace` against larger mixed operational corpora.
+7. Produce formal safety-case evidence for operational evaluation: provider receipts, signed replay bundles, historical calibration reports, high-volume NAS traffic tests, human-factors review, and independent verification.

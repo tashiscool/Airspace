@@ -1,0 +1,11 @@
+{
+  "id": "volcanic-ash-oceanic",
+  "name": "Volcanic Ash Oceanic Reroute",
+  "expectedFinalAction": "REROUTE_OR_BLOCKED",
+  "expectedSourceFamilies": ["WEATHER", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "WEATHER", "payload": "SIGMET VA VALID 201200/201800 BOUNDED BY 3000N15000W 3100N14900W 3050N14880W VA CLD TOP FL350 MOV NE", "expectedAction": "REROUTE" }
+  ],
+  "kpiBounds": { "timeToGuidanceSecondsMax": 0 },
+  "notes": "Demonstrates non-convective hazard routing and residual-risk briefing."
+}

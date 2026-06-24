@@ -653,6 +653,303 @@ public final class ProductDtos {
 
     @Data
     @Builder
+    public static class AirspaceGapStatus {
+        private String id;
+        private String category;
+        private String status;
+        private String summary;
+        private String evidence;
+        private String nextStep;
+        private boolean externallyBlocked;
+        private boolean certificationClaimAllowed;
+        @Builder.Default
+        private List<String> requiredFor = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class ReleaseGateSummary {
+        private String id;
+        private String label;
+        private String status;
+        private boolean passed;
+        private String summary;
+        @Builder.Default
+        private List<String> requiredTests = new ArrayList<>();
+        @Builder.Default
+        private List<String> requiredDocs = new ArrayList<>();
+        @Builder.Default
+        private List<String> excludedClaims = new ArrayList<>();
+        @Builder.Default
+        private List<String> knownNonGoals = new ArrayList<>();
+        @Builder.Default
+        private List<String> blockingGapIds = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class ProviderFreshnessStatusSummary {
+        private String status;
+        private ZonedDateTime lastPollAt;
+        private Long ageSeconds;
+        private Integer pollIntervalSeconds;
+        private boolean stale;
+        private String rationale;
+    }
+
+    @Data
+    @Builder
+    public static class ProviderHealthSummary {
+        private String id;
+        private String label;
+        private String providerType;
+        private String sourceMode;
+        private String credentialRequirement;
+        private String consentScope;
+        private String egressPolicy;
+        private boolean enabled;
+        private boolean authoritative;
+        private boolean liveOperationalUseAllowed;
+        private String endpoint;
+        private ProviderFreshnessStatusSummary freshness;
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    public static class CalibrationRunRequest {
+        private String datasetId;
+        private boolean includeSyntheticScale;
+        private String actor;
+    }
+
+    @Data
+    @Builder
+    public static class RouteImpactCalibrationReport {
+        private String id;
+        private String calibrationVersion;
+        private String datasetId;
+        private int routeOutcomeCount;
+        private int weatherOutcomeCount;
+        private int pirepOutcomeCount;
+        private int sectorCapacityOutcomeCount;
+        private int uncalibratedCoefficientCount;
+        private double deterministicAgreementRate;
+        private double averageProbabilityError;
+        private String summary;
+        @Builder.Default
+        private List<String> uncalibratedCoefficients = new ArrayList<>();
+        @Builder.Default
+        private List<String> recommendations = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class CalibrationRunSummary {
+        private String id;
+        private boolean accepted;
+        private ZonedDateTime generatedAt;
+        private String datasetId;
+        private String actor;
+        private RouteImpactCalibrationReport routeImpactReport;
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class SafetyCaseDossierSummary {
+        private String id;
+        private ZonedDateTime generatedAt;
+        private String releaseGate;
+        private boolean certificationClaimAllowed;
+        private String summary;
+        @Builder.Default
+        private List<String> scenariosTested = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourcesUsed = new ArrayList<>();
+        @Builder.Default
+        private List<String> knownGaps = new ArrayList<>();
+        @Builder.Default
+        private List<String> rejectedOverclaims = new ArrayList<>();
+        @Builder.Default
+        private List<String> replayHashes = new ArrayList<>();
+        @Builder.Default
+        private List<String> coverageSummaries = new ArrayList<>();
+        @Builder.Default
+        private List<String> humanReviewCheckpoints = new ArrayList<>();
+    }
+
+    @Data
+    public static class CoordinationDeliveryRequest {
+        private String actor;
+        private String note;
+        private String deliveryChannel;
+        private String externalReceiptId;
+    }
+
+    @Data
+    @Builder
+    public static class CoordinationDeliveryStatusSummary {
+        private String draftId;
+        private String status;
+        private String actor;
+        private ZonedDateTime updatedAt;
+        private String deliveryChannel;
+        private String externalReceiptId;
+        private boolean humanApproved;
+        private boolean externalSendPerformed;
+        private String rationale;
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class CollaborativeParticipantSummary {
+        private String participantId;
+        private String displayName;
+        private String organization;
+        private String role;
+        private String facility;
+        private String channel;
+        private boolean canApprove;
+        private boolean canDeliver;
+        private boolean active;
+    }
+
+    @Data
+    public static class CollaborativeProposalRequest {
+        private String missionId;
+        private String reservationId;
+        private String hazardOrDecisionId;
+        private String proposalType;
+        private String recommendedAction;
+        private String summary;
+        private String rationale;
+        private String actor;
+        private String role;
+        private List<String> sourceRefs = new ArrayList<>();
+        private List<String> recipientParticipantIds = new ArrayList<>();
+    }
+
+    @Data
+    public static class CollaborativeProposalActionRequest {
+        private String actor;
+        private String role;
+        private String note;
+        private String deliveryChannel;
+        private String externalReceiptId;
+        private String recipient;
+    }
+
+    @Data
+    @Builder
+    public static class CollaborativeCommentSummary {
+        private String id;
+        private String proposalId;
+        private String actor;
+        private String role;
+        private String text;
+        private ZonedDateTime createdAt;
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class CollaborativeApprovalSummary {
+        private String id;
+        private String proposalId;
+        private String actor;
+        private String role;
+        private String status;
+        private String note;
+        private ZonedDateTime updatedAt;
+        private boolean humanApproved;
+    }
+
+    @Data
+    @Builder
+    public static class CollaborativeDeliveryReceiptSummary {
+        private String id;
+        private String proposalId;
+        private String channel;
+        private String recipient;
+        private String status;
+        private String externalReceiptId;
+        private ZonedDateTime deliveredAt;
+        private String actor;
+        private boolean externalSendPerformed;
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder(toBuilder = true)
+    public static class CollaborativeProposalSummary {
+        private String id;
+        private String state;
+        private String proposalType;
+        private String missionId;
+        private String reservationId;
+        private String hazardOrDecisionId;
+        private String recommendedAction;
+        private String summary;
+        private String rationale;
+        private String proposer;
+        private String proposerRole;
+        private ZonedDateTime createdAt;
+        private ZonedDateTime updatedAt;
+        private String commonOperatingPictureVersion;
+        private boolean humanApprovalRequired;
+        @Builder.Default
+        private List<String> recipientParticipantIds = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<CollaborativeCommentSummary> comments = new ArrayList<>();
+        @Builder.Default
+        private List<CollaborativeApprovalSummary> approvals = new ArrayList<>();
+        @Builder.Default
+        private List<CollaborativeDeliveryReceiptSummary> deliveryReceipts = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class CommonOperatingPictureSummary {
+        private String id;
+        private String version;
+        private ZonedDateTime generatedAt;
+        private String syncStatus;
+        private String sourceMode;
+        private int activeMissionCount;
+        private int affectedMissionCount;
+        private int providerCount;
+        private int staleProviderCount;
+        private int activeProposalCount;
+        private int pendingApprovalCount;
+        private int deliveredReceiptCount;
+        @Builder.Default
+        private List<CollaborativeParticipantSummary> participants = new ArrayList<>();
+        @Builder.Default
+        private List<CollaborativeProposalSummary> proposals = new ArrayList<>();
+        @Builder.Default
+        private List<String> sourceRefs = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
     public static class RuntimeSummary {
         private OperationalFeedBatchResult feedBatch;
         private DecisionSummary decision;

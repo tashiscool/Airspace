@@ -9,6 +9,9 @@ export type WorkbenchSourceFamily =
   | 'PIREP'
   | 'REFERENCE'
   | 'DECISION'
+  | 'SIMULATION'
+  | 'TFM'
+  | 'OUTCOME'
   | 'UNKNOWN';
 
 export type WorkbenchSelection = {
@@ -127,6 +130,9 @@ export function sourceFamilyLabel(family?: WorkbenchSourceFamily) {
     case 'PIREP': return 'PIREP report';
     case 'REFERENCE': return 'Reference data';
     case 'DECISION': return 'Operational decision';
+    case 'SIMULATION': return 'Simulation playback';
+    case 'TFM': return 'Traffic Flow Management board';
+    case 'OUTCOME': return 'Operational outcome metrics';
     default: return 'Unknown source';
   }
 }

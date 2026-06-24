@@ -1,0 +1,12 @@
+{
+  "id": "low-vis-rvr-smgcs",
+  "name": "Low Visibility Procedure Ambiguity",
+  "expectedFinalAction": "DELAY_OR_CAUTION",
+  "expectedSourceFamilies": ["METAR", "NOTAM", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "METAR", "payload": "METAR KJFK 201200Z 00000KT 1/8SM R04R/1000FT FG VV002 A2992", "expectedAction": "MONITOR" },
+    { "offsetMinutes": 5, "family": "NOTAM", "payload": "!JFK 06/020 JFK RWY 04R RVR OUT OF SERVICE SMGCS LOW VIS PROC VERIFY", "expectedAction": "DELAY" }
+  ],
+  "kpiBounds": { "timeToGuidanceSecondsMax": 300, "sourceRefPreservationRateMin": 1.0 },
+  "notes": "Advisory only: confirms low-visibility procedure ambiguity without claiming airport procedure state."
+}

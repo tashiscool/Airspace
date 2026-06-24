@@ -1,0 +1,12 @@
+{
+  "id": "blocked-no-viable-reroute",
+  "name": "Blocked Route With No Viable Reroute",
+  "expectedFinalAction": "BLOCKED",
+  "expectedSourceFamilies": ["WEATHER", "NOTAM", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "WEATHER", "payload": "SIGMET BLOCK VALID 201200/202000 BOUNDED BY 2950N15100W 3150N15100W 3150N14800W 2950N14800W EMBD TS TOP FL500", "expectedAction": "REROUTE" },
+    { "offsetMinutes": 5, "family": "NOTAM", "payload": "!FDC BLOCK NOTAM AIRSPACE CLSD WI AN AREA 2950N15100W-3150N14800W SFC-FL600 NO VIABLE CORRIDOR", "expectedAction": "BLOCKED" }
+  ],
+  "kpiBounds": { "falseClearCountMax": 0 },
+  "notes": "Final action should be blocked with exact weather and NOTAM source refs."
+}

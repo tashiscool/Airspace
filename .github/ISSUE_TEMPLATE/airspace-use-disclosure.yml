@@ -1,0 +1,91 @@
+name: Airspace use disclosure
+description: Publicly disclose use, deployment, derivative work, integration, or LLM-assisted recreation of Airspace.
+title: "Use disclosure: <organization or project>"
+labels:
+  - compliance
+  - public-use-disclosure
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for keeping Airspace transparent. This disclosure is intended for public-interest review and license/policy compliance.
+
+        Do not include secrets, credentials, private operational data, personal data, or sensitive aviation-security details.
+  - type: input
+    id: organization
+    attributes:
+      label: Organization or individual
+      description: Who is using, evaluating, deploying, modifying, or recreating Airspace?
+    validations:
+      required: true
+  - type: dropdown
+    id: use_type
+    attributes:
+      label: Use type
+      options:
+        - Evaluation
+        - Deployment
+        - Derivative work
+        - Integration
+        - LLM-assisted recreation
+        - Reference implementation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: Purpose of use
+      description: Explain the workflow, evaluation, deployment, integration, or recreated implementation.
+    validations:
+      required: true
+  - type: input
+    id: source_code_url
+    attributes:
+      label: Published source code URL
+      description: Link to the corresponding source for your fork, derivative, integration, or implementation.
+    validations:
+      required: true
+  - type: input
+    id: operational_config_url
+    attributes:
+      label: Redacted operational configuration URL
+      description: Link to non-secret configuration, policy, scenario, rule, adapter, threshold, prompt, and deployment settings needed for review.
+    validations:
+      required: true
+  - type: input
+    id: public_project_url
+    attributes:
+      label: Public project or disclosure URL
+      description: Link to the public project page, documentation, deployment notes, or disclosure page.
+    validations:
+      required: true
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I acknowledge Airspace is licensed AGPL-3.0-or-later.
+          required: true
+        - label: I acknowledge the Public Use and AI Recreation Policy.
+          required: true
+        - label: I have published corresponding source for modifications, ports, integrations, or LLM-assisted recreations.
+          required: true
+        - label: I have published non-secret operational configuration needed for safety review.
+          required: true
+        - label: I have not disclosed secrets, credentials, personal data, private operational data, or sensitive aviation-security details.
+          required: true
+  - type: textarea
+    id: safety_changes
+    attributes:
+      label: Safety-relevant changes
+      description: List parser, decision-rule, weather, PIREP, NOTAM, route-impact, replay, calibration, agent-policy, or UI workflow changes.
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any additional context for public-interest review.
+    validations:
+      required: false

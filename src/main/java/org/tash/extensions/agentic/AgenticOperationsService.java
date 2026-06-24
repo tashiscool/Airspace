@@ -30,6 +30,8 @@ public class AgenticOperationsService {
     @Inject
     ReplayAuditAgent replayAuditAgent;
     @Inject
+    AirspaceSafetyLabAgent safetyLabAgent;
+    @Inject
     AgentCitationValidator citationValidator;
     @Inject
     AgentPolicyEnforcer policyEnforcer;
@@ -72,6 +74,19 @@ public class AgenticOperationsService {
                 break;
             case "REPLAY_AUDIT":
                 result = replayAuditAgent.explain(safe);
+                break;
+            case "SAFETY_LAB_ALL":
+            case "UNSAFE_GUIDANCE_RED_TEAM":
+            case "OUTCOME_METRICS_AUDITOR":
+            case "SCENARIO_GENERATION":
+            case "TMI_RECOMMENDATION_AUDITOR":
+            case "BRIEF_DELTA_AGENT":
+            case "REPLAY_INTEGRITY_AGENT":
+            case "HISTORICAL_CALIBRATION_CURATOR":
+            case "NATIONAL_DEMAND_STRESS_AGENT":
+            case "COLLABORATIVE_DECISION_FACILITATOR":
+            case "PROVIDER_FRESHNESS_WATCHER":
+                result = safetyLab().run(safe);
                 break;
             case "ALL":
             default:
@@ -119,6 +134,23 @@ public class AgenticOperationsService {
 
     public AgentRunResult replayAudit(AgentRunRequest request) {
         return run(withType(request, "REPLAY_AUDIT"));
+    }
+
+    public AgentRunResult safetyLab(AgentRunRequest request) {
+        return run(withType(request, "SAFETY_LAB_ALL"));
+    }
+
+    public List<AgentWorkloadDefinition> workloads() {
+        List<AgentWorkloadDefinition> definitions = new ArrayList<>();
+        definitions.add(workload("WEATHER_IMPACT", "Weather Impact Watch", "WEATHER", "Weather/PIREP route impact", "Manual or context refresh"));
+        definitions.add(workload("MISSION_RISK", "Mission Risk Analyst", "MISSION", "Mission verdict and affected mission review", "Manual or mission selection"));
+        definitions.add(workload("REROUTE_ANALYSIS", "Reroute Analyst", "ROUTE", "Route candidate and residual-risk review", "Manual or route blockage"));
+        definitions.add(workload("COORDINATION_DRAFT", "Coordination Draft", "COORDINATION", "Human-approved coordination drafts", "Manual"));
+        definitions.add(workload("PILOT_BRIEF", "Pilot Brief", "BRIEF", "Pilot/controller handoff draft", "Manual or brief request"));
+        definitions.add(workload("DATA_INTEGRITY", "Data Integrity", "DATA_QUALITY", "NOTAM/weather/PIREP/ALTRV parser and contradiction review", "Manual or ingest"));
+        definitions.add(workload("REPLAY_AUDIT", "Replay Audit", "AUDIT", "Decision replay and trace Q&A", "Manual or decision replay"));
+        definitions.addAll(safetyLab().workloads());
+        return definitions;
     }
 
     public List<AgentRunResult> runs(Integer limit) {
@@ -348,5 +380,26 @@ public class AgenticOperationsService {
             runStore = new InMemoryAgentRunStore();
         }
         return runStore;
+    }
+
+    private AgentWorkloadDefinition workload(String id, String label, String category, String gapCoverage, String trigger) {
+        return AgentWorkloadDefinition.builder()
+                .id(id)
+                .label(label)
+                .category(category)
+                .gapCoverage(gapCoverage)
+                .description(label + " produces cited advisory findings through the deterministic Airspace agentic layer.")
+                .defaultTrigger(trigger)
+                .humanApprovalRequired(true)
+                .externalSendAllowed(false)
+                .policyGuards(List.of("ADVISORY_ONLY", "NO_EXTERNAL_SEND", "NO_OFFICIAL_MUTATION", "CITED_EVIDENCE_REQUIRED"))
+                .build();
+    }
+
+    private AirspaceSafetyLabAgent safetyLab() {
+        if (safetyLabAgent == null) {
+            safetyLabAgent = new AirspaceSafetyLabAgent();
+        }
+        return safetyLabAgent;
     }
 }

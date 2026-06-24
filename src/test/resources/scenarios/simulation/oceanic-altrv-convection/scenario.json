@@ -1,0 +1,12 @@
+{
+  "id": "oceanic-altrv-convection",
+  "name": "Oceanic ALTRV Moving Convection",
+  "expectedFinalAction": "REROUTE_OR_BLOCKED",
+  "expectedSourceFamilies": ["WEATHER", "PIREP", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "WEATHER", "payload": "SIGMET CONV VALID 201200/201600 FROM 3000N15000W TO 3100N14900W EMBD TS TOP FL450 MOV E 25KT", "expectedAction": "REROUTE" },
+    { "offsetMinutes": 15, "family": "PIREP", "payload": "UA /OV 3030N14950W/TM 1215/FL250/TP B738/TB MOD/RM DEVIATING EAST OF CELL", "expectedAction": "REROUTE" }
+  ],
+  "kpiBounds": { "timeToGuidanceSecondsMax": 0, "rerouteFoundRateMin": 0.5 },
+  "notes": "Shows weather avoidance, pilot report reinforcement, and route-source traceability."
+}

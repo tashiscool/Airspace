@@ -8,6 +8,10 @@ import lombok.Data;
 @Data
 public class AgentRunRequest {
     private String agentType;
+    private String scenarioId;
+    private String runId;
+    private String campaignId;
+    private String historicalReplayDayId;
     private String missionId;
     private String reservationId;
     private String decisionId;

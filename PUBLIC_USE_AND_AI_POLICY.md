@@ -36,7 +36,8 @@ Public disclosure should include:
 - purpose of use,
 - whether it is evaluation, deployment, derivative work, LLM-assisted recreation, or integration,
 - link to the Airspace repository,
-- link to your published source code or modifications.
+- link to your published source code or modifications,
+- link to your published non-secret operational configuration, including redacted deployment, adapter, source-mode, rule, threshold, calibration, audit/replay, and agent-policy settings needed for public safety review.
 
 Recommended disclosure text:
 
@@ -57,6 +58,38 @@ That includes:
 - replay/audit logic,
 - agentic prompts or policy logic,
 - LLM-generated implementation derived from this project.
+
+## Operational Configuration Transparency
+
+Safety-relevant behavior often lives in configuration, not just source code. If you deploy, integrate, or recreate Airspace, publish the non-secret operational configuration needed to inspect how the implementation behaves.
+
+Examples include:
+
+- enabled adapters and provider modes,
+- source-freshness policy,
+- rule catalog version,
+- decision thresholds,
+- calibration model version,
+- route-impact scoring settings,
+- audit/replay settings,
+- agent policy version,
+- redacted environment variable names and templates.
+
+Do **not** publish secrets, credentials, tokens, API keys, private certificates, passwords, personal data, private operational data, or sensitive aviation-security details. Use redacted templates.
+
+## Compliance Disclosure Tools
+
+Airspace does not use hidden telemetry or clone-time collection. Compliance is based on public, explicit disclosure:
+
+- `COMPLIANCE.md`,
+- `docs/COMPLIANCE_COLLECTOR.md`,
+- `.github/ISSUE_TEMPLATE/airspace-use-disclosure.yml`,
+- `scripts/airspace-compliance-manifest.sh`,
+- `/api/compliance/policy`,
+- `/api/compliance/manifest`,
+- `/api/compliance/attestations`.
+
+The local manifest script prints a disclosure manifest by default and submits only when explicitly configured with `AIRSPACE_COMPLIANCE_SUBMIT=1` and `AIRSPACE_COMPLIANCE_COLLECTOR_URL`.
 
 ## LLM And Model-Generated Code
 
@@ -87,4 +120,3 @@ Public source availability is part of the safety model.
 The repository license is currently AGPL-3.0-or-later. AGPL provides strong copyleft obligations for modified versions and network-service interaction, but some requirements in this policy, especially broad public-use disclosure and LLM-assisted independent recreation, may require custom license language for full legal enforceability.
 
 This document states the project’s public-interest policy and contribution condition. If strict enforceability is required, this policy should be reviewed and converted into a lawyer-drafted custom public-benefit source license.
-

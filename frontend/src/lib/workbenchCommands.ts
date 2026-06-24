@@ -1,9 +1,13 @@
 import {
+  BarChart3,
+  Calculator,
   CloudSun,
   Database,
+  FlaskConical,
   GitBranch,
   LayoutGrid,
   Mail,
+  MonitorPlay,
   Radio,
   ScrollText,
   Search,
@@ -21,8 +25,11 @@ export const WORKBENCH_NAV_LINKS: WorkbenchNavLink[] = [
   { to: '/decisions/latest', icon: GitBranch, label: 'Decisions', hint: '⌘5' },
   { to: '/notams', icon: Radio, label: 'NOTAMs', hint: '⌘6' },
   { to: '/weather', icon: CloudSun, label: 'Weather', hint: '⌘7' },
-  { to: '/search', icon: Search, label: 'Search', hint: '⌘8' },
-  { to: '/config', icon: Database, label: 'Config', hint: '⌘9' },
+  { to: '/tfm', icon: BarChart3, label: 'TFM Board', hint: 'flow' },
+  { to: '/outcomes', icon: Calculator, label: 'Outcomes', hint: 'metrics' },
+  { to: '/simulation', icon: MonitorPlay, label: 'Simulation', hint: '⌘8' },
+  { to: '/search', icon: Search, label: 'Search', hint: '⌘9' },
+  { to: '/config', icon: Database, label: 'Config', hint: 'settings' },
   { to: '/audit', icon: ScrollText, label: 'Audit', hint: '⌘0' }
 ];
 
@@ -48,6 +55,10 @@ export function buildWorkbenchCommands(selection: WorkbenchSelection = {}): Work
     ...WORKBENCH_NAV_LINKS.map((link) => ({ id: link.to, label: `Open ${link.label}`, route: link.to, hint: link.to, icon: link.icon })),
     { id: 'compose-message', label: 'Compose message', route: '/messages', hint: 'USNS / internal message', icon: Mail },
     { id: 'ingest-feed', label: 'Ingest feed payload', route: '/feed', hint: 'USNS/weather/PIREP/NOTAM traffic', icon: Send },
+    { id: 'run-simulation', label: 'Run simulation scenario', route: '/simulation', hint: 'timeline, route impact, pilot brief', icon: MonitorPlay },
+    { id: 'open-tfm-board', label: 'Open TFM command-center board', route: '/tfm', hint: 'airport demand, sector load, TMIs, route alternatives', icon: BarChart3 },
+    { id: 'open-outcomes', label: 'Open outcome metrics', route: '/outcomes', hint: 'delay, fuel, overload, false-clear, source refs', icon: Calculator },
+    { id: 'author-simulation-scenario', label: 'Author simulation scenario', route: '/simulation/author', hint: 'validate, import, red-team drafts', icon: FlaskConical },
     { id: 'review-notams', label: 'Review NOTAM constraints', route: '/notams', hint: 'constraints, not reservations', icon: Radio },
     {
       id: 'review-conflicts',
@@ -96,6 +107,8 @@ export function routesForSelection(selection: WorkbenchSelection = {}): Array<{ 
   if (selection.decisionId) routes.push({ label: 'Decision', route: `/decisions/${selection.decisionId}` });
   if (selection.sourceFamily === 'NOTAM') routes.push({ label: 'NOTAMs', route: '/notams' });
   if (selection.sourceFamily === 'WEATHER' || selection.sourceFamily === 'PIREP') routes.push({ label: 'Weather', route: '/weather' });
+  if (selection.sourceFamily === 'TFM') routes.push({ label: 'TFM Board', route: '/tfm' });
+  if (selection.sourceFamily === 'OUTCOME') routes.push({ label: 'Outcome Metrics', route: '/outcomes' });
   return dedupeRoutes(routes);
 }
 

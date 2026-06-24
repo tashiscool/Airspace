@@ -328,6 +328,64 @@ class AgenticOperationsServiceTest {
     }
 
     @Test
+    void safetyLabWorkloadsAreCatalogedCitedAndHumanReviewed() {
+        AirspaceProductService productService = seededProductService();
+        AgenticOperationsService service = wiredService(productService);
+
+        assertTrue(service.workloads().stream().anyMatch(workload -> "UNSAFE_GUIDANCE_RED_TEAM".equals(workload.getId())));
+        assertTrue(service.workloads().stream().anyMatch(workload -> "OUTCOME_METRICS_AUDITOR".equals(workload.getId())));
+        assertTrue(service.workloads().stream().anyMatch(workload -> "TMI_RECOMMENDATION_AUDITOR".equals(workload.getId())));
+        assertTrue(service.workloads().stream()
+                .filter(workload -> "UNSAFE_GUIDANCE_RED_TEAM".equals(workload.getId()))
+                .allMatch(workload -> workload.isHumanApprovalRequired() && !workload.isExternalSendAllowed()));
+
+        AgentRunRequest request = new AgentRunRequest();
+        request.setAgentType("SAFETY_LAB_ALL");
+        request.setScenarioId("oceanic-altrv-convection");
+        request.setActor("planner");
+        AgentRunResult result = service.run(request);
+
+        assertTrue(result.isAccepted(), result.getDiagnostics().toString());
+        assertEquals("SAFETY_LAB_ALL", result.getAgentType());
+        assertTrue(result.isHumanApprovalRequired());
+        assertFalse(result.isExternalSendPerformed());
+        assertFalse(result.isOfficialStateMutationPerformed());
+        assertNotNull(result.getCostBudget());
+        assertTrue(result.getCostBudget().isCircuitBreakerArmed());
+        assertTrue(result.getCostBudget().getEstimatedCostUsd() <= result.getCostBudget().getMaxCostUsd());
+        assertTrue(result.getPolicyGuards().contains("NO_EXTERNAL_SEND"));
+        assertFalse(result.getEvidenceReceipts().isEmpty());
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "UNSAFE_GUIDANCE_RED_TEAM".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "OUTCOME_METRICS_AUDIT".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "TMI_RECOMMENDATION_AUDIT".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "REPLAY_INTEGRITY".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().allMatch(finding -> finding.getCitations() != null && !finding.getCitations().isEmpty()));
+        assertTrue(result.getRecommendations().stream().allMatch(AgentRecommendation::isHumanApprovalRequired));
+        assertTrue(result.getTasks().stream().allMatch(task -> task.getCitations() != null && !task.getCitations().isEmpty()));
+        assertTrue(result.getEvaluation().isAccepted(), result.getEvaluation().getErrors().toString());
+        assertEquals(0, result.getEvaluation().getPolicyViolationCount());
+    }
+
+    @Test
+    void safetyLabTmiAuditorPreservesTfmEvidenceAndReviewTask() {
+        AirspaceProductService productService = seededProductService();
+        AgenticOperationsService service = wiredService(productService);
+
+        AgentRunRequest request = new AgentRunRequest();
+        request.setAgentType("TMI_RECOMMENDATION_AUDITOR");
+        AgentRunResult result = service.run(request);
+
+        assertTrue(result.isAccepted(), result.getDiagnostics().toString());
+        assertEquals("TMI_RECOMMENDATION_AUDITOR", result.getAgentType());
+        assertTrue(result.getSummary().contains("TFM proposal audit"));
+        assertTrue(result.getTasks().stream().anyMatch(task -> "/tfm".equals(task.getRoute())));
+        assertTrue(result.getCitations().stream().anyMatch(citation -> citation.getSourceFamily() != null));
+        assertTrue(result.getDiagnostics().stream().anyMatch(value -> value.contains("NO_EXTERNAL_SEND")));
+        assertFalse(result.isExternalSendPerformed());
+        assertFalse(result.isOfficialStateMutationPerformed());
+    }
+
+    @Test
     void operationalDeltaServiceComparesDecisionAndRouteImpactChanges() {
         AirspaceProductService productService = seededProductService();
         String missionId = productService.missions().get(0).getId();
@@ -556,6 +614,10 @@ class AgenticOperationsServiceTest {
         service.replayAuditAgent = new ReplayAuditAgent();
         service.replayAuditAgent.productService = productService;
         service.replayAuditAgent.operationalDeltaService = deltaService;
+        service.safetyLabAgent = new AirspaceSafetyLabAgent();
+        service.safetyLabAgent.productService = productService;
+        service.safetyLabAgent.simulationService = new org.tash.extensions.simulation.OperationalSimulationService(productService);
+        service.safetyLabAgent.readinessService = new org.tash.extensions.product.application.AirspaceReadinessService(productService);
         service.citationValidator = new AgentCitationValidator();
         service.policyEnforcer = new AgentPolicyEnforcer();
         service.evaluationService = new AgentEvaluationService();
@@ -592,6 +654,8 @@ class AgenticOperationsServiceTest {
                 .id("agent-policy-test")
                 .agentType("COORDINATION_DRAFT")
                 .accepted(true)
+                .externalSendPerformed(true)
+                .officialStateMutationPerformed(true)
                 .recommendations(java.util.Arrays.asList(
                         AgentRecommendation.builder()
                                 .id("send")
@@ -610,6 +674,8 @@ class AgenticOperationsServiceTest {
         java.util.List<String> diagnostics = enforcer.validate(result, AgentPolicy.builder().build());
         assertTrue(diagnostics.stream().anyMatch(value -> value.contains("external-send")));
         assertTrue(diagnostics.stream().anyMatch(value -> value.contains("workflow mutation")));
+        assertTrue(diagnostics.stream().anyMatch(value -> value.contains("performed an external send")));
+        assertTrue(diagnostics.stream().anyMatch(value -> value.contains("performed official workflow mutation")));
     }
 
     @Test

@@ -14,6 +14,12 @@ public class AgentPolicyEnforcer {
         if (result == null) {
             return diagnostics;
         }
+        if (!safePolicy.isAllowExternalSend() && result.isExternalSendPerformed()) {
+            diagnostics.add("Policy blocks agent result that performed an external send: " + result.getId());
+        }
+        if (!safePolicy.isAllowOfficialStateMutation() && result.isOfficialStateMutationPerformed()) {
+            diagnostics.add("Policy blocks agent result that performed official workflow mutation: " + result.getId());
+        }
         for (AgentRecommendation recommendation : result.getRecommendations()) {
             String action = recommendation.getAction() == null ? "" : recommendation.getAction().toUpperCase(Locale.US);
             if (!safePolicy.isAllowExternalSend() && (action.contains("SEND") || action.contains("TRANSMIT"))) {

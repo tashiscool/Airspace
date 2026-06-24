@@ -4,7 +4,7 @@ import { api } from './client';
 const calls: Array<{ url: string; init: RequestInit }> = [];
 
 function bodyFor(url: string) {
-  const call = calls.find((candidate) => candidate.url === url);
+  const call = calls.find((candidate) => candidate.url === url && candidate.init.body !== undefined);
   expect(call, `Expected request to ${url}`).toBeDefined();
   return JSON.parse(String(call?.init.body));
 }
@@ -77,6 +77,7 @@ describe('product API client', () => {
     await api.pilotBriefAgent({ missionId: 'mission-1' });
     await api.dataIntegrityAgent({ missionId: 'mission-1' });
     await api.replayAuditAgent({ decisionId: 'decision-1' });
+    await api.safetyLabAgent({ agentType: 'SAFETY_LAB_ALL', scenarioId: 'oceanic-altrv-convection' });
     await api.agentDelta({ previousDecisionId: 'decision-0', decisionId: 'decision-1', missionId: 'mission-1' });
     await api.generateAgentScenario({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
     await api.evaluateAgentStability({ iterations: 3, agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' } });
@@ -95,13 +96,66 @@ describe('product API client', () => {
     });
     await api.agentJobs(5);
     await api.agentJob('job-1');
+    await api.simulationScenarios();
+    await api.simulationScenarioBundle('low-vis-rvr-smgcs');
+    await api.validateSimulationScenario({ id: 'scenario-1', scenario: { id: 'scenario-1', name: 'Scenario 1', route: [[30, -150], [31, -149]], events: [], sourceRefs: [], expectedSourceFamilies: [], sensitivityDefaults: {} } as never, kpiGates: [], expectedSummary: {} });
+    await api.importSimulationScenario({ id: 'scenario-1', scenario: { id: 'scenario-1', name: 'Scenario 1', route: [[30, -150], [31, -149]], events: [{ id: 'evt-1', offsetMinutes: 0, family: 'WEATHER', sourceRefs: [] }], expectedSourceFamilies: [], sensitivityDefaults: {} }, kpiGates: [], expectedSummary: {} });
+    await api.validateTrafficReplay({
+      id: 'traffic-replay-1',
+      sourceMode: 'LOCAL_FIXTURE_REPLAY',
+      flightPlans: [],
+      positions: [],
+      airportDemand: [],
+      sectorDemand: [],
+      trafficManagementInitiatives: [],
+      sourceRefs: [],
+      assumptions: [],
+      diagnostics: []
+    });
+    await api.historicalReplayDays();
+    await api.historicalReplayDay('public-like-jfk-lowvis-opsnet-bts-awc');
+    await api.loadHistoricalReplay({ dayId: 'public-like-jfk-lowvis-opsnet-bts-awc', runSimulation: true });
+    await api.historicalReplayCalibration({ dayId: 'public-like-jfk-lowvis-opsnet-bts-awc' });
+    await api.previewNationalDemandCapacity({ id: 'national-1', flightCount: 1000, airportCount: 12, sectorCount: 24 });
+    await api.tfmBoard({ demandCapacityConfig: { id: 'tfm-1', flightCount: 500, airportCount: 10, sectorCount: 18 }, focusMinute: 30 });
+    await api.outcomeMetrics({ runSimulation: true, scenarioId: 'low-vis-rvr-smgcs', demandCapacityConfig: { id: 'outcome-1', flightCount: 300, airportCount: 6, sectorCount: 12 } });
+    await api.runSimulation({ scenarioId: 'low-vis-rvr-smgcs', includeSensitivity: true, tickIntervalSeconds: 60, durationMinutes: 30, randomSeed: 7 });
+    await api.runSimulationCampaign({ scenarioIds: ['low-vis-rvr-smgcs'], actor: 'planner', randomSeed: 7 });
+    await api.simulationRun('sim-run-1');
+    await api.simulationTimeline('sim-run-1');
+    await api.simulationFeatures('sim-run-1');
+    await api.simulationWorldState('sim-run-1');
+    await api.simulationReplay('sim-run-1');
+    await api.simulationCampaignReport('sim-campaign-1');
+    await api.simulationCampaignDossier('sim-campaign-1');
+    await api.generateSimulationScenarios({ scenarioType: 'LOW_VISIBILITY_PROCEDURE_AMBIGUITY', count: 2, focusAreas: ['RVR'] });
+    await api.redTeamSimulation({ runId: 'sim-run-1' });
     await api.agentStatus();
+    await api.agentWorkloads();
     await api.agentMetrics();
     await api.agentRuns(5, { agentType: 'ALL', missionId: 'mission-1', accepted: true, sourceFamily: 'WEATHER' });
     await api.agentRun('run-1');
     await api.agentTasks('OPEN', 8, { priority: 'HIGH', assignedRole: 'planner', sourceFamily: 'WEATHER', routeContains: 'mission-1' });
     await api.agentTask('task-1');
     await api.transitionAgentTask('task-1', { status: 'ACKNOWLEDGED', actor: 'planner', note: 'reviewed' });
+    await api.gaps();
+    await api.releaseGates();
+    await api.providersStatus();
+    await api.pollProviderWeather({ products: ['metar'], maxResults: 5 });
+    await api.runCalibration({ datasetId: 'fixture-low-vis-weather', includeSyntheticScale: true, actor: 'planner' });
+    await api.calibrationReports();
+    await api.safetyDossier();
+    await api.commonOperatingPicture();
+    await api.collaborativeParticipants();
+    await api.collaborativeProposals();
+    await api.createCollaborativeProposal({ missionId: 'mission-1', recommendedAction: 'REROUTE', sourceRefs: ['WEATHER:1'] });
+    await api.commentOnCollaborativeProposal('proposal-1', { actor: 'dispatcher', note: 'accept if approved' });
+    await api.acceptCollaborativeProposal('proposal-1', { actor: 'dispatcher', role: 'AIRLINE_OPERATOR' });
+    await api.rejectCollaborativeProposal('proposal-2', { actor: 'dispatcher', note: 'cannot accept' });
+    await api.approveCollaborativeProposal('proposal-1', { actor: 'tmu', role: 'TRAFFIC_MANAGER' });
+    await api.deliverCollaborativeProposal('proposal-1', { actor: 'tmu', deliveryChannel: 'TELECON', externalReceiptId: 'cop-77' });
+    await api.approveCoordination('draft-1', { actor: 'supervisor', note: 'reviewed' });
+    await api.markCoordinationDelivered('draft-1', { actor: 'supervisor', deliveryChannel: 'PHONE', externalReceiptId: 'ops-log-1' });
 
     expect(calls.map((call) => call.url)).toEqual([
       '/api/reservations/reservation-2/force-parse',
@@ -129,6 +183,7 @@ describe('product API client', () => {
       '/api/agents/pilot-brief',
       '/api/agents/data-integrity',
       '/api/agents/replay-audit',
+      '/api/agents/safety-lab',
       '/api/agents/delta',
       '/api/agents/scenario/generate',
       '/api/agents/evaluate/stability',
@@ -140,13 +195,55 @@ describe('product API client', () => {
       '/api/agents/jobs',
       '/api/agents/jobs?limit=5',
       '/api/agents/jobs/job-1',
+      '/api/simulations/scenarios',
+      '/api/simulations/scenarios/low-vis-rvr-smgcs/bundle',
+      '/api/simulations/scenarios/validate',
+      '/api/simulations/scenarios/import',
+      '/api/simulations/traffic-replay/validate',
+      '/api/simulations/historical-replay/days',
+      '/api/simulations/historical-replay/days/public-like-jfk-lowvis-opsnet-bts-awc',
+      '/api/simulations/historical-replay/load',
+      '/api/simulations/historical-replay/calibrate',
+      '/api/simulations/national-demand/preview',
+      '/api/tfm/board',
+      '/api/outcomes/metrics',
+      '/api/simulations/run',
+      '/api/simulations/campaign',
+      '/api/simulations/runs/sim-run-1',
+      '/api/simulations/runs/sim-run-1/timeline',
+      '/api/simulations/runs/sim-run-1/features',
+      '/api/simulations/runs/sim-run-1/world-state',
+      '/api/simulations/runs/sim-run-1/replay',
+      '/api/simulations/campaigns/sim-campaign-1/report',
+      '/api/simulations/campaigns/sim-campaign-1/dossier',
+      '/api/simulations/agents/generate-scenarios',
+      '/api/simulations/agents/red-team',
       '/api/agents/status',
+      '/api/agents/workloads',
       '/api/agents/metrics',
       '/api/agents/runs?limit=5&agentType=ALL&missionId=mission-1&accepted=true&sourceFamily=WEATHER',
       '/api/agents/runs/run-1',
       '/api/agents/tasks?status=OPEN&limit=8&priority=HIGH&assignedRole=planner&sourceFamily=WEATHER&routeContains=mission-1',
       '/api/agents/tasks/task-1',
-      '/api/agents/tasks/task-1/transition'
+      '/api/agents/tasks/task-1/transition',
+      '/api/gaps',
+      '/api/gaps/release-gates',
+      '/api/providers/status',
+      '/api/providers/weather/poll',
+      '/api/calibration/run',
+      '/api/calibration/reports',
+      '/api/safety/dossier',
+      '/api/collaboration/common-operating-picture',
+      '/api/collaboration/participants',
+      '/api/collaboration/proposals',
+      '/api/collaboration/proposals',
+      '/api/collaboration/proposals/proposal-1/comment',
+      '/api/collaboration/proposals/proposal-1/accept',
+      '/api/collaboration/proposals/proposal-2/reject',
+      '/api/collaboration/proposals/proposal-1/approve',
+      '/api/collaboration/proposals/proposal-1/deliver',
+      '/api/coordination/draft-1/approve',
+      '/api/coordination/draft-1/mark-delivered'
     ]);
     expect(bodyFor('/api/weather/live/poll')).toMatchObject({ products: ['metar', 'airsigmet'], hoursBeforeNow: 2 });
     expect(bodyFor('/api/weather/route-sample')).toMatchObject({ corridorNauticalMiles: 40 });
@@ -158,11 +255,31 @@ describe('product API client', () => {
     expect(bodyFor('/api/agents/run')).toMatchObject({ agentType: 'ALL', missionId: 'mission-1' });
     expect(bodyFor('/api/agents/reroute-analysis')).toMatchObject({ missionId: 'mission-1', reservationId: 'reservation-1' });
     expect(bodyFor('/api/agents/delta')).toMatchObject({ previousDecisionId: 'decision-0', decisionId: 'decision-1' });
+    expect(bodyFor('/api/agents/safety-lab')).toMatchObject({ agentType: 'SAFETY_LAB_ALL', scenarioId: 'oceanic-altrv-convection' });
     expect(bodyFor('/api/agents/scenario/generate')).toMatchObject({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
     expect(bodyFor('/api/agents/evaluate/stability')).toMatchObject({ iterations: 3, agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' } });
     expect(bodyFor('/api/agents/mcp/tools/call')).toMatchObject({ toolId: 'airspace.mission.weather_verdict' });
     expect(bodyFor('/api/agents/jobs')).toMatchObject({ agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' } });
+    expect(bodyFor('/api/simulations/scenarios/validate')).toMatchObject({ id: 'scenario-1' });
+    expect(bodyFor('/api/simulations/scenarios/import')).toMatchObject({ id: 'scenario-1' });
+    expect(bodyFor('/api/simulations/traffic-replay/validate')).toMatchObject({ id: 'traffic-replay-1', sourceMode: 'LOCAL_FIXTURE_REPLAY' });
+    expect(bodyFor('/api/simulations/historical-replay/load')).toMatchObject({ dayId: 'public-like-jfk-lowvis-opsnet-bts-awc', runSimulation: true });
+    expect(bodyFor('/api/simulations/historical-replay/calibrate')).toMatchObject({ dayId: 'public-like-jfk-lowvis-opsnet-bts-awc' });
+    expect(bodyFor('/api/simulations/national-demand/preview')).toMatchObject({ id: 'national-1', flightCount: 1000 });
+    expect(bodyFor('/api/tfm/board')).toMatchObject({ demandCapacityConfig: { id: 'tfm-1', flightCount: 500 }, focusMinute: 30 });
+    expect(bodyFor('/api/outcomes/metrics')).toMatchObject({ runSimulation: true, scenarioId: 'low-vis-rvr-smgcs', demandCapacityConfig: { id: 'outcome-1', flightCount: 300 } });
+    expect(bodyFor('/api/simulations/run')).toMatchObject({ scenarioId: 'low-vis-rvr-smgcs', includeSensitivity: true, tickIntervalSeconds: 60, durationMinutes: 30, randomSeed: 7 });
+    expect(bodyFor('/api/simulations/campaign')).toMatchObject({ scenarioIds: ['low-vis-rvr-smgcs'], actor: 'planner', randomSeed: 7 });
+    expect(bodyFor('/api/simulations/agents/generate-scenarios')).toMatchObject({ scenarioType: 'LOW_VISIBILITY_PROCEDURE_AMBIGUITY', count: 2 });
+    expect(bodyFor('/api/simulations/agents/red-team')).toMatchObject({ runId: 'sim-run-1' });
     expect(bodyFor('/api/agents/tasks/task-1/transition')).toMatchObject({ status: 'ACKNOWLEDGED', actor: 'planner' });
+    expect(bodyFor('/api/providers/weather/poll')).toMatchObject({ products: ['metar'], maxResults: 5 });
+    expect(bodyFor('/api/calibration/run')).toMatchObject({ datasetId: 'fixture-low-vis-weather', includeSyntheticScale: true });
+    expect(bodyFor('/api/collaboration/proposals')).toMatchObject({ missionId: 'mission-1', recommendedAction: 'REROUTE' });
+    expect(bodyFor('/api/collaboration/proposals/proposal-1/comment')).toMatchObject({ actor: 'dispatcher', note: 'accept if approved' });
+    expect(bodyFor('/api/collaboration/proposals/proposal-1/deliver')).toMatchObject({ deliveryChannel: 'TELECON', externalReceiptId: 'cop-77' });
+    expect(bodyFor('/api/coordination/draft-1/approve')).toMatchObject({ actor: 'supervisor' });
+    expect(bodyFor('/api/coordination/draft-1/mark-delivered')).toMatchObject({ deliveryChannel: 'PHONE', externalReceiptId: 'ops-log-1' });
   });
 
   it('surfaces JSON diagnostics from failed API responses', async () => {

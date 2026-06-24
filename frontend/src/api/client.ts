@@ -1,5 +1,6 @@
 import type {
   AffectedMissionSummary,
+  AirspaceGapStatus,
   AgentRunRequest,
   AgentRunResult,
   AgenticRiskAssessment,
@@ -10,12 +11,24 @@ import type {
   AgentStoreStatus,
   AgentTask,
   AgentTaskTransitionRequest,
+  AgentWorkloadDefinition,
   AgentOperationalDelta,
+  CalibrationRunSummary,
+  CollaborativeParticipantSummary,
+  CollaborativeProposalActionRequest,
+  CollaborativeProposalRequest,
+  CollaborativeProposalSummary,
+  CommonOperatingPictureSummary,
+  CoordinationDeliveryStatusSummary,
   DecisionSummary,
   FeedArtifactSummary,
   FeedTransactionSummary,
   FeatureCollection,
   HistoryEventSummary,
+  HistoricalReplayCalibrationReport,
+  HistoricalReplayDay,
+  HistoricalReplayLoadRequest,
+  HistoricalReplayLoadResult,
   MessageSummary,
   McpEvidenceReceipt,
   McpServerDefinition,
@@ -25,6 +38,10 @@ import type {
   MissionDetail,
   MissionWeatherVerdictSummary,
   MissionSummary,
+  NationalDemandCapacityConfig,
+  NationalDemandCapacityReport,
+  OutcomeMetricsReport,
+  OutcomeMetricsRequest,
   PilotBriefSummary,
   PirepRelevanceRequest,
   PirepRelevanceResult,
@@ -36,6 +53,28 @@ import type {
   SearchResultSummary,
   ScenarioFixtureBundle,
   ScenarioFixtureRequest,
+  SafetyDossierExport,
+  ScenarioBundle,
+  ScenarioValidationResult,
+  SimulationAgentReport,
+  SimulationAgentRequest,
+  SimulationCampaignReport,
+  SimulationRunResult,
+  SimulationScenario,
+  SimulationStepResult,
+  SimulationReplayBundle,
+  SimulationWorldState,
+  SimulatedAircraft,
+  TrafficReplayBundle,
+  TrafficReplayValidationResult,
+  TfmCommandCenterRequest,
+  TfmCommandCenterSummary,
+  WeatherEnsembleConfig,
+  SectorWorkloadModel,
+  AirportOpsTimeline,
+  ProviderHealthSummary,
+  ReleaseGateSummary,
+  SafetyCaseDossierSummary,
   CoordinationDraftSummary,
   UserSummary,
   WeatherSourceSummary,
@@ -197,6 +236,34 @@ export const api = {
     request<ReferenceDataImportResult>('/api/reference/import/apply', { method: 'POST', body: JSON.stringify({ payload, actor, apply: true }) }),
   metrics: () => request<Record<string, number>>('/api/metrics'),
   config: () => request<Record<string, unknown>>('/api/config'),
+  gaps: () => request<AirspaceGapStatus[]>('/api/gaps'),
+  releaseGates: () => request<ReleaseGateSummary[]>('/api/gaps/release-gates'),
+  providersStatus: () => request<ProviderHealthSummary[]>('/api/providers/status'),
+  pollProviderWeather: (body: { products?: string[]; hoursBeforeNow?: number; maxResults?: number } = {}) =>
+    request<ProviderHealthSummary>('/api/providers/weather/poll', { method: 'POST', body: JSON.stringify(body) }),
+  runCalibration: (body: { datasetId?: string; includeSyntheticScale?: boolean; actor?: string } = {}) =>
+    request<CalibrationRunSummary>('/api/calibration/run', { method: 'POST', body: JSON.stringify(body) }),
+  calibrationReports: () => request<CalibrationRunSummary[]>('/api/calibration/reports'),
+  safetyDossier: () => request<SafetyCaseDossierSummary>('/api/safety/dossier'),
+  commonOperatingPicture: () => request<CommonOperatingPictureSummary>('/api/collaboration/common-operating-picture'),
+  collaborativeParticipants: () => request<CollaborativeParticipantSummary[]>('/api/collaboration/participants'),
+  collaborativeProposals: () => request<CollaborativeProposalSummary[]>('/api/collaboration/proposals'),
+  createCollaborativeProposal: (body: CollaborativeProposalRequest) =>
+    request<CollaborativeProposalSummary>('/api/collaboration/proposals', { method: 'POST', body: JSON.stringify(body) }),
+  commentOnCollaborativeProposal: (proposalId: string, body: CollaborativeProposalActionRequest) =>
+    request<CollaborativeProposalSummary>(`/api/collaboration/proposals/${proposalId}/comment`, { method: 'POST', body: JSON.stringify(body) }),
+  acceptCollaborativeProposal: (proposalId: string, body: CollaborativeProposalActionRequest = {}) =>
+    request<CollaborativeProposalSummary>(`/api/collaboration/proposals/${proposalId}/accept`, { method: 'POST', body: JSON.stringify(body) }),
+  rejectCollaborativeProposal: (proposalId: string, body: CollaborativeProposalActionRequest = {}) =>
+    request<CollaborativeProposalSummary>(`/api/collaboration/proposals/${proposalId}/reject`, { method: 'POST', body: JSON.stringify(body) }),
+  approveCollaborativeProposal: (proposalId: string, body: CollaborativeProposalActionRequest = {}) =>
+    request<CollaborativeProposalSummary>(`/api/collaboration/proposals/${proposalId}/approve`, { method: 'POST', body: JSON.stringify(body) }),
+  deliverCollaborativeProposal: (proposalId: string, body: CollaborativeProposalActionRequest = {}) =>
+    request<CollaborativeProposalSummary>(`/api/collaboration/proposals/${proposalId}/deliver`, { method: 'POST', body: JSON.stringify(body) }),
+  approveCoordination: (draftId: string, body: { actor?: string; note?: string; deliveryChannel?: string; externalReceiptId?: string } = {}) =>
+    request<CoordinationDeliveryStatusSummary>(`/api/coordination/${draftId}/approve`, { method: 'POST', body: JSON.stringify(body) }),
+  markCoordinationDelivered: (draftId: string, body: { actor?: string; note?: string; deliveryChannel?: string; externalReceiptId?: string } = {}) =>
+    request<CoordinationDeliveryStatusSummary>(`/api/coordination/${draftId}/mark-delivered`, { method: 'POST', body: JSON.stringify(body) }),
   runAgent: (body: AgentRunRequest) =>
     request<AgentRunResult>('/api/agents/run', { method: 'POST', body: JSON.stringify(body) }),
   weatherImpactAgent: (body: AgentRunRequest = {}) =>
@@ -213,6 +280,8 @@ export const api = {
     request<AgentRunResult>('/api/agents/data-integrity', { method: 'POST', body: JSON.stringify(body) }),
   replayAuditAgent: (body: AgentRunRequest) =>
     request<AgentRunResult>('/api/agents/replay-audit', { method: 'POST', body: JSON.stringify(body) }),
+  safetyLabAgent: (body: AgentRunRequest = {}) =>
+    request<AgentRunResult>('/api/agents/safety-lab', { method: 'POST', body: JSON.stringify(body) }),
   agentDelta: (body: AgentRunRequest) =>
     request<AgentOperationalDelta[]>('/api/agents/delta', { method: 'POST', body: JSON.stringify(body) }),
   generateAgentScenario: (body: ScenarioFixtureRequest) =>
@@ -231,7 +300,57 @@ export const api = {
   agentJobs: (limit?: number) =>
     request<AgentJobResult[]>(`/api/agents/jobs${limit ? `?limit=${limit}` : ''}`),
   agentJob: (id: string) => request<AgentJobResult>(`/api/agents/jobs/${id}`),
+  simulationScenarios: () => request<SimulationScenario[]>('/api/simulations/scenarios'),
+  validateSimulationScenario: (body: ScenarioBundle) =>
+    request<ScenarioValidationResult>('/api/simulations/scenarios/validate', { method: 'POST', body: JSON.stringify(body) }),
+  importSimulationScenario: (body: ScenarioBundle) =>
+    request<ScenarioBundle>('/api/simulations/scenarios/import', { method: 'POST', body: JSON.stringify(body) }),
+  validateTrafficReplay: (body: TrafficReplayBundle) =>
+    request<TrafficReplayValidationResult>('/api/simulations/traffic-replay/validate', { method: 'POST', body: JSON.stringify(body) }),
+  historicalReplayDays: () => request<HistoricalReplayDay[]>('/api/simulations/historical-replay/days'),
+  historicalReplayDay: (id: string) => request<HistoricalReplayDay>(`/api/simulations/historical-replay/days/${id}`),
+  loadHistoricalReplay: (body: HistoricalReplayLoadRequest = {}) =>
+    request<HistoricalReplayLoadResult>('/api/simulations/historical-replay/load', { method: 'POST', body: JSON.stringify(body) }),
+  historicalReplayCalibration: (body: HistoricalReplayLoadRequest = {}) =>
+    request<HistoricalReplayCalibrationReport>('/api/simulations/historical-replay/calibrate', { method: 'POST', body: JSON.stringify(body) }),
+  previewNationalDemandCapacity: (body: NationalDemandCapacityConfig) =>
+    request<NationalDemandCapacityReport>('/api/simulations/national-demand/preview', { method: 'POST', body: JSON.stringify(body) }),
+  tfmBoard: (body: TfmCommandCenterRequest = {}) =>
+    request<TfmCommandCenterSummary>('/api/tfm/board', { method: 'POST', body: JSON.stringify(body) }),
+  outcomeMetrics: (body: OutcomeMetricsRequest = {}) =>
+    request<OutcomeMetricsReport>('/api/outcomes/metrics', { method: 'POST', body: JSON.stringify(body) }),
+  simulationScenarioBundle: (id: string) => request<ScenarioBundle>(`/api/simulations/scenarios/${id}/bundle`),
+  runSimulation: (body: {
+    scenarioId?: string;
+    actor?: string;
+    includeSensitivity?: boolean;
+    sensitivityOverrides?: Record<string, number>;
+    tickIntervalSeconds?: number;
+    durationMinutes?: number;
+    randomSeed?: number;
+    aircraftFleet?: SimulatedAircraft[];
+    trafficReplay?: TrafficReplayBundle;
+    nationalDemandCapacityConfig?: NationalDemandCapacityConfig;
+    weatherEnsembleConfig?: WeatherEnsembleConfig;
+    sectorWorkloadModel?: SectorWorkloadModel;
+    airportOpsTimeline?: AirportOpsTimeline;
+  } = {}) =>
+    request<SimulationRunResult>('/api/simulations/run', { method: 'POST', body: JSON.stringify(body) }),
+  runSimulationCampaign: (body: { scenarioIds?: string[]; includeSensitivity?: boolean; actor?: string; iterationsPerScenario?: number; simulatedDayCount?: number; randomSeed?: number; kpiGates?: unknown[] } = {}) =>
+    request<SimulationCampaignReport>('/api/simulations/campaign', { method: 'POST', body: JSON.stringify(body) }),
+  simulationRun: (id: string) => request<SimulationRunResult>(`/api/simulations/runs/${id}`),
+  simulationTimeline: (id: string) => request<SimulationStepResult[]>(`/api/simulations/runs/${id}/timeline`),
+  simulationFeatures: (id: string) => request<FeatureCollection>(`/api/simulations/runs/${id}/features`),
+  simulationWorldState: (id: string) => request<SimulationWorldState>(`/api/simulations/runs/${id}/world-state`),
+  simulationReplay: (id: string) => request<SimulationReplayBundle>(`/api/simulations/runs/${id}/replay`),
+  simulationCampaignReport: (id: string) => request<SimulationCampaignReport>(`/api/simulations/campaigns/${id}/report`),
+  simulationCampaignDossier: (id: string) => request<SafetyDossierExport>(`/api/simulations/campaigns/${id}/dossier`),
+  generateSimulationScenarios: (body: SimulationAgentRequest = {}) =>
+    request<SimulationAgentReport>('/api/simulations/agents/generate-scenarios', { method: 'POST', body: JSON.stringify(body) }),
+  redTeamSimulation: (body: SimulationAgentRequest = {}) =>
+    request<SimulationAgentReport>('/api/simulations/agents/red-team', { method: 'POST', body: JSON.stringify(body) }),
   agentStatus: () => request<AgentStoreStatus>('/api/agents/status'),
+  agentWorkloads: () => request<AgentWorkloadDefinition[]>('/api/agents/workloads'),
   agentMetrics: () => request<Record<string, number>>('/api/agents/metrics'),
   agentRuns: (limit?: number, filters?: { agentType?: string; missionId?: string; reservationId?: string; decisionId?: string; accepted?: boolean; sourceFamily?: string }) => {
     const params = new URLSearchParams();

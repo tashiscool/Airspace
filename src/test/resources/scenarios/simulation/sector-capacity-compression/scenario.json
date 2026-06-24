@@ -1,0 +1,12 @@
+{
+  "id": "sector-capacity-compression",
+  "name": "Sector Capacity Compression",
+  "expectedFinalAction": "REROUTE_OR_BLOCKED",
+  "expectedSourceFamilies": ["WEATHER", "OPERATOR", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "WEATHER", "payload": "CWAP-style SECTOR VALID 201200/201800 WITHIN 45NM OF 3030N14950W TOP FL430 GROWING", "expectedAction": "REROUTE" },
+    { "offsetMinutes": 12, "family": "OPERATOR", "payload": "SECTOR_DEMAND ZNY-TEST ACTIVE 32 BASELINE 20", "expectedAction": "REROUTE" }
+  ],
+  "kpiBounds": { "rerouteFoundRateMin": 0.5 },
+  "notes": "Synthetic capacity pressure only; real sector demand calibration remains external."
+}

@@ -22,7 +22,11 @@ public class AgentRunResult {
     private String summary;
     private double confidence;
     private boolean accepted;
+    private boolean humanApprovalRequired;
+    private boolean externalSendPerformed;
+    private boolean officialStateMutationPerformed;
     private ZonedDateTime generatedAt;
+    private AgentCostBudget costBudget;
     private AgentAuditEnvelope auditEnvelope;
     private AgentEvaluationSummary evaluation;
     private AgentReasoningEnvelope reasoningEnvelope;
@@ -43,6 +47,10 @@ public class AgentRunResult {
     private List<AgentOperationalDelta> deltas = new ArrayList<>();
     @Builder.Default
     private List<AgentOperatingLoopStep> operatingLoop = new ArrayList<>();
+    @Builder.Default
+    private List<AgentEvidenceReceipt> evidenceReceipts = new ArrayList<>();
+    @Builder.Default
+    private List<String> policyGuards = new ArrayList<>();
     @Builder.Default
     private List<String> diagnostics = new ArrayList<>();
 }

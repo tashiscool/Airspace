@@ -1,0 +1,11 @@
+{
+  "id": "viable-reroute-residual-risk",
+  "name": "Viable Reroute With Residual Risk",
+  "expectedFinalAction": "REROUTE_WITH_CANDIDATE",
+  "expectedSourceFamilies": ["WEATHER", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "WEATHER", "payload": "SIGMET REROUTE VALID 201200/201600 FROM 3000N15000W TO 3100N14900W EMBD TS TOP FL430 MOV E 20KT", "expectedAction": "REROUTE" }
+  ],
+  "kpiBounds": { "rerouteFoundRateMin": 0.5, "sourceRefPreservationRateMin": 1.0 },
+  "notes": "Candidate comparison should expose avoided sources, residual risk, and cost assumptions."
+}

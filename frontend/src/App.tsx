@@ -17,6 +17,11 @@ const ConfigPage = lazy(() => import('./pages/ConfigPage').then((module) => ({ d
 const NotamsPage = lazy(() => import('./pages/NotamsPage').then((module) => ({ default: module.NotamsPage })));
 const WeatherPage = lazy(() => import('./pages/WeatherPage').then((module) => ({ default: module.WeatherPage })));
 const PilotBriefPage = lazy(() => import('./pages/PilotBriefPage').then((module) => ({ default: module.PilotBriefPage })));
+const TfmBoardPage = lazy(() => import('./pages/TfmBoardPage').then((module) => ({ default: module.TfmBoardPage })));
+const OutcomeMetricsPage = lazy(() => import('./pages/OutcomeMetricsPage').then((module) => ({ default: module.OutcomeMetricsPage })));
+const SimulationPage = lazy(() => import('./pages/SimulationPage').then((module) => ({ default: module.SimulationPage })));
+const SimulationAuthorPage = lazy(() => import('./pages/SimulationAuthorPage').then((module) => ({ default: module.SimulationAuthorPage })));
+const SimulationReplayPage = lazy(() => import('./pages/SimulationReplayPage').then((module) => ({ default: module.SimulationReplayPage })));
 
 function Guarded() {
   const token = useSession((state) => state.token);
@@ -51,6 +56,11 @@ export function App() {
             <Route path="/decisions/:decisionId" element={<DecisionPage />} />
             <Route path="/notams" element={<NotamsPage />} />
             <Route path="/weather" element={<WeatherPage />} />
+            <Route path="/tfm" element={<TfmBoardPage />} />
+            <Route path="/outcomes" element={<OutcomeMetricsPage />} />
+            <Route path="/simulation" element={<SimulationPage />} />
+            <Route path="/simulation/author" element={<SimulationAuthorPage />} />
+            <Route path="/simulation/runs/:runId/replay" element={<SimulationReplayPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/audit" element={<HistoryPage />} />

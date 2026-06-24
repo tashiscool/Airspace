@@ -23,5 +23,9 @@ This project is operated as a donation-only, public-interest aviation safety pro
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 - [SAFETY.md](SAFETY.md)
 - [PUBLIC_USE_AND_AI_POLICY.md](PUBLIC_USE_AND_AI_POLICY.md)
+- [COMPLIANCE.md](COMPLIANCE.md)
+- [docs/COMPLIANCE_COLLECTOR.md](docs/COMPLIANCE_COLLECTOR.md)
 
 The project policy expects public disclosure and source publication for organizational use, deployment, modification, reference implementation, LLM-assisted recreation, or substantially similar implementations derived from this repository. Some of those expectations may require custom legal drafting beyond standard AGPL for full enforceability.
+
+Airspace does not use hidden telemetry or clone-time collection. Compliance evidence is expected through explicit public disclosure, self-attestation, and redacted operational-configuration publication.

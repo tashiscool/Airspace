@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 
 @QuarkusTest
@@ -373,7 +374,7 @@ class ProductApiResourceTest {
                 .get("/api/search")
                 .then()
                 .statusCode(200)
-                .body("find { it.type == 'mission' }.route", equalTo("/missions/" + missionId));
+                .body("findAll { it.type == 'mission' }.route", hasItem("/missions/" + missionId));
 
         given()
                 .queryParam("q", "METAR")
@@ -465,6 +466,31 @@ class ProductApiResourceTest {
                 .statusCode(200)
                 .body("id", equalTo(agentRunId))
                 .body("reasoningEnvelope.draftHash", notNullValue());
+
+        given()
+                .when()
+                .get("/api/agents/workloads")
+                .then()
+                .statusCode(200)
+                .body("id", hasItem("UNSAFE_GUIDANCE_RED_TEAM"))
+                .body("id", hasItem("OUTCOME_METRICS_AUDITOR"))
+                .body("find { it.id == 'UNSAFE_GUIDANCE_RED_TEAM' }.externalSendAllowed", equalTo(false));
+
+        given()
+                .contentType("application/json")
+                .body("{\"agentType\":\"SAFETY_LAB_ALL\",\"scenarioId\":\"oceanic-altrv-convection\",\"actor\":\"planner\"}")
+                .when()
+                .post("/api/agents/safety-lab")
+                .then()
+                .statusCode(200)
+                .body("accepted", equalTo(true))
+                .body("humanApprovalRequired", equalTo(true))
+                .body("externalSendPerformed", equalTo(false))
+                .body("officialStateMutationPerformed", equalTo(false))
+                .body("policyGuards", hasItem("NO_EXTERNAL_SEND"))
+                .body("costBudget.circuitBreakerArmed", equalTo(true))
+                .body("evidenceReceipts.size()", greaterThanOrEqualTo(1))
+                .body("findings.find { it.category == 'OUTCOME_METRICS_AUDIT' }.id", notNullValue());
 
         given()
                 .when()

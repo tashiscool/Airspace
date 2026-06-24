@@ -1,0 +1,12 @@
+{
+  "id": "pirep-safety-override",
+  "name": "Severe PIREP Safety Override",
+  "expectedFinalAction": "CAUTION_OR_ALTITUDE_CHANGE",
+  "expectedSourceFamilies": ["TAF", "PIREP", "CARF/ALTRV"],
+  "events": [
+    { "offsetMinutes": 0, "family": "TAF", "payload": "TAF KJFK 201130Z 2012/2118 P6SM SCT030", "expectedAction": "MONITOR" },
+    { "offsetMinutes": 6, "family": "PIREP", "payload": "UUA /OV 3030N14950W/TM 1206/FL250/TP B738/TB SEV/RM ABRUPT ALTITUDE CHANGE", "expectedAction": "CAUTION" }
+  ],
+  "kpiBounds": { "timeToGuidanceSecondsMax": 360, "sourceRefPreservationRateMin": 1.0 },
+  "notes": "Urgent aircraft report must change the mission review posture."
+}

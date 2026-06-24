@@ -37,6 +37,11 @@ export function DecisionPage() {
     queryFn: () => api.search('decision'),
     staleTime: 30_000
   });
+  const calibrationReports = useQuery({
+    queryKey: ['readiness', 'calibration'],
+    queryFn: api.calibrationReports,
+    staleTime: 60_000
+  });
   const decision = evaluate.data ?? savedDecision.data;
   const replay = useMutation({ mutationFn: () => api.replayDecision(decision!.id) });
   const features = useQuery({
@@ -132,6 +137,7 @@ export function DecisionPage() {
         <div className="notice-stack">
           {decisionId !== 'latest' && <QueryNotice query={savedDecision} label="Decision" />}
           <ErrorNotice error={features.error} title="Decision map features unavailable" />
+          <ErrorNotice error={calibrationReports.error} title="Calibration reports unavailable" />
           <MutationNotice mutation={evaluate} label="Evaluate decision" />
           <MutationNotice mutation={replay} label="Replay verification" />
         </div>
@@ -151,6 +157,11 @@ export function DecisionPage() {
               <Metric label="Route Predictions" value={String(Math.max(routePredictions.length ?? 0, routeImpactSummary?.impactedSegmentCount ?? 0))} />
               <Metric label="Avoidance Candidates" value={String(avoidanceCount)} attention={contextualAttention && avoidanceCount === 0} />
               <Metric label="Source Refs" value={String(sourceRefs.length)} attention={contextualAttention && sourceRefs.length === 0} />
+              <Metric
+                label="Calibration"
+                value={calibrationReports.data?.[0]?.routeImpactReport?.calibrationVersion ?? 'fixture pending'}
+                attention={(calibrationReports.data?.[0]?.routeImpactReport?.uncalibratedCoefficientCount ?? 1) > 0}
+              />
               {decision?.routeImpact && (
                 <div className="panel wide contextual-decision-note">
                   <h3>Mission Context Overlay</h3>
@@ -207,6 +218,15 @@ export function DecisionPage() {
                     setTab('map');
                   }}
                 />
+              </div>
+              <div className="panel wide">
+                <h3>Calibration Readiness</h3>
+                <p>{calibrationReports.data?.[0]?.routeImpactReport?.summary ?? 'Calibration report unavailable. Treat route blockage scoring as deterministic prototype guidance until fixture and historical reports are loaded.'}</p>
+                <div className="source-ref-grid">
+                  {(calibrationReports.data?.[0]?.routeImpactReport?.uncalibratedCoefficients ?? ['historical CWAP-style/CWAF-like outcomes', 'sector demand model']).slice(0, 6).map((item) => (
+                    <span key={item}>{item}</span>
+                  ))}
+                </div>
               </div>
             </section>
           </>

@@ -34,6 +34,45 @@ Airspace tackles that as a cooperative aviation decision loop:
 
 The acceptance target for the prototype is: a new SIGMET/PIREP/feed artifact should identify affected active missions locally in under 5 seconds, show a per-mission verdict badge, expose route impacts and source artifacts, support a coordination draft, and generate a printable pilot handoff brief.
 
+### Readiness Registry And Release Gates
+
+Airspace now exposes a machine-readable readiness layer so public copy, UI status, and safety claims stay aligned:
+
+- `GET /api/gaps` lists the current gap registry across weather, PIREPs, NOTAMs, CARF/ALTRV, route avoidance, live feeds, calibration, UI workflow, replay/audit, scale, and safety claims.
+- `GET /api/gaps/release-gates` reports `prototype-ready`, `public-review-ready`, `integration-ready`, and `operational-evaluation-ready` gates with required tests, required docs, excluded claims, non-goals, and blocking gaps.
+- `GET /api/providers/status` reports provider mode, credentials/consent requirements, egress policy, freshness, diagnostics, and whether a source is fixture-backed, public API, authenticated external, or authorized operational.
+- `POST /api/providers/weather/poll` is the configuration-gated Aviation Weather Center public-data seam. It is disabled by default and is not an operational SWIM/NAS feed.
+- `POST /api/calibration/run` and `GET /api/calibration/reports` generate fixture-backed calibration reports that identify uncalibrated CWAP-style/CWAF-like, PIREP aging, storm lifecycle, and sector-demand coefficients.
+- `GET /api/safety/dossier` summarizes scenarios tested, sources used, known gaps, rejected overclaims, replay-hash expectations, coverage summaries, and human-review checkpoints.
+
+The first three gates can pass for local review and integration preparation. `operational-evaluation-ready` is intentionally blocked until authorized live feeds, historical calibration datasets, real recipient/delivery integration, high-volume operational testing, and formal safety review exist. This project is still advisory software and is not FAA-certified.
+
+### Simulation Workbench
+
+Airspace now includes a local aerospace operations simulation workbench at `/simulation`. It runs fixture-backed, minute-stepped scenarios that inject weather, PIREPs, NOTAMs, CARF/ALTRV reservations, and operator events, then records mission verdict changes, multi-aircraft state, runway/RVR/SMGCS surface state, sector workload, pilot/controller/operator behavior, stochastic weather-evolution seams, recorded SWIM/TFMS-like traffic replay, route-impact deltas, coordination drafts, pilot briefs, map playback, source refs, replay/audit IDs, and KPI summaries.
+
+The traffic replay layer is local/replay-first: scenario authors can provide `TrafficReplayBundle` JSON with flight plans, scheduled/estimated departure and arrival times, aircraft position snapshots, filed routes, airport demand/capacity snapshots, sector demand/workload snapshots, and typed Traffic Flow Management primitives. GDP, AFP, FEA/FCA, miles-in-trail, reroute advisory, ground stop, departure metering, arrival rate, sector capacity, and TMI recommendations are modeled explicitly so the simulator can drive tick-level aircraft positions, airport queues/surface delay, sector workload/frequency congestion, affected-flight TMI review, and human-approved TFM recommendations while keeping `liveSwimNasDataUsed=false` unless a future authorized provider explicitly changes the source mode. `POST /api/simulations/traffic-replay/validate` checks replay structure before a run. `POST /api/simulations/national-demand/preview` and `SimulationRunRequest.nationalDemandCapacityConfig` generate local NAS-scale demand/capacity reports across hundreds or thousands of synthetic flights, airport resources, sector resources, overload snapshots, and advisory TFM recommendations.
+
+Historical replay is modeled as a named day corpus over the same `TrafficReplayBundle` contract. `GET /api/simulations/historical-replay/days`, `POST /api/simulations/historical-replay/load`, and `POST /api/simulations/historical-replay/calibrate` expose synthetic and public-historical-like replay days with expected outcomes, source refs, data-quality warnings, and calibration-readiness reports. These days are useful for regression and demos, but they are not authorized operational evidence until future SWIM/TFMS/ASPM/NCEI/provider data is loaded with receipts and independent review. See [docs/HISTORICAL_REPLAY_CORPUS.md](docs/HISTORICAL_REPLAY_CORPUS.md).
+
+The collaborative decision workflow is local/replay-first too. `GET /api/collaboration/common-operating-picture` assembles mission counts, affected missions, provider freshness, participants, proposals, pending approvals, delivery receipts, and source refs into a common operating picture. Operators can create proposals, comment, accept, reject, approve locally, and record delivery receipts through `/api/collaboration/proposals/...`; every proposal remains human-approved and `externalSendPerformed=false` unless a future authorized delivery adapter is configured. See [docs/COLLABORATIVE_DECISION_WORKFLOW.md](docs/COLLABORATIVE_DECISION_WORKFLOW.md).
+
+The simulator is meant to show Airspace capabilities in motion: low-visibility RVR/SMGCS ambiguity, oceanic ALTRV weather avoidance, altitude-separated icing, PIREP safety override, volcanic ash reroute, runway surface contamination, sector capacity compression, blocked routes, and viable reroutes with residual risk. Campaign controls can sweep scenarios across multiple deterministic iterations and simulated days. `/simulation/author` supports bundle validation/import and advisory scenario-generation/red-team workloads, while `/simulation/runs/{runId}/replay` replays tick-level world state, source refs, aircraft, airport, sector, behavior, map overlays, and replay hashes. Campaigns can export a safety dossier with assumptions, KPI summaries, known gaps, replay hashes, and non-certification warnings.
+
+The map remains GeoJSON-driven and now exposes a renderer registry: OpenLayers is active today, while Leaflet, Cesium, deck.gl, and generic GeoJSON adapter modes can be selected without changing backend contracts. It is not a physics-grade flight simulator, FAA-qualified FSTD, certified cockpit display, or live NAS traffic simulator. See [docs/SIMULATION_GUIDE.md](docs/SIMULATION_GUIDE.md), [docs/TRAFFIC_REPLAY_FORMAT.md](docs/TRAFFIC_REPLAY_FORMAT.md), [docs/TRAFFIC_FLOW_MANAGEMENT_PRIMITIVES.md](docs/TRAFFIC_FLOW_MANAGEMENT_PRIMITIVES.md), and [docs/NATIONAL_DEMAND_CAPACITY_SIMULATION.md](docs/NATIONAL_DEMAND_CAPACITY_SIMULATION.md).
+
+### TFM Command Center Board
+
+Airspace now has a dedicated Traffic Flow Management board at `/tfm`, backed by `GET/POST /api/tfm/board`. It turns the local SWIM/TFMS-like replay and national demand/capacity simulator into a command-center view: airport demand/capacity, sector load, active constraints, proposed TMIs, route alternatives, impact totals, and human-factors notes. The UI is modeled on public FSM/TSD/OIS/CDM concepts: show what is overloaded, show active constraints separately from recommended restrictions, preserve source refs, prefer the least restrictive suitable TMI, and require human approval before any external coordination or delivery.
+
+The board is intentionally honest about source mode. Today it uses local synthetic or fixture-backed demand/capacity, not live FMDS/TFMS/SWIM/FNS/NMS/NADIN/WMSCR data. Capacity values, delays, and recommendations are review/demonstration artifacts until future authorized providers, calibration datasets, operational role directories, and external safety review are configured. See [docs/TFM_COMMAND_CENTER_BOARD.md](docs/TFM_COMMAND_CENTER_BOARD.md).
+
+### Outcome Metrics
+
+Airspace now has a local outcome-metrics surface at `/outcomes`, backed by `GET/POST /api/outcomes/metrics`. It aggregates simulation, route-impact, and TFM-board evidence into review metrics for delay minutes saved, fuel impact, reroute miles, sector overload avoided, false-clear, false-block, source-reference completeness, and operator time-to-decision.
+
+These metrics are intentionally labeled as local modeled outcomes. Delay and fuel values compare simulation baselines against available reroute/TMI mitigation; source-ref completeness measures whether every guidance step keeps evidence attached; false-clear/false-block require scenario expected-outcome labels. They are useful for regression campaigns, safety-case review, and demos, but they are not FAA ASPM/TFMS post-event measurements or calibrated operational claims until authorized historical datasets and independent review are attached. See [docs/OUTCOME_METRICS.md](docs/OUTCOME_METRICS.md).
+
 ### Example Scenario: RVR / LVO / SMGCS Terminology Mismatch
 
 One concrete reason Airspace has a USNS/NOTAM subsystem is to support low-visibility operational clarity. In a scenario where runway visual range is reported at 1000 feet and an international crew asks whether "LVO" or "LVP" is in force, a U.S. airport may use local/FAA terminology such as SMGCS or airport-specific low-visibility procedures instead of the exact phrase the crew used. The safety problem is not only the weather; it is that weather state, airport procedure state, operator minima, and ATC phraseology can fail to line up quickly enough.
@@ -72,6 +111,7 @@ Airspace is released as a donation-only public-interest safety prototype by **Le
 - **License:** [AGPL-3.0-or-later](LICENSE.md), chosen to keep network-service modifications public.
 - **Governance:** [GOVERNANCE.md](GOVERNANCE.md), including anti-capture rules for core safety logic.
 - **Public use and AI recreation policy:** [PUBLIC_USE_AND_AI_POLICY.md](PUBLIC_USE_AND_AI_POLICY.md), requiring disclosure and source publication for use, deployment, reference implementation, or LLM-assisted recreation.
+- **Compliance disclosure:** [COMPLIANCE.md](COMPLIANCE.md) and [docs/COMPLIANCE_COLLECTOR.md](docs/COMPLIANCE_COLLECTOR.md), providing transparent self-attestation, public disclosure, and redacted operational-configuration publication paths without hidden telemetry or clone-time collection.
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md), including tests, fixture expectations, and certification-language guardrails.
 - **Safety notice:** [SAFETY.md](SAFETY.md), clarifying that Airspace is not certified, not operational authority, and not a replacement for official FAA/NWS/ATC systems.
 - **Whitepaper:** [docs/SAFETY_WHITEPAPER.md](docs/SAFETY_WHITEPAPER.md), a concise explanation of the safety problem, prototype approach, claims, and review questions.
@@ -81,6 +121,17 @@ Airspace is released as a donation-only public-interest safety prototype by **Le
 
 The preferred path is public review and collaboration, not contractor capture. Anyone using Airspace, adapting it, or using LLM/code-generation systems against the code, docs, screenshots, fixtures, schemas, prompts, or workflows to recreate similar software is expected to disclose that use and publish the resulting implementation source. Feedback should focus on safety usefulness, missing scenarios, misleading guidance, parser gaps, route-impact assumptions, traceability, and what would need calibration before any real operational use.
 
+Airspace does not include hidden telemetry or a clone-time beacon. Instead, it ships a transparent compliance path:
+
+- `GET /api/compliance/policy`
+- `GET /api/compliance/manifest`
+- `POST /api/compliance/attestations`
+- `GET /api/compliance/attestations`
+- `./scripts/airspace-compliance-manifest.sh`
+- `.github/ISSUE_TEMPLATE/airspace-use-disclosure.yml`
+
+The manifest and attestation flow asks users to publish source and redacted operational configuration for derivative deployments, integrations, and LLM-assisted recreations while explicitly forbidding publication of secrets, credentials, private operational data, personal data, or sensitive aviation-security details.
+
 ### Competitive Positioning
 
 The European-style benchmark is a live weather rerouting console: affected flights turn red, operators compare the original route against alternatives, and the system estimates extra distance, delay, fuel, and cost. Airspace now includes that prototype-grade reroute comparison surface, but the product goal is broader: **weather rerouting plus FAA-style operational fusion**.
@@ -88,6 +139,8 @@ The European-style benchmark is a live weather rerouting console: affected fligh
 Airspace combines reroute candidates with USNS/NADIN/WMSCR-style messaging, NOTAM constraints, CARF/ALTRV reservations, PIREPs, protected-volume deconfliction, source traceability, audit/replay, and pilot handoff. The route-impact API returns structured candidate comparisons with original-route estimates, added distance, delay, fuel, cost, avoided hazards, residual constraints, and “Why this reroute?” trace rule IDs/source refs. The deterministic cost seam exposes its assumptions directly in the UI: cruise speed, fuel burn per nautical mile, fuel price, and delay cost per minute, so prototype economics stay inspectable rather than magic. The workbench exposes affected mission map mode, route-candidate map overlays, selected-feature reroute cost readouts, weather event drilldowns, and source-family chips so controllers can move from hazard to affected mission to reroute review to coordination draft without losing provenance.
 
 Airspace now also includes an agentic operations layer. Unlike a black-box AI recommender, the agent layer operates over typed engine artifacts and cited tool outputs: weather impact, mission risk, reroute comparison, coordination draft, pilot brief, data-integrity scan, and replay audit. Agent output is labeled as assistant analysis or draft material, includes source refs/input-output hashes/policy version, and cannot mutate official workflow state or send external messages without a human operator.
+
+The autonomous-AI extension of that layer is the **Airspace Safety Lab**: a local-first suite of evidence-cited workloads for unsafe-guidance red-team review, outcome-metrics auditing, draft scenario generation, TMI recommendation review, brief-delta comparison, replay-integrity checks, calibration curation, national-demand stress review, collaborative-decision facilitation, and provider-freshness monitoring. The catalog and guardrails are documented in [docs/AIRSPACE_SAFETY_LAB_AGENTS.md](docs/AIRSPACE_SAFETY_LAB_AGENTS.md).
 
 ## What Is Implemented
 
@@ -192,7 +245,19 @@ OperationalDecisionResult result = engine.evaluate(request);
   - Pilot Brief Agent,
   - Data Integrity Agent,
   - Replay Audit Agent.
+- Safety Lab autonomous-review workloads:
+  - Unsafe Guidance Red Team,
+  - Outcome Metrics Auditor,
+  - Scenario Generation Agent,
+  - TMI Recommendation Auditor,
+  - Brief Delta Agent,
+  - Replay Integrity Agent,
+  - Historical Calibration Curator,
+  - National Demand Stress Agent,
+  - Collaborative Decision Facilitator,
+  - Provider Freshness Watcher.
 - Every agent result includes source citations, confidence, diagnostics, generated time, policy version, input hash, output hash, audit envelope, and an explicit NextGen operating-loop snapshot from observe through audit.
+- Safety Lab results also include evidence receipts, policy guards, a cost/time/retry budget, and explicit booleans proving the run did not send external messages or mutate official workflow state. Human approval is required for operational use of any draft, finding, coordination note, or recommendation.
 - Mission-risk and replay-audit output use `OperationalDeltaService` for typed “what changed” deltas, including action changes, confidence changes, new source refs, route candidate changes, blocking-constraint changes, and fallback mission weather/PIREP/NOTAM deltas.
 - Data-integrity scans flag malformed or unsupported inputs, stale products, missing geometry, ambiguous DOM2 semantic reduction, malformed domestic NOTAM records, ICAO/Canadian NOTAMs retained without route-usable geometry, empty/ambiguous ICAO Q-field FIR prefixes, contradictory severe weather vs smooth/negative PIREPs, off-route/off-altitude PIREP relevance mismatches, missing source refs, and route candidates with residual NOTAM/CARF/ALTRV risk.
 - Agent policy enforcement blocks future autonomous external-send or official workflow-mutation recommendations unless policy explicitly permits them.
@@ -212,8 +277,8 @@ OperationalDecisionResult result = engine.evaluate(request);
 - `/api/agents/metrics` summarizes retained agent runs, accepted/rejected counts, task status/priority counts, policy violations, uncited claims, and store durability for local observability.
 - `/api/metrics` includes the same `agentic.*` counters alongside product/feed/weather metrics, and `/api/config` reports the active agentic store mode/durability.
 - Citation validation blocks unsupported operational claims from being accepted as guidance.
-- Product endpoints are available under `/api/agents/*`, including `/api/agents/run`, `/api/agents/weather-impact`, `/api/agents/mission-risk`, `/api/agents/reroute-analysis`, `/api/agents/coordination-draft`, `/api/agents/pilot-brief`, `/api/agents/data-integrity`, `/api/agents/replay-audit`, `/api/agents/delta`, `/api/agents/scenario/generate`, `/api/agents/evaluate/stability`, `/api/agents/risk-assessments`, `/api/agents/runs`, `/api/agents/tasks`, `/api/agents/mcp/*`, and `/api/agents/jobs/*`.
-- The React workbench shell includes an **Agentic Ops** panel that shows active findings, fixed-shape assessments, review tasks, recommendations, HITL modes, typed “what changed” deltas, trace answers, citations, evaluation coverage, policy issues, reasoning-envelope prompt/draft hashes, available/blocked MCP tools, MCP risk/blast-radius metadata, evidence receipts, queued jobs, stability metrics, the observe/normalize/fuse/predict/guide/coordinate/explain/audit loop, audit hashes, retained run count, and task acknowledgment controls.
+- Product endpoints are available under `/api/agents/*`, including `/api/agents/run`, `/api/agents/weather-impact`, `/api/agents/mission-risk`, `/api/agents/reroute-analysis`, `/api/agents/coordination-draft`, `/api/agents/pilot-brief`, `/api/agents/data-integrity`, `/api/agents/replay-audit`, `/api/agents/delta`, `/api/agents/scenario/generate`, `/api/agents/safety-lab`, `/api/agents/workloads`, `/api/agents/evaluate/stability`, `/api/agents/risk-assessments`, `/api/agents/runs`, `/api/agents/tasks`, `/api/agents/mcp/*`, and `/api/agents/jobs/*`.
+- The React workbench shell includes an **Agentic Ops** panel that shows active findings, fixed-shape assessments, review tasks, recommendations, HITL modes, typed “what changed” deltas, trace answers, citations, evaluation coverage, policy issues, reasoning-envelope prompt/draft hashes, available/blocked MCP tools, MCP risk/blast-radius metadata, evidence receipts, Safety Lab workload catalog, cost budget, policy guards, queued jobs, stability metrics, the observe/normalize/fuse/predict/guide/coordinate/explain/audit loop, audit hashes, retained run count, and task acknowledgment controls.
 - `ScenarioFixtureGenerator` creates deterministic, human-reviewable scenario bundles for severe convection, altitude-separated icing/turbulence, PIREP clusters, NOTAM/weather compound constraints, viable reroutes, blocked routes, and malformed retained inputs. Calibration/live-feed readiness is represented by fixture-backed weather outcome, storm lifecycle, sector demand, and local replay validation seams; these are not live operational calibration claims.
 - See [docs/agentic-mcp.md](docs/agentic-mcp.md), [docs/agentic-stability-harness.md](docs/agentic-stability-harness.md), and [docs/agentic-risk-checklist.md](docs/agentic-risk-checklist.md) for the curated tool catalog, evidence-receipt contract, queue behavior, stability evaluation, risk checklist, HITL taxonomy, and draft-only autonomy boundary.
 
@@ -222,6 +287,13 @@ Key entry point:
 ```java
 AgenticOperationsService agents = new AgenticOperationsService();
 AgentRunResult result = agents.run(request);
+```
+
+Safety Lab catalog and run APIs:
+
+```http
+GET /api/agents/workloads
+POST /api/agents/safety-lab
 ```
 
 ### Operations Product Layer

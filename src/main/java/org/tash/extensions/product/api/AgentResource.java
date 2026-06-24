@@ -17,6 +17,7 @@ import org.tash.extensions.agentic.AgentRunResult;
 import org.tash.extensions.agentic.AgentStoreStatus;
 import org.tash.extensions.agentic.AgenticRiskAssessment;
 import org.tash.extensions.agentic.AgenticRiskChecklistService;
+import org.tash.extensions.agentic.AgentWorkloadDefinition;
 import org.tash.extensions.agentic.AgenticOperationsService;
 import org.tash.extensions.agentic.AgentOperationalDelta;
 import org.tash.extensions.agentic.OperationalDeltaService;
@@ -113,6 +114,12 @@ public class AgentResource {
     }
 
     @POST
+    @Path("/safety-lab")
+    public AgentRunResult safetyLab(AgentRunRequest request) {
+        return agenticOperationsService.safetyLab(request);
+    }
+
+    @POST
     @Path("/delta")
     public List<AgentOperationalDelta> delta(AgentRunRequest request) {
         AgentRunRequest safe = request == null ? new AgentRunRequest() : request;
@@ -177,6 +184,12 @@ public class AgentResource {
     @Path("/jobs/{id}")
     public AgentJobResult job(@PathParam("id") String id) {
         return agentJobQueueService.job(id).orElseThrow(() -> new IllegalArgumentException("Unknown agent job: " + id));
+    }
+
+    @GET
+    @Path("/workloads")
+    public List<AgentWorkloadDefinition> workloads() {
+        return agenticOperationsService.workloads();
     }
 
     @GET
