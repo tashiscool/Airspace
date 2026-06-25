@@ -277,7 +277,7 @@ OperationalDecisionResult result = engine.evaluate(request);
 - `/api/agents/metrics` summarizes retained agent runs, accepted/rejected counts, task status/priority counts, policy violations, uncited claims, and store durability for local observability.
 - `/api/metrics` includes the same `agentic.*` counters alongside product/feed/weather metrics, and `/api/config` reports the active agentic store mode/durability.
 - Citation validation blocks unsupported operational claims from being accepted as guidance.
-- Product endpoints are available under `/api/agents/*`, including `/api/agents/run`, `/api/agents/weather-impact`, `/api/agents/mission-risk`, `/api/agents/reroute-analysis`, `/api/agents/coordination-draft`, `/api/agents/pilot-brief`, `/api/agents/data-integrity`, `/api/agents/replay-audit`, `/api/agents/delta`, `/api/agents/scenario/generate`, `/api/agents/safety-lab`, `/api/agents/workloads`, `/api/agents/evaluate/stability`, `/api/agents/risk-assessments`, `/api/agents/runs`, `/api/agents/tasks`, `/api/agents/mcp/*`, and `/api/agents/jobs/*`.
+- Product endpoints are available under `/api/agents/*`, including `/api/agents/run`, `/api/agents/weather-impact`, `/api/agents/mission-risk`, `/api/agents/reroute-analysis`, `/api/agents/coordination-draft`, `/api/agents/pilot-brief`, `/api/agents/data-integrity`, `/api/agents/replay-audit`, `/api/agents/delta`, `/api/agents/scenario/generate`, `/api/agents/safety-lab`, `/api/agents/workloads`, `/api/agents/evaluate/stability`, `/api/agents/risk-assessments`, `/api/agents/runs`, `/api/agents/tasks`, `/api/agents/mcp/*`, and `/api/agents/jobs/*`. Compatibility aliases under `/api/agents/airspace/*` support explicit Safety Lab plan integrations for run history and task acknowledge/resolve flows.
 - The React workbench shell includes an **Agentic Ops** panel that shows active findings, fixed-shape assessments, review tasks, recommendations, HITL modes, typed “what changed” deltas, trace answers, citations, evaluation coverage, policy issues, reasoning-envelope prompt/draft hashes, available/blocked MCP tools, MCP risk/blast-radius metadata, evidence receipts, Safety Lab workload catalog, cost budget, policy guards, queued jobs, stability metrics, the observe/normalize/fuse/predict/guide/coordinate/explain/audit loop, audit hashes, retained run count, and task acknowledgment controls.
 - `ScenarioFixtureGenerator` creates deterministic, human-reviewable scenario bundles for severe convection, altitude-separated icing/turbulence, PIREP clusters, NOTAM/weather compound constraints, viable reroutes, blocked routes, and malformed retained inputs. Calibration/live-feed readiness is represented by fixture-backed weather outcome, storm lifecycle, sector demand, and local replay validation seams; these are not live operational calibration claims.
 - See [docs/agentic-mcp.md](docs/agentic-mcp.md), [docs/agentic-stability-harness.md](docs/agentic-stability-harness.md), and [docs/agentic-risk-checklist.md](docs/agentic-risk-checklist.md) for the curated tool catalog, evidence-receipt contract, queue behavior, stability evaluation, risk checklist, HITL taxonomy, and draft-only autonomy boundary.
@@ -294,7 +294,10 @@ Safety Lab catalog and run APIs:
 ```http
 GET /api/agents/workloads
 POST /api/agents/safety-lab
+POST /api/agents/airspace/run
 ```
+
+Safety Lab results include evidence receipts, typed policy guard details, replay references, approval requirements, execution time, and cost estimates. `SAFETY_LAB_ALL` includes unsafe-guidance red-team, outcome audit, scenario generation, TMI audit, brief delta, replay integrity, historical calibration curation, national demand stress, collaborative decision facilitation, coordination draft, and provider freshness workloads.
 
 ### Operations Product Layer
 

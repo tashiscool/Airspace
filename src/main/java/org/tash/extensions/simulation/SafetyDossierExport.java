@@ -19,6 +19,12 @@ public class SafetyDossierExport {
     private ZonedDateTime generatedAt;
     private String format;
     private String markdown;
+    private int agentRunsExecuted;
+    private int falseClearCount;
+    private int falseBlockCount;
+    private double replayIntegrityScore;
+    private double calibrationReadinessScore;
+    private String outcomeMetricSummary;
     @Builder.Default
     private Map<String, Object> jsonSummary = new java.util.LinkedHashMap<>();
     @Builder.Default
@@ -31,4 +37,10 @@ public class SafetyDossierExport {
     private List<String> nonCertificationWarnings = new ArrayList<>();
     @Builder.Default
     private List<String> replayHashes = new ArrayList<>();
+    @Builder.Default
+    private List<String> agentFindings = new ArrayList<>();
+    @Builder.Default
+    private List<String> agentPolicyGuards = new ArrayList<>();
+    @Builder.Default
+    private List<String> unresolvedReviewTasks = new ArrayList<>();
 }

@@ -474,9 +474,10 @@ class ProductApiResourceTest {
                 .statusCode(200)
                 .body("id", hasItem("UNSAFE_GUIDANCE_RED_TEAM"))
                 .body("id", hasItem("OUTCOME_METRICS_AUDITOR"))
+                .body("id", hasItem("COORDINATION_DRAFT_AGENT"))
                 .body("find { it.id == 'UNSAFE_GUIDANCE_RED_TEAM' }.externalSendAllowed", equalTo(false));
 
-        given()
+        String safetyLabId = given()
                 .contentType("application/json")
                 .body("{\"agentType\":\"SAFETY_LAB_ALL\",\"scenarioId\":\"oceanic-altrv-convection\",\"actor\":\"planner\"}")
                 .when()
@@ -490,7 +491,61 @@ class ProductApiResourceTest {
                 .body("policyGuards", hasItem("NO_EXTERNAL_SEND"))
                 .body("costBudget.circuitBreakerArmed", equalTo(true))
                 .body("evidenceReceipts.size()", greaterThanOrEqualTo(1))
-                .body("findings.find { it.category == 'OUTCOME_METRICS_AUDIT' }.id", notNullValue());
+                .body("findings.find { it.category == 'OUTCOME_METRICS_AUDIT' }.id", notNullValue())
+                .body("findings.find { it.category == 'COORDINATION_DRAFT_AGENT' }.id", notNullValue())
+                .body("costEstimate", notNullValue())
+                .body("executionTimeMs", notNullValue())
+                .body("policyGuardDetails.find { it.id == 'NO_EXTERNAL_SEND' }.enforced", equalTo(true))
+                .body("approvalRequirements.size()", greaterThanOrEqualTo(1))
+                .body("replayRefs.size()", greaterThanOrEqualTo(1))
+                .extract()
+                .path("id");
+
+        given()
+                .contentType("application/json")
+                .body("{\"agentType\":\"COORDINATION_DRAFT_AGENT\",\"missionId\":\"" + missionId + "\",\"actor\":\"planner\"}")
+                .when()
+                .post("/api/agents/airspace/run")
+                .then()
+                .statusCode(200)
+                .body("accepted", equalTo(true))
+                .body("agentType", equalTo("COORDINATION_DRAFT_AGENT"))
+                .body("externalSendPerformed", equalTo(false))
+                .body("officialStateMutationPerformed", equalTo(false));
+
+        given()
+                .when()
+                .get("/api/agents/airspace/runs/" + safetyLabId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(safetyLabId))
+                .body("policyGuardDetails.find { it.id == 'NO_EXTERNAL_SEND' }.enforced", equalTo(true));
+
+        String taskId = given()
+                .when()
+                .get("/api/agents/tasks?limit=1")
+                .then()
+                .statusCode(200)
+                .extract()
+                .path("[0].id");
+
+        given()
+                .contentType("application/json")
+                .body("{\"actor\":\"planner\",\"note\":\"reviewed through compatibility endpoint\"}")
+                .when()
+                .post("/api/agents/airspace/tasks/" + taskId + "/acknowledge")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("ACKNOWLEDGED"));
+
+        given()
+                .contentType("application/json")
+                .body("{\"actor\":\"planner\",\"note\":\"resolved through compatibility endpoint\"}")
+                .when()
+                .post("/api/agents/airspace/tasks/" + taskId + "/resolve")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("RESOLVED"));
 
         given()
                 .when()

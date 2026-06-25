@@ -583,12 +583,21 @@ public class OperationalSimulationService {
                 .generatedAt(ZonedDateTime.now(ZoneOffset.UTC))
                 .format("MARKDOWN_AND_JSON")
                 .markdown(markdown)
+                .agentRunsExecuted(report.getRuns().size())
+                .falseClearCount(report.getAggregateKpis().getFalseClearCount())
+                .falseBlockCount(report.getAggregateKpis().getFalseBlockCount())
+                .replayIntegrityScore(report.getAggregateKpis().getReplayVerificationPassRate())
+                .calibrationReadinessScore(report.getAggregateKpis().getSourceRefPreservationRate())
+                .outcomeMetricSummary("Campaign outcome metrics preserve local delay, false-clear, false-block, source-ref, replay, and time-to-guidance evidence for review.")
                 .jsonSummary(json)
                 .scenarios(report.getRuns().stream().map(SimulationRunResult::getScenarioId).distinct().toList())
                 .assumptions(List.of("Local deterministic replay only.", "No FAA certification claim.", "No autonomous official workflow mutation."))
                 .knownGaps(List.of("Live SWIM/FNS/NMS adapters require authorization.", "Calibration requires authoritative historical outcomes.", "Aircraft performance is approximate."))
                 .nonCertificationWarnings(List.of("Not an FAA-qualified FSTD.", "Not a cockpit avionics display.", "Not an operational clearance authority."))
                 .replayHashes(report.getRuns().stream().map(run -> run.getReplayBundle().getReplayHashes().get("result")).toList())
+                .agentFindings(List.of("Simulation red-team and scenario-generation agents can replay this campaign as local advisory evidence."))
+                .agentPolicyGuards(List.of("ADVISORY_ONLY", "NO_EXTERNAL_SEND", "NO_OFFICIAL_MUTATION", "HUMAN_APPROVAL_REQUIRED", "CITED_EVIDENCE_REQUIRED", "LOCAL_OR_REPLAY_FIRST"))
+                .unresolvedReviewTasks(List.of("Review false-clear/false-block labels.", "Review calibration readiness before operational claims."))
                 .build();
     }
 

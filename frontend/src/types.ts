@@ -666,6 +666,30 @@ export type AgentTaskTransitionRequest = {
   note?: string;
 };
 
+export type AgentPolicyGuard = {
+  id?: string;
+  label?: string;
+  description?: string;
+  enforced?: boolean;
+};
+
+export type AgentReplayReference = {
+  id?: string;
+  type?: string;
+  route?: string;
+  label?: string;
+  hash?: string;
+};
+
+export type AgentApprovalRequirement = {
+  id?: string;
+  mode?: HumanReviewMode;
+  reason?: string;
+  route?: string;
+  required?: boolean;
+  citations?: AgentSourceCitation[];
+};
+
 export type AgentRunResult = {
   id: string;
   agentType: string;
@@ -675,6 +699,8 @@ export type AgentRunResult = {
   summary?: string;
   confidence?: number;
   accepted: boolean;
+  costEstimate?: number;
+  executionTimeMs?: number;
   humanApprovalRequired?: boolean;
   externalSendPerformed?: boolean;
   officialStateMutationPerformed?: boolean;
@@ -694,6 +720,9 @@ export type AgentRunResult = {
   operatingLoop?: AgentOperatingLoopStep[];
   evidenceReceipts?: AgentEvidenceReceipt[];
   policyGuards?: string[];
+  policyGuardDetails?: AgentPolicyGuard[];
+  replayRefs?: AgentReplayReference[];
+  approvalRequirements?: AgentApprovalRequirement[];
   diagnostics: string[];
 };
 
@@ -950,6 +979,15 @@ export type SafetyCaseDossierSummary = {
   replayHashes: string[];
   coverageSummaries: string[];
   humanReviewCheckpoints: string[];
+  agentRunsExecuted?: number;
+  falseClearCount?: number;
+  falseBlockCount?: number;
+  replayIntegrityScore?: number;
+  calibrationReadinessScore?: number;
+  outcomeMetricSummary?: string;
+  agentFindings?: string[];
+  agentPolicyGuards?: string[];
+  unresolvedReviewTasks?: string[];
 };
 
 export type CoordinationDeliveryStatusSummary = {
@@ -2121,6 +2159,15 @@ export type SafetyDossierExport = {
   knownGaps: string[];
   nonCertificationWarnings: string[];
   replayHashes: string[];
+  agentRunsExecuted?: number;
+  falseClearCount?: number;
+  falseBlockCount?: number;
+  replayIntegrityScore?: number;
+  calibrationReadinessScore?: number;
+  outcomeMetricSummary?: string;
+  agentFindings?: string[];
+  agentPolicyGuards?: string[];
+  unresolvedReviewTasks?: string[];
 };
 
 export type SimulationAgentRequest = {

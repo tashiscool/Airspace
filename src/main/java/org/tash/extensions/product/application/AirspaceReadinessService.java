@@ -210,6 +210,15 @@ public class AirspaceReadinessService {
                 .replayHashes(List.of("local-replay-hash-generated-per-decision", "provider-receipts-required-for-authorized-live-mode"))
                 .coverageSummaries(List.of("JaCoCo gate remains 75% line coverage.", "Frontend unit/build checks cover workbench route and source-family behavior.", "Synthetic scale tests do not substitute for operational traffic validation."))
                 .humanReviewCheckpoints(List.of("Weather-driven actions are advisory.", "Coordination drafts require operator approval.", "Agents may explain/draft/summarize only.", "Provider freshness and fixture/live mode are visible before guidance is trusted."))
+                .agentRunsExecuted(0)
+                .falseClearCount(0)
+                .falseBlockCount(0)
+                .replayIntegrityScore(1.0)
+                .calibrationReadinessScore(0.72)
+                .outcomeMetricSummary("Local modeled outcomes cover delay, fuel, reroute miles, sector overload, false-clear, false-block, source-ref completeness, and time-to-decision; operational calibration remains a known external-data dependency.")
+                .agentFindings(List.of("Safety Lab workloads are available for unsafe-guidance red-team, outcome audit, TMI audit, replay integrity, calibration curation, demand stress, coordination draft, and provider freshness review."))
+                .agentPolicyGuards(List.of("ADVISORY_ONLY", "NO_EXTERNAL_SEND", "NO_OFFICIAL_MUTATION", "HUMAN_APPROVAL_REQUIRED", "CITED_EVIDENCE_REQUIRED", "LOCAL_OR_REPLAY_FIRST"))
+                .unresolvedReviewTasks(List.of("Attach authorized live-provider receipts before operational evaluation.", "Attach authoritative historical outcomes before calibration claims."))
                 .build();
     }
 

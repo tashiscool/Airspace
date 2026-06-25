@@ -22,6 +22,8 @@ public class AgentRunResult {
     private String summary;
     private double confidence;
     private boolean accepted;
+    private double costEstimate;
+    private long executionTimeMs;
     private boolean humanApprovalRequired;
     private boolean externalSendPerformed;
     private boolean officialStateMutationPerformed;
@@ -51,6 +53,12 @@ public class AgentRunResult {
     private List<AgentEvidenceReceipt> evidenceReceipts = new ArrayList<>();
     @Builder.Default
     private List<String> policyGuards = new ArrayList<>();
+    @Builder.Default
+    private List<AgentPolicyGuard> policyGuardDetails = new ArrayList<>();
+    @Builder.Default
+    private List<AgentReplayReference> replayRefs = new ArrayList<>();
+    @Builder.Default
+    private List<AgentApprovalRequirement> approvalRequirements = new ArrayList<>();
     @Builder.Default
     private List<String> diagnostics = new ArrayList<>();
 }

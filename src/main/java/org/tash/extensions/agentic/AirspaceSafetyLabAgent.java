@@ -42,6 +42,8 @@ public class AirspaceSafetyLabAgent {
     AirspaceProductService productService;
     @Inject
     AirspaceReadinessService readinessService;
+    @Inject
+    CoordinationDraftAgent coordinationDraftAgent;
 
     public List<AgentWorkloadDefinition> workloads() {
         return List.of(
@@ -72,6 +74,9 @@ public class AirspaceSafetyLabAgent {
                 workload("COLLABORATIVE_DECISION_FACILITATOR", "Collaborative Decision Facilitator", "CDM_WORKFLOW",
                         "FAA/airline/operator proposal states, comments, approvals, receipts",
                         "Summarizes the common operating picture, pending proposals, stale providers, and delivery receipts."),
+                workload("COORDINATION_DRAFT_AGENT", "Coordination Draft Agent", "COORDINATION",
+                        "human-approved hazard, TMI, route-impact, and decision coordination drafts",
+                        "Prepares cited coordination draft material and never sends externally."),
                 workload("PROVIDER_FRESHNESS_WATCHER", "Provider Freshness Watcher", "PROVIDER_READINESS",
                         "provider mode, freshness, credentials, consent, egress",
                         "Reviews source mode and freshness posture without activating live external providers.")
@@ -90,6 +95,7 @@ public class AirspaceSafetyLabAgent {
             case "HISTORICAL_CALIBRATION_CURATOR" -> historicalCalibrationCurator(request);
             case "NATIONAL_DEMAND_STRESS_AGENT" -> nationalDemandStress(request);
             case "COLLABORATIVE_DECISION_FACILITATOR" -> collaborativeDecisionFacilitator(request);
+            case "COORDINATION_DRAFT_AGENT" -> coordinationDraftWorkload(request);
             case "PROVIDER_FRESHNESS_WATCHER" -> providerFreshnessWatcher(request);
             case "SAFETY_LAB_ALL" -> runAll(request);
             default -> runAll(request);
@@ -107,6 +113,7 @@ public class AirspaceSafetyLabAgent {
                 historicalCalibrationCurator(request),
                 nationalDemandStress(request),
                 collaborativeDecisionFacilitator(request),
+                coordinationDraftWorkload(request),
                 providerFreshnessWatcher(request));
         List<AgentFinding> findings = new ArrayList<>();
         List<AgentRecommendation> recommendations = new ArrayList<>();
@@ -353,6 +360,24 @@ public class AirspaceSafetyLabAgent {
                 citations, receipts(citations), List.of("No external delivery performed by agent."), 0.83, 0.005);
     }
 
+    private AgentRunResult coordinationDraftWorkload(AgentRunRequest request) {
+        AgentRunResult draft = coordinationDraft().createDraft(request);
+        List<AgentSourceCitation> citations = draft.getCitations() == null || draft.getCitations().isEmpty()
+                ? List.of(AgentSupport.citation("COORDINATION", value(draft.getId(), "draft"), "Coordination draft", "/messages"))
+                : draft.getCitations();
+        List<String> diagnostics = new ArrayList<>(draft.getDiagnostics() == null ? Collections.emptyList() : draft.getDiagnostics());
+        diagnostics.add("Coordination Draft Agent produced draft material only; external delivery remains human-approved.");
+        return result("COORDINATION_DRAFT_AGENT",
+                "Coordination Draft Agent prepared " + draft.getRecommendations().size()
+                        + " recommendation(s) and " + draft.getTasks().size() + " approval task(s) without sending externally.",
+                List.of(finding("COORDINATION_DRAFT_AGENT", "INFO",
+                        "Coordination draft is human-review only and preserves source refs for affected mission, hazard, route impact, or decision context.",
+                        0.86, citations)),
+                draft.getRecommendations(),
+                draft.getTasks(),
+                citations, receipts(citations), diagnostics, 0.86, 0.006);
+    }
+
     private AgentRunResult providerFreshnessWatcher(AgentRunRequest request) {
         List<ProductDtos.ProviderHealthSummary> providers = readiness() == null ? Collections.emptyList() : readiness().providersStatus();
         List<AgentSourceCitation> citations = providers.isEmpty()
@@ -554,5 +579,13 @@ public class AirspaceSafetyLabAgent {
             readinessService = new AirspaceReadinessService(productService);
         }
         return readinessService;
+    }
+
+    private CoordinationDraftAgent coordinationDraft() {
+        if (coordinationDraftAgent == null) {
+            coordinationDraftAgent = new CoordinationDraftAgent();
+            coordinationDraftAgent.productService = productService;
+        }
+        return coordinationDraftAgent;
     }
 }

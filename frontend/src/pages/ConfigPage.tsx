@@ -459,9 +459,19 @@ function SafetyDossierPanel({ dossier, gaps }: { dossier?: SafetyCaseDossierSumm
     <section>
       <div className="panel-heading"><h3>Safety Dossier</h3><span>{dossier?.releaseGate ?? 'loading'}</span></div>
       <p className="warning-text">{dossier?.summary ?? 'Safety dossier unavailable.'}</p>
+      <div className="metric-row">
+        <div><strong>{dossier?.agentRunsExecuted ?? 0}</strong><small>agent runs executed</small></div>
+        <div><strong>{dossier?.falseClearCount ?? 0}/{dossier?.falseBlockCount ?? 0}</strong><small>false clear/block</small></div>
+        <div><strong>{Math.round((dossier?.replayIntegrityScore ?? 0) * 100)}%</strong><small>replay integrity</small></div>
+        <div><strong>{Math.round((dossier?.calibrationReadinessScore ?? 0) * 100)}%</strong><small>calibration readiness</small></div>
+      </div>
+      {dossier?.outcomeMetricSummary && <p>{dossier.outcomeMetricSummary}</p>}
       <div className="config-split">
         <ConfigList title="Scenarios Tested" items={dossier?.scenariosTested} />
         <ConfigList title="Human Review Checkpoints" items={dossier?.humanReviewCheckpoints} />
+        <ConfigList title="Agent Findings" items={dossier?.agentFindings} />
+        <ConfigList title="Agent Policy Guards" items={dossier?.agentPolicyGuards} />
+        <ConfigList title="Unresolved Review Tasks" items={dossier?.unresolvedReviewTasks} />
         <ConfigList title="Rejected Overclaims" items={dossier?.rejectedOverclaims} />
         <ConfigList title="Known External Blocks" items={(gaps ?? []).filter((gap) => gap.externallyBlocked).map((gap) => `${gap.category}: ${gap.nextStep}`)} />
       </div>

@@ -2107,12 +2107,41 @@ details summary span { float: right; }
   color: var(--warning) !important;
 }
 
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.metric-row > div {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 8px;
+}
+
+.metric-row strong,
+.metric-row small {
+  display: block;
+}
+
+.metric-row strong {
+  font: 700 16px var(--font-mono);
+}
+
+.metric-row small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
 @media (max-width: 1100px) {
   .explorer-workspace, .reservation-layout, .message-grid, .workspace-grid-main, .feed-workspace, .decision-workspace, .config-workspace {
     grid-template-columns: 1fr;
   }
   .metric-sidebar, .split-tree, .feed-list, .decision-queue, .config-tree { display: none; }
-  .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .agentic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-strip, .metric-row, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .agentic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .command-button { display: none; }
 }
 
@@ -2121,7 +2150,7 @@ details summary span { float: right; }
   .breadcrumb, .ops-footer > span:last-child, .operator-block small { display: none; }
   .ops-rail { width: 58px; }
   .ops-rail span, .ops-rail small, .rail-collapse { display: none; }
-  .form-grid, .metric-strip, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .route-baseline-grid, .route-cost-grid, .agentic-grid { grid-template-columns: 1fr; }
+  .form-grid, .metric-strip, .metric-row, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .route-baseline-grid, .route-cost-grid, .agentic-grid { grid-template-columns: 1fr; }
   .agentic-panel-summary { grid-template-columns: auto auto minmax(0, 1fr); }
   .agentic-panel-summary small { display: none; }
 }

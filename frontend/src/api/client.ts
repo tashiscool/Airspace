@@ -266,6 +266,8 @@ export const api = {
     request<CoordinationDeliveryStatusSummary>(`/api/coordination/${draftId}/mark-delivered`, { method: 'POST', body: JSON.stringify(body) }),
   runAgent: (body: AgentRunRequest) =>
     request<AgentRunResult>('/api/agents/run', { method: 'POST', body: JSON.stringify(body) }),
+  runAirspaceAgent: (body: AgentRunRequest) =>
+    request<AgentRunResult>('/api/agents/airspace/run', { method: 'POST', body: JSON.stringify(body) }),
   weatherImpactAgent: (body: AgentRunRequest = {}) =>
     request<AgentRunResult>('/api/agents/weather-impact', { method: 'POST', body: JSON.stringify(body) }),
   missionRiskAgent: (body: AgentRunRequest) =>
@@ -365,6 +367,19 @@ export const api = {
     return request<AgentRunResult[]>(`/api/agents/runs${query ? `?${query}` : ''}`);
   },
   agentRun: (id: string) => request<AgentRunResult>(`/api/agents/runs/${id}`),
+  airspaceAgentRuns: (limit?: number, filters?: { agentType?: string; missionId?: string; reservationId?: string; decisionId?: string; accepted?: boolean; sourceFamily?: string }) => {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    if (filters?.agentType) params.set('agentType', filters.agentType);
+    if (filters?.missionId) params.set('missionId', filters.missionId);
+    if (filters?.reservationId) params.set('reservationId', filters.reservationId);
+    if (filters?.decisionId) params.set('decisionId', filters.decisionId);
+    if (filters?.accepted !== undefined) params.set('accepted', String(filters.accepted));
+    if (filters?.sourceFamily) params.set('sourceFamily', filters.sourceFamily);
+    const query = params.toString();
+    return request<AgentRunResult[]>(`/api/agents/airspace/runs${query ? `?${query}` : ''}`);
+  },
+  airspaceAgentRun: (id: string) => request<AgentRunResult>(`/api/agents/airspace/runs/${id}`),
   agentTasks: (status?: string, limit?: number, filters?: { priority?: string; assignedRole?: string; sourceFamily?: string; routeContains?: string }) => {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
@@ -378,5 +393,9 @@ export const api = {
   },
   agentTask: (id: string) => request<AgentTask>(`/api/agents/tasks/${id}`),
   transitionAgentTask: (id: string, body: AgentTaskTransitionRequest) =>
-    request<AgentTask>(`/api/agents/tasks/${id}/transition`, { method: 'POST', body: JSON.stringify(body) })
+    request<AgentTask>(`/api/agents/tasks/${id}/transition`, { method: 'POST', body: JSON.stringify(body) }),
+  acknowledgeAirspaceAgentTask: (id: string, body: AgentTaskTransitionRequest = {}) =>
+    request<AgentTask>(`/api/agents/airspace/tasks/${id}/acknowledge`, { method: 'POST', body: JSON.stringify(body) }),
+  resolveAirspaceAgentTask: (id: string, body: AgentTaskTransitionRequest = {}) =>
+    request<AgentTask>(`/api/agents/airspace/tasks/${id}/resolve`, { method: 'POST', body: JSON.stringify(body) })
 };

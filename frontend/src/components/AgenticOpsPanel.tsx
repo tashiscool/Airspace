@@ -370,6 +370,18 @@ function AgentResult({
             timeout {result.costBudget.timeoutMillis ?? 0}ms · retries {result.costBudget.retryCap ?? 0}
           </small>
         )}
+        <small>
+          Runtime {Number(result.executionTimeMs ?? 0).toFixed(0)} ms · Cost estimate ${Number(result.costEstimate ?? result.costBudget?.estimatedCostUsd ?? 0).toFixed(3)}
+        </small>
+        {!!result.policyGuardDetails?.length && (
+          <small>Typed guards {result.policyGuardDetails.slice(0, 4).map((guard) => guard.id ?? guard.label).join(', ')}</small>
+        )}
+        {!!result.approvalRequirements?.length && (
+          <small className="warning-text">Approval requirements {result.approvalRequirements.length} · {result.approvalRequirements[0]?.mode ?? 'review'}</small>
+        )}
+        {!!result.replayRefs?.length && (
+          <small>Replay refs {result.replayRefs.slice(0, 3).map((ref) => ref.label ?? ref.id).join(', ')}</small>
+        )}
         {!!result.evidenceReceipts?.length && <small>Evidence receipts {result.evidenceReceipts.length} · first {result.evidenceReceipts[0]?.receiptHash?.slice(0, 16)}</small>}
         <p>
           Evaluation {Math.round((result.evaluation?.citationCoverage ?? 0) * 100)}% cited ·
@@ -415,7 +427,16 @@ function AgentResult({
       </div>
       <div className="agent-card workload-card">
         <h4>Safety Lab Workloads</h4>
-        {(workloads ?? []).filter((workload) => ['UNSAFE_GUIDANCE_RED_TEAM', 'OUTCOME_METRICS_AUDITOR', 'TMI_RECOMMENDATION_AUDITOR', 'REPLAY_INTEGRITY_AGENT', 'SCENARIO_GENERATION'].includes(workload.id)).slice(0, 6).map((workload) => (
+        {(workloads ?? []).filter((workload) => [
+          'UNSAFE_GUIDANCE_RED_TEAM',
+          'OUTCOME_METRICS_AUDITOR',
+          'TMI_RECOMMENDATION_AUDITOR',
+          'REPLAY_INTEGRITY_AGENT',
+          'SCENARIO_GENERATION',
+          'COORDINATION_DRAFT_AGENT',
+          'COLLABORATIVE_DECISION_FACILITATOR',
+          'PROVIDER_FRESHNESS_WATCHER'
+        ].includes(workload.id)).slice(0, 8).map((workload) => (
           <div className="agent-item" key={workload.id}>
             <span className="status-badge">{workload.category ?? 'WORKLOAD'}</span>
             <strong>{workload.label ?? workload.id}</strong>

@@ -70,6 +70,7 @@ describe('product API client', () => {
     await api.coordinateWeather('mission-1', { reservationId: 'reservation-1' });
     await api.pilotBrief('mission-1');
     await api.runAgent({ agentType: 'ALL', missionId: 'mission-1' });
+    await api.runAirspaceAgent({ agentType: 'COORDINATION_DRAFT_AGENT', missionId: 'mission-1' });
     await api.weatherImpactAgent({ missionId: 'mission-1' });
     await api.missionRiskAgent({ missionId: 'mission-1' });
     await api.rerouteAnalysisAgent({ missionId: 'mission-1', reservationId: 'reservation-1' });
@@ -135,9 +136,13 @@ describe('product API client', () => {
     await api.agentMetrics();
     await api.agentRuns(5, { agentType: 'ALL', missionId: 'mission-1', accepted: true, sourceFamily: 'WEATHER' });
     await api.agentRun('run-1');
+    await api.airspaceAgentRuns(3, { agentType: 'SAFETY_LAB_ALL', missionId: 'mission-1', accepted: true, sourceFamily: 'WEATHER' });
+    await api.airspaceAgentRun('run-1');
     await api.agentTasks('OPEN', 8, { priority: 'HIGH', assignedRole: 'planner', sourceFamily: 'WEATHER', routeContains: 'mission-1' });
     await api.agentTask('task-1');
     await api.transitionAgentTask('task-1', { status: 'ACKNOWLEDGED', actor: 'planner', note: 'reviewed' });
+    await api.acknowledgeAirspaceAgentTask('task-1', { actor: 'planner', note: 'ack' });
+    await api.resolveAirspaceAgentTask('task-1', { actor: 'planner', note: 'done' });
     await api.gaps();
     await api.releaseGates();
     await api.providersStatus();
@@ -176,6 +181,7 @@ describe('product API client', () => {
       '/api/missions/mission-1/coordinate-weather',
       '/api/missions/mission-1/pilot-brief',
       '/api/agents/run',
+      '/api/agents/airspace/run',
       '/api/agents/weather-impact',
       '/api/agents/mission-risk',
       '/api/agents/reroute-analysis',
@@ -223,9 +229,13 @@ describe('product API client', () => {
       '/api/agents/metrics',
       '/api/agents/runs?limit=5&agentType=ALL&missionId=mission-1&accepted=true&sourceFamily=WEATHER',
       '/api/agents/runs/run-1',
+      '/api/agents/airspace/runs?limit=3&agentType=SAFETY_LAB_ALL&missionId=mission-1&accepted=true&sourceFamily=WEATHER',
+      '/api/agents/airspace/runs/run-1',
       '/api/agents/tasks?status=OPEN&limit=8&priority=HIGH&assignedRole=planner&sourceFamily=WEATHER&routeContains=mission-1',
       '/api/agents/tasks/task-1',
       '/api/agents/tasks/task-1/transition',
+      '/api/agents/airspace/tasks/task-1/acknowledge',
+      '/api/agents/airspace/tasks/task-1/resolve',
       '/api/gaps',
       '/api/gaps/release-gates',
       '/api/providers/status',
@@ -253,6 +263,7 @@ describe('product API client', () => {
       corridorNauticalMiles: 40
     });
     expect(bodyFor('/api/agents/run')).toMatchObject({ agentType: 'ALL', missionId: 'mission-1' });
+    expect(bodyFor('/api/agents/airspace/run')).toMatchObject({ agentType: 'COORDINATION_DRAFT_AGENT', missionId: 'mission-1' });
     expect(bodyFor('/api/agents/reroute-analysis')).toMatchObject({ missionId: 'mission-1', reservationId: 'reservation-1' });
     expect(bodyFor('/api/agents/delta')).toMatchObject({ previousDecisionId: 'decision-0', decisionId: 'decision-1' });
     expect(bodyFor('/api/agents/safety-lab')).toMatchObject({ agentType: 'SAFETY_LAB_ALL', scenarioId: 'oceanic-altrv-convection' });
@@ -273,6 +284,8 @@ describe('product API client', () => {
     expect(bodyFor('/api/simulations/agents/generate-scenarios')).toMatchObject({ scenarioType: 'LOW_VISIBILITY_PROCEDURE_AMBIGUITY', count: 2 });
     expect(bodyFor('/api/simulations/agents/red-team')).toMatchObject({ runId: 'sim-run-1' });
     expect(bodyFor('/api/agents/tasks/task-1/transition')).toMatchObject({ status: 'ACKNOWLEDGED', actor: 'planner' });
+    expect(bodyFor('/api/agents/airspace/tasks/task-1/acknowledge')).toMatchObject({ actor: 'planner', note: 'ack' });
+    expect(bodyFor('/api/agents/airspace/tasks/task-1/resolve')).toMatchObject({ actor: 'planner', note: 'done' });
     expect(bodyFor('/api/providers/weather/poll')).toMatchObject({ products: ['metar'], maxResults: 5 });
     expect(bodyFor('/api/calibration/run')).toMatchObject({ datasetId: 'fixture-low-vis-weather', includeSyntheticScale: true });
     expect(bodyFor('/api/collaboration/proposals')).toMatchObject({ missionId: 'mission-1', recommendedAction: 'REROUTE' });

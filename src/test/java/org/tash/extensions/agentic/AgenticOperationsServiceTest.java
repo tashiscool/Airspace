@@ -335,6 +335,7 @@ class AgenticOperationsServiceTest {
         assertTrue(service.workloads().stream().anyMatch(workload -> "UNSAFE_GUIDANCE_RED_TEAM".equals(workload.getId())));
         assertTrue(service.workloads().stream().anyMatch(workload -> "OUTCOME_METRICS_AUDITOR".equals(workload.getId())));
         assertTrue(service.workloads().stream().anyMatch(workload -> "TMI_RECOMMENDATION_AUDITOR".equals(workload.getId())));
+        assertTrue(service.workloads().stream().anyMatch(workload -> "COORDINATION_DRAFT_AGENT".equals(workload.getId())));
         assertTrue(service.workloads().stream()
                 .filter(workload -> "UNSAFE_GUIDANCE_RED_TEAM".equals(workload.getId()))
                 .allMatch(workload -> workload.isHumanApprovalRequired() && !workload.isExternalSendAllowed()));
@@ -359,11 +360,25 @@ class AgenticOperationsServiceTest {
         assertTrue(result.getFindings().stream().anyMatch(finding -> "OUTCOME_METRICS_AUDIT".equals(finding.getCategory())));
         assertTrue(result.getFindings().stream().anyMatch(finding -> "TMI_RECOMMENDATION_AUDIT".equals(finding.getCategory())));
         assertTrue(result.getFindings().stream().anyMatch(finding -> "REPLAY_INTEGRITY".equals(finding.getCategory())));
+        assertTrue(result.getFindings().stream().anyMatch(finding -> "COORDINATION_DRAFT_AGENT".equals(finding.getCategory())));
         assertTrue(result.getFindings().stream().allMatch(finding -> finding.getCitations() != null && !finding.getCitations().isEmpty()));
         assertTrue(result.getRecommendations().stream().allMatch(AgentRecommendation::isHumanApprovalRequired));
         assertTrue(result.getTasks().stream().allMatch(task -> task.getCitations() != null && !task.getCitations().isEmpty()));
+        assertTrue(result.getCostEstimate() >= 0.0);
+        assertTrue(result.getExecutionTimeMs() >= 0L);
+        assertFalse(result.getPolicyGuardDetails().isEmpty());
+        assertTrue(result.getPolicyGuardDetails().stream().anyMatch(guard -> "NO_EXTERNAL_SEND".equals(guard.getId()) && guard.isEnforced()));
+        assertFalse(result.getReplayRefs().isEmpty());
+        assertFalse(result.getApprovalRequirements().isEmpty());
         assertTrue(result.getEvaluation().isAccepted(), result.getEvaluation().getErrors().toString());
         assertEquals(0, result.getEvaluation().getPolicyViolationCount());
+
+        request.setAgentType("COORDINATION_DRAFT_AGENT");
+        AgentRunResult coordinationDraft = service.run(request);
+        assertEquals("COORDINATION_DRAFT_AGENT", coordinationDraft.getAgentType());
+        assertFalse(coordinationDraft.isExternalSendPerformed());
+        assertFalse(coordinationDraft.isOfficialStateMutationPerformed());
+        assertTrue(coordinationDraft.getRecommendations().stream().allMatch(AgentRecommendation::isHumanApprovalRequired));
     }
 
     @Test

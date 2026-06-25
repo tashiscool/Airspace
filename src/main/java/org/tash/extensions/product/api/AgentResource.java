@@ -72,6 +72,12 @@ public class AgentResource {
     }
 
     @POST
+    @Path("/airspace/run")
+    public AgentRunResult airspaceRun(AgentRunRequest request) {
+        return agenticOperationsService.run(request);
+    }
+
+    @POST
     @Path("/weather-impact")
     public AgentRunResult weatherImpact(AgentRunRequest request) {
         return agenticOperationsService.weatherImpact(request);
@@ -225,9 +231,27 @@ public class AgentResource {
     }
 
     @GET
+    @Path("/airspace/runs")
+    public List<AgentRunResult> airspaceRuns(@QueryParam("limit") Integer limit,
+                                             @QueryParam("agentType") String agentType,
+                                             @QueryParam("missionId") String missionId,
+                                             @QueryParam("reservationId") String reservationId,
+                                             @QueryParam("decisionId") String decisionId,
+                                             @QueryParam("accepted") Boolean accepted,
+                                             @QueryParam("sourceFamily") String sourceFamily) {
+        return runs(limit, agentType, missionId, reservationId, decisionId, accepted, sourceFamily);
+    }
+
+    @GET
     @Path("/runs/{id}")
     public AgentRunResult runById(@PathParam("id") String id) {
         return agenticOperationsService.runById(id);
+    }
+
+    @GET
+    @Path("/airspace/runs/{id}")
+    public AgentRunResult airspaceRunById(@PathParam("id") String id) {
+        return runById(id);
     }
 
     @GET
@@ -258,5 +282,23 @@ public class AgentResource {
     @Path("/tasks/{id}/transition")
     public AgentTask transitionTask(@PathParam("id") String id, AgentTaskTransitionRequest request) {
         return agenticOperationsService.transitionTask(id, request);
+    }
+
+    @POST
+    @Path("/airspace/tasks/{id}/acknowledge")
+    public AgentTask acknowledgeAirspaceTask(@PathParam("id") String id, AgentTaskTransitionRequest request) {
+        return transitionAirspaceTask(id, request, "ACKNOWLEDGED");
+    }
+
+    @POST
+    @Path("/airspace/tasks/{id}/resolve")
+    public AgentTask resolveAirspaceTask(@PathParam("id") String id, AgentTaskTransitionRequest request) {
+        return transitionAirspaceTask(id, request, "RESOLVED");
+    }
+
+    private AgentTask transitionAirspaceTask(String id, AgentTaskTransitionRequest request, String status) {
+        AgentTaskTransitionRequest safe = request == null ? new AgentTaskTransitionRequest() : request;
+        safe.setStatus(status);
+        return agenticOperationsService.transitionTask(id, safe);
     }
 }

@@ -784,6 +784,18 @@ public final class ProductDtos {
         private List<String> coverageSummaries = new ArrayList<>();
         @Builder.Default
         private List<String> humanReviewCheckpoints = new ArrayList<>();
+        private int agentRunsExecuted;
+        private int falseClearCount;
+        private int falseBlockCount;
+        private double replayIntegrityScore;
+        private double calibrationReadinessScore;
+        private String outcomeMetricSummary;
+        @Builder.Default
+        private List<String> agentFindings = new ArrayList<>();
+        @Builder.Default
+        private List<String> agentPolicyGuards = new ArrayList<>();
+        @Builder.Default
+        private List<String> unresolvedReviewTasks = new ArrayList<>();
     }
 
     @Data

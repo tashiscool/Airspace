@@ -49,6 +49,7 @@ public class AgenticOperationsService {
     Instance<LlmReasoningProvider> llmReasoningProviders;
 
     public AgentRunResult run(AgentRunRequest request) {
+        long startedNanos = System.nanoTime();
         AgentRunRequest safe = request == null ? new AgentRunRequest() : request;
         AgentPolicy policy = safe.getPolicy() == null ? AgentPolicy.builder().build() : safe.getPolicy();
         String type = normalize(safe.getAgentType());
@@ -85,6 +86,7 @@ public class AgenticOperationsService {
             case "HISTORICAL_CALIBRATION_CURATOR":
             case "NATIONAL_DEMAND_STRESS_AGENT":
             case "COLLABORATIVE_DECISION_FACILITATOR":
+            case "COORDINATION_DRAFT_AGENT":
             case "PROVIDER_FRESHNESS_WATCHER":
                 result = safetyLab().run(safe);
                 break;
@@ -105,7 +107,7 @@ public class AgenticOperationsService {
                     ? reasoned.toBuilder().reasoningEnvelope(result.getReasoningEnvelope()).build()
                     : reasoned;
         }
-        return finalizeResult(safe, result, policy);
+        return finalizeResult(safe, result, policy, startedNanos);
     }
 
     public AgentRunResult weatherImpact(AgentRunRequest request) {
@@ -257,7 +259,7 @@ public class AgenticOperationsService {
                 .build();
     }
 
-    private AgentRunResult finalizeResult(AgentRunRequest request, AgentRunResult result, AgentPolicy policy) {
+    private AgentRunResult finalizeResult(AgentRunRequest request, AgentRunResult result, AgentPolicy policy, long startedNanos) {
         AgentAssessmentBuilder safeAssessmentBuilder = assessmentBuilder == null ? new AgentAssessmentBuilder() : assessmentBuilder;
         result = safeAssessmentBuilder.normalize(result);
         AgentEvaluationSummary evaluation = evaluationService == null
@@ -274,18 +276,167 @@ public class AgenticOperationsService {
                 .operatingLoop(result.getOperatingLoop().isEmpty() ? operatingLoop(result, diagnostics) : result.getOperatingLoop())
                 .build();
         AgentAuditEnvelope audit = auditService.record(request, withDiagnostics, policy);
-        AgentRunResult finalized = withDiagnostics.toBuilder()
+        AgentRunResult audited = withDiagnostics.toBuilder()
                 .auditEnvelope(audit)
                 .missionId(request == null ? null : request.getMissionId())
                 .reservationId(request == null ? null : request.getReservationId())
                 .decisionId(request == null ? null : request.getDecisionId())
                 .generatedAt(withDiagnostics.getGeneratedAt() == null ? ZonedDateTime.now(ZoneOffset.UTC) : withDiagnostics.getGeneratedAt())
                 .build();
+        AgentRunResult finalized = audited.toBuilder()
+                .costEstimate(costEstimate(withDiagnostics))
+                .executionTimeMs(Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L))
+                .policyGuardDetails(policyGuardDetails(withDiagnostics))
+                .replayRefs(replayRefs(request, audited))
+                .approvalRequirements(approvalRequirements(withDiagnostics))
+                .build();
         store().saveRun(finalized);
         for (AgentTask task : finalized.getTasks()) {
             store().saveTask(task);
         }
         return finalized;
+    }
+
+    private double costEstimate(AgentRunResult result) {
+        if (result == null) {
+            return 0.0;
+        }
+        if (result.getCostBudget() != null) {
+            return result.getCostBudget().getEstimatedCostUsd();
+        }
+        return result.getCostEstimate();
+    }
+
+    private List<AgentPolicyGuard> policyGuardDetails(AgentRunResult result) {
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        if (result.getPolicyGuardDetails() != null && !result.getPolicyGuardDetails().isEmpty()) {
+            return result.getPolicyGuardDetails();
+        }
+        List<AgentPolicyGuard> guards = new ArrayList<>();
+        for (String guard : result.getPolicyGuards() == null ? Collections.<String>emptyList() : result.getPolicyGuards()) {
+            guards.add(AgentPolicyGuard.builder()
+                    .id(guard)
+                    .label(guardLabel(guard))
+                    .description(guardDescription(guard))
+                    .enforced(true)
+                    .build());
+        }
+        return guards;
+    }
+
+    private String guardLabel(String guard) {
+        if (guard == null || guard.trim().isEmpty()) {
+            return "Policy guard";
+        }
+        String normalized = guard.trim().replace('_', ' ').toLowerCase(Locale.US);
+        return normalized.substring(0, 1).toUpperCase(Locale.US) + normalized.substring(1);
+    }
+
+    private String guardDescription(String guard) {
+        String normalized = guard == null ? "" : guard.trim().toUpperCase(Locale.US);
+        switch (normalized) {
+            case "ADVISORY_ONLY":
+                return "Agent output is advisory analysis, draft, or review material.";
+            case "NO_EXTERNAL_SEND":
+                return "Agent output may not send external coordination traffic.";
+            case "NO_OFFICIAL_MUTATION":
+                return "Agent output may not mutate official mission, reservation, TMI, or message state.";
+            case "HUMAN_APPROVAL_REQUIRED":
+                return "Human review is required before operational use.";
+            case "CITED_EVIDENCE_REQUIRED":
+                return "Claims must carry source references or produce missing-evidence findings.";
+            case "LOCAL_OR_REPLAY_FIRST":
+                return "Workload runs against local, fixture, or replay evidence unless explicitly configured.";
+            default:
+                return "Configured agent policy guard.";
+        }
+    }
+
+    private List<AgentReplayReference> replayRefs(AgentRunRequest request, AgentRunResult result) {
+        List<AgentReplayReference> refs = new ArrayList<>();
+        if (result != null && result.getReplayRefs() != null && !result.getReplayRefs().isEmpty()) {
+            refs.addAll(result.getReplayRefs());
+        }
+        if (request != null) {
+            addReplayRef(refs, request.getRunId(), "SIMULATION_RUN", "/simulation/runs/" + request.getRunId() + "/replay", "Simulation run replay");
+            addReplayRef(refs, request.getCampaignId(), "SIMULATION_CAMPAIGN", "/simulation/campaigns/" + request.getCampaignId() + "/report", "Simulation campaign report");
+            addReplayRef(refs, request.getDecisionId(), "DECISION", "/decisions/" + request.getDecisionId(), "Decision replay/audit");
+        }
+        if (result != null && result.getAuditEnvelope() != null && result.getAuditEnvelope().getOutputHash() != null) {
+            addReplayRef(refs, result.getAuditEnvelope().getId(), "AGENT_AUDIT", "/config", "Agent audit envelope",
+                    result.getAuditEnvelope().getOutputHash());
+        }
+        return refs;
+    }
+
+    private void addReplayRef(List<AgentReplayReference> refs, String id, String type, String route, String label) {
+        addReplayRef(refs, id, type, route, label, null);
+    }
+
+    private void addReplayRef(List<AgentReplayReference> refs, String id, String type, String route, String label, String hash) {
+        if (id == null || id.trim().isEmpty()) {
+            return;
+        }
+        for (AgentReplayReference ref : refs) {
+            if (id.equals(ref.getId()) && type.equals(ref.getType())) {
+                return;
+            }
+        }
+        refs.add(AgentReplayReference.builder()
+                .id(id)
+                .type(type)
+                .route(route)
+                .label(label)
+                .hash(hash)
+                .build());
+    }
+
+    private List<AgentApprovalRequirement> approvalRequirements(AgentRunResult result) {
+        if (result == null) {
+            return Collections.emptyList();
+        }
+        if (result.getApprovalRequirements() != null && !result.getApprovalRequirements().isEmpty()) {
+            return result.getApprovalRequirements();
+        }
+        List<AgentApprovalRequirement> requirements = new ArrayList<>();
+        for (AgentRecommendation recommendation : result.getRecommendations() == null ? Collections.<AgentRecommendation>emptyList() : result.getRecommendations()) {
+            HumanReviewMode mode = recommendation.getHumanReviewMode();
+            if (recommendation.isHumanApprovalRequired() || mode == HumanReviewMode.PUSH_APPROVAL || mode == HumanReviewMode.PULL_CLARIFICATION) {
+                requirements.add(AgentApprovalRequirement.builder()
+                        .id(AgentSupport.id("approval", recommendation.getId()))
+                        .mode(mode == null ? HumanReviewMode.PUSH_APPROVAL : mode)
+                        .reason(recommendation.getHumanReviewReason())
+                        .route(null)
+                        .required(true)
+                        .citations(recommendation.getCitations())
+                        .build());
+            }
+        }
+        for (AgentTask task : result.getTasks() == null ? Collections.<AgentTask>emptyList() : result.getTasks()) {
+            HumanReviewMode mode = task.getHumanReviewMode();
+            if (mode == HumanReviewMode.PUSH_APPROVAL || mode == HumanReviewMode.PULL_CLARIFICATION) {
+                requirements.add(AgentApprovalRequirement.builder()
+                        .id(AgentSupport.id("approval", task.getId()))
+                        .mode(mode)
+                        .reason(task.getHumanReviewReason())
+                        .route(task.getRoute())
+                        .required(true)
+                        .citations(task.getCitations())
+                        .build());
+            }
+        }
+        if (requirements.isEmpty() && result.isHumanApprovalRequired()) {
+            requirements.add(AgentApprovalRequirement.builder()
+                    .id(AgentSupport.id("approval", result.getId()))
+                    .mode(HumanReviewMode.REVIEW_ONLY)
+                    .reason("Agent result is advisory and requires human review before operational use.")
+                    .required(true)
+                    .citations(result.getCitations())
+                    .build());
+        }
+        return requirements;
     }
 
     private AgentRunResult mergeRequestToolCalls(AgentRunRequest request, AgentRunResult result) {

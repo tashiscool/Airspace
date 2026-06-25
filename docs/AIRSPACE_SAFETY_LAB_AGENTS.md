@@ -25,6 +25,11 @@ The core principle is simple: agents can triage, explain, draft, audit, and red-
 GET /api/agents/workloads
 POST /api/agents/safety-lab
 POST /api/agents/run
+POST /api/agents/airspace/run
+GET /api/agents/airspace/runs
+GET /api/agents/airspace/runs/{id}
+POST /api/agents/airspace/tasks/{id}/acknowledge
+POST /api/agents/airspace/tasks/{id}/resolve
 ```
 
 `GET /api/agents/workloads` returns the catalog of available workloads with scope, evidence sources, enabled state, cost budget, and policy guards.
@@ -48,6 +53,8 @@ POST /api/agents/run
 }
 ```
 
+The `/api/agents/airspace/*` paths are compatibility aliases for the explicit Airspace Safety Lab plan. The canonical product API remains `/api/agents/*`.
+
 ## Workload Catalog
 
 | Workload | What it does | Primary evidence |
@@ -61,6 +68,7 @@ POST /api/agents/run
 | `HISTORICAL_CALIBRATION_CURATOR` | Flags fixture-backed calibration candidates and uncalibrated coefficients. | Historical replay corpus, calibration reports |
 | `NATIONAL_DEMAND_STRESS_AGENT` | Reviews national-scale demand/capacity stress runs and bottleneck sectors/airports. | National demand simulation, TFM board |
 | `COLLABORATIVE_DECISION_FACILITATOR` | Drafts human-review coordination notes and common-operating-picture updates. | Collaborative decision workflow, recipient/role model |
+| `COORDINATION_DRAFT_AGENT` | Prepares cited, human-approved coordination draft material from hazards, TMIs, route impacts, or decisions. | Coordination draft service, source refs, message workspace |
 | `PROVIDER_FRESHNESS_WATCHER` | Flags stale, fixture-backed, credential-required, or non-authoritative provider modes. | Provider status, source freshness |
 
 ## Guardrails
@@ -78,7 +86,8 @@ Every Safety Lab result carries explicit safety metadata:
   - `CITED_EVIDENCE_REQUIRED`
   - `LOCAL_OR_REPLAY_FIRST`
 - evidence receipts with source type, source ID, source hash, citation text, and generated time,
-- cost budget with max cost, timeout, retry cap, fallback mode, and circuit-breaker state.
+- cost budget with max cost, timeout, retry cap, fallback mode, and circuit-breaker state,
+- compatibility fields `costEstimate`, `executionTimeMs`, typed `policyGuardDetails`, `replayRefs`, and `approvalRequirements`.
 
 The policy enforcer rejects any result that claims an external send or official workflow mutation when the policy does not explicitly allow those actions.
 
