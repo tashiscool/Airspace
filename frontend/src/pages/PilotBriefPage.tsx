@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { Printer, Radio, ShieldAlert } from 'lucide-react';
 import { api } from '../api/client';
+import { AgentRouteContextPanel } from '../components/AgentRouteContextPanel';
 import { QueryNotice } from '../components/Notices';
 import { RouteCandidateComparisonPanel } from '../components/RouteCandidateComparisonPanel';
 import { StatusBadge } from '../components/StatusBadge';
@@ -45,6 +46,14 @@ export function PilotBriefPage() {
         </div>
       </header>
       <QueryNotice query={brief} label="Pilot brief" />
+      <AgentRouteContextPanel
+        title="Brief Delta Agent Evidence"
+        description="Mission-scoped brief-delta checks show what changed since the last handoff and keep source refs attached to advisory claims."
+        agentTypes={['BRIEF_DELTA_AGENT']}
+        missionId={missionId}
+        sourceFamily="BRIEF"
+        taskRouteContains={`/missions/${missionId}/brief`}
+      />
       <main className="pilot-brief-grid">
         <section className="brief-card verdict">
           <span>Verdict</span>

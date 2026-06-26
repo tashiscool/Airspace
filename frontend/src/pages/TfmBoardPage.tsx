@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Clock, Database, FileText, MapPinned, Play, Route, ShieldAlert } from 'lucide-react';
 import { api } from '../api/client';
+import { AgentRouteContextPanel } from '../components/AgentRouteContextPanel';
 import { ErrorNotice, QueryNotice } from '../components/Notices';
 import { StatusBadge } from '../components/StatusBadge';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
@@ -106,6 +107,13 @@ export function TfmBoardPage() {
           <QueryNotice query={board} label="TFM command-center board" />
           <ErrorNotice error={board.error} title="TFM board unavailable" />
         </div>
+        <AgentRouteContextPanel
+          title="TFM Agent Evidence"
+          description="TMI recommendation audits and collaborative-decision facilitation stay visible next to the common operating picture they review."
+          agentTypes={['TMI_RECOMMENDATION_AUDITOR', 'COLLABORATIVE_DECISION_FACILITATOR']}
+          sourceFamily="TFM"
+          taskRouteContains="/tfm"
+        />
 
         <section className="safety-loop-grid">
           <MetricCard title="Active Flights" value={String(data?.impactTotals.activeFlightCount ?? '—')} detail={`${data?.impactTotals.flightCount ?? 0} total replay flights`} />

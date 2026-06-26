@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import { Database } from 'lucide-react';
 import { api } from '../api/client';
+import { AgentRouteContextPanel } from '../components/AgentRouteContextPanel';
 import { DataTable } from '../components/DataTable';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
@@ -145,6 +146,13 @@ export function ConfigPage() {
           <MutationNotice mutation={runCalibration} label="Calibration run" />
           <MutationNotice mutation={createCollaborationProposal} label="Create collaboration proposal" />
         </div>
+        <AgentRouteContextPanel
+          title="Provider Freshness Agent Evidence"
+          description="Provider-freshness watcher runs, setup-required policy guards, and human-review tasks stay visible beside configuration and release-gate state."
+          agentTypes={['PROVIDER_FRESHNESS_WATCHER']}
+          sourceFamily="PROVIDER"
+          taskRouteContains="/config"
+        />
         {selected === 'navaids' && <ReferenceTable rows={(points.data ?? []).filter((point) => point.pointType === 'NAVAID')} onAdd={() => addPoint.mutate()} />}
         {selected === 'fixes' && <ReferenceTable rows={(points.data ?? []).filter((point) => point.pointType !== 'NAVAID')} onAdd={() => addPoint.mutate()} />}
         {selected === 'airspace' && <AirspaceGroupsPanel />}

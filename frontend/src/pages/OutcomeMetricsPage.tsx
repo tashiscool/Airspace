@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Calculator, Clock, Fuel, Play, Route, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { api } from '../api/client';
+import { AgentRouteContextPanel } from '../components/AgentRouteContextPanel';
 import { ErrorNotice, QueryNotice } from '../components/Notices';
 import { StatusBadge } from '../components/StatusBadge';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
@@ -97,6 +98,13 @@ export function OutcomeMetricsPage() {
           <QueryNotice query={report} label="outcome metrics" />
           <ErrorNotice error={report.error} title="Outcome metrics unavailable" />
         </div>
+        <AgentRouteContextPanel
+          title="Outcome Metrics Agent Evidence"
+          description="Outcome-metrics audit runs track delay, fuel, reroute, false-clear/false-block, source-ref, and operator time-to-decision claims."
+          agentTypes={['OUTCOME_METRICS_AUDITOR']}
+          sourceFamily="OUTCOME"
+          taskRouteContains="/outcomes"
+        />
 
         <section className="safety-loop-grid">
           <MetricCard icon={<Clock size={16} />} title="Delay Saved" value={`${formatNumber(data?.delayMinutesSaved)}m`} detail={`${formatNumber(data?.baselineDelayMinutes)}m baseline · ${formatNumber(data?.mitigatedDelayMinutes)}m mitigated`} attention={(data?.delayMinutesSaved ?? 0) > 0} />

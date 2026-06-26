@@ -2006,6 +2006,84 @@ details summary span { float: right; }
   border-top: 1px solid var(--border);
 }
 
+.agent-route-context {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(7, 13, 24, 0.96));
+}
+
+.agent-route-context-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.agent-route-context-header h3,
+.agent-route-context-header p {
+  margin: 0;
+}
+
+.agent-route-context-header p {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.agent-route-context-status {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+
+.agent-route-context-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 10px;
+}
+
+.agent-context-card {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+}
+
+.agent-context-card.primary {
+  background: rgba(30, 64, 175, 0.14);
+}
+
+.agent-context-card > span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--muted);
+  font: 10px var(--font-mono);
+  text-transform: uppercase;
+}
+
+.agent-context-card strong {
+  overflow-wrap: anywhere;
+}
+
+.agent-context-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.agent-context-card .badge {
+  margin-right: 5px;
+}
+
 .agentic-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -2141,7 +2219,7 @@ details summary span { float: right; }
     grid-template-columns: 1fr;
   }
   .metric-sidebar, .split-tree, .feed-list, .decision-queue, .config-tree { display: none; }
-  .metric-strip, .metric-row, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .agentic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-strip, .metric-row, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .agentic-grid, .agent-route-context-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .command-button { display: none; }
 }
 
@@ -2150,7 +2228,8 @@ details summary span { float: right; }
   .breadcrumb, .ops-footer > span:last-child, .operator-block small { display: none; }
   .ops-rail { width: 58px; }
   .ops-rail span, .ops-rail small, .rail-collapse { display: none; }
-  .form-grid, .metric-strip, .metric-row, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .route-baseline-grid, .route-cost-grid, .agentic-grid { grid-template-columns: 1fr; }
+  .form-grid, .metric-strip, .metric-row, .mission-summary-grid, .decision-summary-grid, .safety-loop-grid, .sections-grid, .map-semantics, .config-split, .config-system-grid, .policy-grid, .weather-event-drilldown, .route-baseline-grid, .route-cost-grid, .agentic-grid, .agent-route-context-grid, .agent-route-context-header { grid-template-columns: 1fr; }
+  .agent-route-context-status { justify-items: start; }
   .agentic-panel-summary { grid-template-columns: auto auto minmax(0, 1fr); }
   .agentic-panel-summary small { display: none; }
 }

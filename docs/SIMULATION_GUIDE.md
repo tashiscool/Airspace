@@ -252,11 +252,23 @@ POST /api/simulations/agents/generate-scenarios
 POST /api/simulations/agents/red-team
 GET /api/agents/workloads
 POST /api/agents/safety-lab
+POST /api/agents/airspace/run
+GET /api/agents/airspace/runs
+GET /api/agents/airspace/runs/{runId}
+POST /api/agents/airspace/tasks/{taskId}/acknowledge
+POST /api/agents/airspace/tasks/{taskId}/resolve
 ```
 
 Generated scenario bundles are drafts only. A human operator must review and import them before they become part of the scenario library or regression corpus.
 
-The broader Airspace Safety Lab agent catalog covers unsafe-guidance red-team review, outcome-metrics auditing, draft scenario generation, TMI recommendation review, brief-delta comparison, replay-integrity checks, calibration curation, national-demand stress review, collaborative-decision facilitation, and provider-freshness monitoring. These runs are local/replay-first, evidence-cited, cost-bounded, and guarded by `NO_EXTERNAL_SEND`, `NO_OFFICIAL_MUTATION`, and `HUMAN_APPROVAL_REQUIRED` policy metadata. See [AIRSPACE_SAFETY_LAB_AGENTS.md](AIRSPACE_SAFETY_LAB_AGENTS.md).
+The broader Airspace Safety Lab agent catalog covers unsafe-guidance red-team review, outcome-metrics auditing, draft scenario generation, TMI recommendation review, brief-delta comparison, replay-integrity checks, calibration curation, national-demand stress review, collaborative-decision facilitation, provider-freshness monitoring, and coordination-draft review. These runs are local/replay-first, evidence-cited, cost-bounded, and guarded by `NO_EXTERNAL_SEND`, `NO_OFFICIAL_MUTATION`, and `HUMAN_APPROVAL_REQUIRED` policy metadata. See [AIRSPACE_SAFETY_LAB_AGENTS.md](AIRSPACE_SAFETY_LAB_AGENTS.md).
+
+The frontend surfaces this evidence in two places:
+
+- The global Agentic Ops drawer can run the catalog and inspect findings, policy guards, replay references, MCP receipts, and human-review tasks from any workbench route.
+- Page-level Safety Lab context panels appear on Simulation, TFM, Outcomes, Decision, Pilot Brief, and Config so operators can see the agent runs and review tasks that are specific to the artifact they are inspecting.
+
+These panels are evidence/readout surfaces only. They do not authorize external delivery, mutate official workflow state, or make certification claims.
 
 ## Scenario Corpus
 

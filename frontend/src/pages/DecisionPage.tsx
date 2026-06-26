@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, GitBranch, Play, RotateCcw, ShieldAlert } from 'lucide-react';
 import { api } from '../api/client';
+import { AgentRouteContextPanel } from '../components/AgentRouteContextPanel';
 import { OperationsMap } from '../components/OperationsMap';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { RouteCandidateComparisonPanel } from '../components/RouteCandidateComparisonPanel';
@@ -141,6 +142,14 @@ export function DecisionPage() {
           <MutationNotice mutation={evaluate} label="Evaluate decision" />
           <MutationNotice mutation={replay} label="Replay verification" />
         </div>
+        <AgentRouteContextPanel
+          title="Decision Agent Evidence"
+          description="Unsafe-guidance red-team and replay-integrity checks stay attached to the decision trace they evaluate."
+          agentTypes={['UNSAFE_GUIDANCE_RED_TEAM', 'REPLAY_INTEGRITY_AGENT']}
+          decisionId={decision?.id ?? (decisionId !== 'latest' ? decisionId : undefined)}
+          sourceFamily="DECISION"
+          taskRouteContains={decision?.id ? `/decisions/${decision.id}` : '/decisions'}
+        />
         {tab === 'summary' && (
           <>
             <section className="safety-loop-grid">

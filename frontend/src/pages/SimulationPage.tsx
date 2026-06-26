@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { BarChart3, Clock, Database, FileText, MapPinned, Play, Route, ShieldAlert } from 'lucide-react';
 import { api } from '../api/client';
+import { AgentRouteContextPanel } from '../components/AgentRouteContextPanel';
 import { OperationsMap } from '../components/OperationsMap';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { RouteCandidateComparisonPanel } from '../components/RouteCandidateComparisonPanel';
@@ -141,6 +142,13 @@ export function SimulationPage() {
           <MutationNotice mutation={runCampaign} label="Run campaign" />
           <MutationNotice mutation={loadHistoricalReplay} label="Load historical replay" />
         </div>
+        <AgentRouteContextPanel
+          title="Simulation Agent Evidence"
+          description="Draft scenario generation, unsafe-guidance red-team findings, replay-integrity checks, and coordination-draft review for local simulation runs."
+          agentTypes={['SCENARIO_GENERATION', 'UNSAFE_GUIDANCE_RED_TEAM', 'REPLAY_INTEGRITY_AGENT', 'COORDINATION_DRAFT_AGENT']}
+          sourceFamily="SIMULATION"
+          taskRouteContains="/simulation"
+        />
         <section className="safety-loop-grid">
           <SimulationMetric title="Time To Guidance" value={run ? `${run.kpiSummary.timeToGuidanceSeconds}s` : '—'} detail="First non-clear/monitor advisory in the local timeline." />
           <SimulationMetric title="Source Refs" value={run ? `${Math.round(run.kpiSummary.sourceRefPreservationRate * 100)}%` : '—'} detail="Timestep source refs preserved into guidance snapshots." />
