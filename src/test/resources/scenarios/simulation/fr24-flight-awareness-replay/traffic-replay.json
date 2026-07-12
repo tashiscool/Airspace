@@ -1,0 +1,166 @@
+{
+  "id": "fr24-flight-awareness-demo",
+  "sourceId": "flightradar24-api-mcp-demo",
+  "sourceMode": "AUTHENTICATED_EXTERNAL_REPLAY_SAMPLE",
+  "providerFamily": "FLIGHTRADAR24",
+  "generatedAt": "2026-07-12T12:00:00Z",
+  "timeBasis": "SIMULATION_OFFSET_MINUTES",
+  "providerReceiptId": "mcp-receipt-fr24-demo-not-live",
+  "authorizationMode": "LOCAL_SAMPLE_NO_LIVE_CALL",
+  "sourceRefs": [
+    "FR24_MCP:get_live_flights_positions_full",
+    "FR24_MCP:get_flight_tracks",
+    "FR24_API_DOCS:https://fr24api.flightradar24.com"
+  ],
+  "flightPlans": [
+    {
+      "flightId": "fr24-demo-baw1",
+      "callsign": "BAW1",
+      "aircraftClass": "HEAVY_JET",
+      "operator": "BRITISH AIRWAYS",
+      "origin": "JFK",
+      "destination": "LHR",
+      "filedRouteText": "JFK DCT OCEANIC TRACK EAST",
+      "filedRoutePoints": [
+        [40.6413, -73.7781, 0],
+        [41.0000, -72.2000, 12000],
+        [43.0000, -66.0000, 33000],
+        [51.4700, -0.4543, 0]
+      ],
+      "scheduledDepartureTime": "2026-07-12T12:05:00Z",
+      "estimatedDepartureTime": "2026-07-12T12:20:00Z",
+      "scheduledArrivalTime": "2026-07-12T18:30:00Z",
+      "requestedAltitudeFeet": 33000,
+      "requestedAltitudeBlock": "FL310-FL350",
+      "filedSpeedKnots": 470,
+      "missionId": "mission-fr24-demo",
+      "reservationId": "reservation-fr24-demo",
+      "sourceRefs": [
+        "FR24:summary:fr24-demo-baw1",
+        "FR24:track:fr24-demo-baw1"
+      ]
+    },
+    {
+      "flightId": "fr24-demo-aal2",
+      "callsign": "AAL2",
+      "aircraftClass": "NARROWBODY",
+      "operator": "AMERICAN AIRLINES",
+      "origin": "JFK",
+      "destination": "LAX",
+      "filedRouteText": "JFK DCT MIDCON DCT LAX",
+      "filedRoutePoints": [
+        [40.6413, -73.7781, 0],
+        [41.2000, -80.0000, 30000],
+        [39.0000, -100.0000, 34000],
+        [33.9416, -118.4085, 0]
+      ],
+      "scheduledDepartureTime": "2026-07-12T12:10:00Z",
+      "estimatedDepartureTime": "2026-07-12T12:25:00Z",
+      "scheduledArrivalTime": "2026-07-12T18:15:00Z",
+      "requestedAltitudeFeet": 34000,
+      "requestedAltitudeBlock": "FL320-FL360",
+      "filedSpeedKnots": 455,
+      "sourceRefs": [
+        "FR24:summary:fr24-demo-aal2",
+        "FR24:track:fr24-demo-aal2"
+      ]
+    }
+  ],
+  "positions": [
+    {
+      "flightId": "fr24-demo-baw1",
+      "timestamp": "2026-07-12T12:20:00Z",
+      "offsetMinutes": 0,
+      "latitude": 40.6413,
+      "longitude": -73.7781,
+      "altitudeFeet": 0,
+      "groundSpeedKnots": 0,
+      "headingDegrees": 44,
+      "routeProgress": 0.0,
+      "delaySeconds": 900,
+      "phase": "SURFACE_DELAY",
+      "sourceRefs": ["FR24:position:fr24-demo-baw1:T+0"]
+    },
+    {
+      "flightId": "fr24-demo-baw1",
+      "timestamp": "2026-07-12T12:35:00Z",
+      "offsetMinutes": 15,
+      "latitude": 40.9800,
+      "longitude": -72.3500,
+      "altitudeFeet": 18000,
+      "groundSpeedKnots": 390,
+      "headingDegrees": 72,
+      "routeProgress": 0.18,
+      "delaySeconds": 900,
+      "phase": "CLIMB",
+      "sourceRefs": ["FR24:position:fr24-demo-baw1:T+15"]
+    },
+    {
+      "flightId": "fr24-demo-aal2",
+      "timestamp": "2026-07-12T12:25:00Z",
+      "offsetMinutes": 5,
+      "latitude": 40.6413,
+      "longitude": -73.7781,
+      "altitudeFeet": 0,
+      "groundSpeedKnots": 0,
+      "headingDegrees": 270,
+      "routeProgress": 0.0,
+      "delaySeconds": 900,
+      "phase": "SURFACE_DELAY",
+      "sourceRefs": ["FR24:position:fr24-demo-aal2:T+5"]
+    },
+    {
+      "flightId": "fr24-demo-aal2",
+      "timestamp": "2026-07-12T12:40:00Z",
+      "offsetMinutes": 20,
+      "latitude": 41.1500,
+      "longitude": -78.2000,
+      "altitudeFeet": 26000,
+      "groundSpeedKnots": 430,
+      "headingDegrees": 276,
+      "routeProgress": 0.12,
+      "delaySeconds": 900,
+      "phase": "CLIMB",
+      "sourceRefs": ["FR24:position:fr24-demo-aal2:T+20"]
+    }
+  ],
+  "airportDemand": [
+    {
+      "airportId": "JFK",
+      "timestamp": "2026-07-12T12:00:00Z",
+      "offsetMinutes": 0,
+      "departureDemandPerHour": 58,
+      "arrivalDemandPerHour": 46,
+      "departureCapacityPerHour": 42,
+      "arrivalCapacityPerHour": 38,
+      "departureQueueDepth": 14,
+      "arrivalQueueDepth": 6,
+      "averageDelaySeconds": 900,
+      "runwayConfiguration": "LOW_VIS_REVIEW",
+      "sourceRefs": ["FR24:airport:JFK:traffic-snapshot"]
+    }
+  ],
+  "sectorDemand": [
+    {
+      "sectorId": "ZNY-OCEANIC-GATE",
+      "timestamp": "2026-07-12T12:20:00Z",
+      "offsetMinutes": 20,
+      "activeAircraft": 22,
+      "baselineCapacity": 28,
+      "handoffQueueDepth": 5,
+      "frequencyUtilization": 0.78,
+      "estimatedHandoffDelaySeconds": 180,
+      "sourceRefs": ["FR24:bounds:ZNY-OCEANIC-GATE"]
+    }
+  ],
+  "trafficManagementInitiatives": [],
+  "assumptions": [
+    "This fixture is a local shape example derived from the public FR24 MCP/SDK contract, not a live FR24 response.",
+    "FR24 flight-awareness data is useful for simulation/replay enrichment but is not authoritative SWIM/TFMS/NAS truth.",
+    "Any live FR24 use must retain provider receipt, query filters, freshness, consent, and egress policy."
+  ],
+  "diagnostics": [
+    "No external API call was made to create this fixture.",
+    "Use /api/simulations/traffic-replay/validate to validate this bundle before scenario authoring."
+  ]
+}

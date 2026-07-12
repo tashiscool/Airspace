@@ -6,6 +6,7 @@ Airspace includes a governed MCP-style tool plane for the agentic operations lay
 
 - `airspace-first-party`: enabled by default, local, direct Java execution, no credentials, no live external dependency.
 - `external-mcp`: disabled/setup-required by default. It is a placeholder for future stdio/SSE/HTTP MCP servers after credentials, command allowlists, and operator consent are configured.
+- `flightradar24-fr24api-mcp`: disabled/setup-required by default. This tracks the official MIT-licensed Flightradar24 API MCP server for optional commercial flight-awareness enrichment. It requires `FR24_API_KEY`, explicit egress approval, operator consent, and evidence receipts before use. Airspace treats it as non-authoritative situational/replay data, not FAA SWIM/TFMS/NAS truth.
 
 ## First-Party Tools
 
@@ -20,6 +21,24 @@ Airspace includes a governed MCP-style tool plane for the agentic operations lay
 | `airspace.feed.artifact_transactions` | `READ_ONLY` | List parsed transactions for a retained feed artifact. |
 | `airspace.reference.lookup` | `READ_ONLY` | Lookup navaids, fixes, and reference points. |
 | `airspace.coordination.draft` | `DRAFT_ONLY` | Draft weather/ATC coordination text. No message is sent. |
+
+## Optional Flightradar24 MCP Tools
+
+Airspace does not vendor or execute Flightradar24 tools by default. The catalog exposes them so an operator can see exactly what would become available after credentials, egress policy, and reviewer approval exist.
+
+| Tool | Purpose |
+|---|---|
+| `get_live_flights_positions_light` / `get_live_flights_positions_full` | Live commercial flight-awareness position lookups with bounded filters. |
+| `get_live_flights_count` | Count matching live flights before requesting detail. |
+| `get_historic_flights_positions_light` / `get_historic_flights_positions_full` | Historical position replay lookups for timestamped scenarios. |
+| `get_historic_flights_count` | Count matching historical replay positions before requesting detail. |
+| `get_flight_summary_light` / `get_flight_summary_full` | Flight schedule, route, takeoff, and landing summaries for bounded time windows. |
+| `get_flight_summary_count` | Count matching flight summaries before requesting detail. |
+| `get_flight_tracks` | Retrieve track points for a specific FR24 flight id. |
+| `get_historic_flight_events_light` / `get_historic_flight_events_full` | Historical event timelines such as gate, takeoff, airspace transition, descent, landing, and gate arrival. |
+| `get_airline_info`, `get_airport_info_light`, `get_airport_info_full` | Airline and airport reference lookups. |
+
+The intended Airspace mapping target is `TrafficReplayBundle`: flight plans, position snapshots, flight tracks, airport context, provider receipts, and source refs. Any live FR24 use must preserve query bounds, freshness, source mode, and non-authoritative status in the replay/audit envelope.
 
 ## Evidence Receipts
 
@@ -38,7 +57,7 @@ The agent run can attach `AgentToolCall` records that reference receipt ids. The
 
 Every curated MCP tool now carries an `AgenticRiskProfile` with autonomy scope, tool surface, worst-case blast radius, permission scope, data-egress behavior, poisoned-data exposure, audit attribution, tool/model provenance, rollback path, cost/SLA class, and required human-review mode.
 
-`GET /api/agents/risk-assessments` returns the same checklist for operator and reviewer display. First-party tools are local/read-only or draft-only. The external MCP placeholder is setup-required and requires push approval before any future configured use.
+`GET /api/agents/risk-assessments` returns the same checklist for operator and reviewer display. First-party tools are local/read-only or draft-only. The external MCP placeholder is setup-required and requires push approval before any future configured use. The Flightradar24 MCP tools also appear in this checklist so reviewers can inspect external egress, non-authoritative data warnings, credentials, provenance, and rate-limited commercial API risk before enabling anything.
 
 Agent output uses explicit human-review modes:
 

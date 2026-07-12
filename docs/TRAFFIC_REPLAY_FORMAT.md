@@ -64,6 +64,26 @@ Flights are considered active at a simulation tick only after the first recorded
 
 See [TRAFFIC_FLOW_MANAGEMENT_PRIMITIVES.md](TRAFFIC_FLOW_MANAGEMENT_PRIMITIVES.md) for the GDP, AFP, FEA/FCA, miles-in-trail, reroute advisory, ground stop, departure metering, arrival rate, sector capacity, and TMI recommendation model catalog.
 
+## Optional Flightradar24 Flight-Awareness Mapping
+
+Airspace now includes a local sample for mapping commercial flight-awareness data into the same replay contract:
+
+```text
+src/test/resources/scenarios/simulation/fr24-flight-awareness-replay/traffic-replay.json
+```
+
+The sample is derived from the public shape of the official Flightradar24 API MCP/SDK contracts, but it is not a live FR24 response. It demonstrates how optional FR24 lookups can enrich simulations:
+
+| FR24-style source | Replay mapping |
+|---|---|
+| live/historic flight positions | `TrafficReplayPosition` snapshots with altitude, speed, heading, phase, delay, and source refs |
+| flight summaries | `TrafficReplayFlightPlan` schedule, origin/destination, route text, altitude request, operator, mission linkage |
+| flight tracks | `filedRoutePoints` and per-position source refs for replay/map playback |
+| airport reference/info | `TrafficReplayAirportDemand` context or reference-data sync candidates |
+| historic flight events | future event/timeline annotations for gate, takeoff, airspace transition, descent, landed, and gate arrival states |
+
+FR24 data remains `AUTHENTICATED_EXTERNAL` or `AUTHENTICATED_EXTERNAL_REPLAY_SAMPLE`, not `AUTHORIZED_OPERATIONAL`. It is useful for demo replay, human-factors review, and simulation enrichment, but it is not FAA SWIM, TFMS, FMDS, FNS, NMS, NADIN, WMSCR, or operational NAS truth. Any real FR24 adapter must retain provider receipt id, query filters, freshness, egress/consent policy, source refs, and non-authoritative warnings.
+
 ## Non-Goals
 
 - No live SWIM/NEMS transport.

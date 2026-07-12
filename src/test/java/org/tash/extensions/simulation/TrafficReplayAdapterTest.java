@@ -2,7 +2,10 @@ package org.tash.extensions.simulation;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -151,6 +154,39 @@ class TrafficReplayAdapterTest {
         assertFalse(bundle.getAirportDemand().isEmpty());
         assertFalse(bundle.getSectorDemand().isEmpty());
         assertTrue(bundle.getAssumptions().get(0).contains("not live SWIM data"));
+    }
+
+    @Test
+    void parsesFlightradar24FlightAwarenessReplayFixture() throws IOException {
+        TrafficReplayBundle bundle = adapter.parseJson(resourceText(
+                "/scenarios/simulation/fr24-flight-awareness-replay/traffic-replay.json"));
+
+        assertEquals("fr24-flight-awareness-demo", bundle.getId());
+        assertEquals("FLIGHTRADAR24", bundle.getProviderFamily());
+        assertEquals("AUTHENTICATED_EXTERNAL_REPLAY_SAMPLE", bundle.getSourceMode());
+        assertEquals("LOCAL_SAMPLE_NO_LIVE_CALL", bundle.getAuthorizationMode());
+        assertEquals(2, bundle.getFlightPlans().size());
+        assertEquals(4, bundle.getPositions().size());
+        assertTrue(adapter.validate(bundle).isEmpty());
+        assertTrue(bundle.getSourceRefs().contains("FR24_MCP:get_live_flights_positions_full"));
+        assertTrue(bundle.getAssumptions().stream()
+                .anyMatch(assumption -> assumption.contains("not authoritative SWIM/TFMS/NAS truth")));
+
+        List<SimulatedAircraft> aircraftAtTwenty = adapter.aircraftAtMinute(bundle, 20, List.of("WEATHER:sigmet-fr24-demo"));
+
+        assertEquals(2, aircraftAtTwenty.size());
+        assertEquals("BAW1", aircraftAtTwenty.get(0).getCallsign());
+        assertEquals("AAL2", aircraftAtTwenty.get(1).getCallsign());
+        assertTrue(aircraftAtTwenty.get(0).getImpactedSourceRefs().contains("FR24:track:fr24-demo-baw1"));
+        assertTrue(aircraftAtTwenty.get(0).getImpactedSourceRefs().contains("WEATHER:sigmet-fr24-demo"));
+        assertEquals("JFK", adapter.airportDemandAtMinute(bundle, 0).orElseThrow().getAirportId());
+        assertEquals("ZNY-OCEANIC-GATE", adapter.sectorDemandAtMinute(bundle, 20).orElseThrow().getSectorId());
+    }
+
+    private String resourceText(String path) throws IOException {
+        try (var input = Objects.requireNonNull(TrafficReplayAdapterTest.class.getResourceAsStream(path))) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
     }
 
     private String sampleReplayJson() {

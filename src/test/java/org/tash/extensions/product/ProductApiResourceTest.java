@@ -17,6 +17,21 @@ import static org.hamcrest.Matchers.notNullValue;
 @QuarkusTest
 class ProductApiResourceTest {
     @Test
+    void providerStatusIncludesFlightradar24FlightAwarenessReadiness() {
+        given()
+                .when()
+                .get("/api/providers/status")
+                .then()
+                .statusCode(200)
+                .body("find { it.id == 'flightradar24-api-mcp' }.providerType", equalTo("FLIGHT_AWARENESS"))
+                .body("find { it.id == 'flightradar24-api-mcp' }.sourceMode", equalTo("AUTHENTICATED_EXTERNAL"))
+                .body("find { it.id == 'flightradar24-api-mcp' }.enabled", equalTo(false))
+                .body("find { it.id == 'flightradar24-api-mcp' }.authoritative", equalTo(false))
+                .body("find { it.id == 'flightradar24-api-mcp' }.freshness.status", equalTo("SETUP_REQUIRED"))
+                .body("find { it.id == 'flightradar24-api-mcp' }.diagnostics", hasItem(org.hamcrest.Matchers.containsString("not authoritative FAA")));
+    }
+
+    @Test
     void weatherPatternEndpointsExposeOfflineSafeLiveStatusPatternsEventsAndRouteSampling() {
         String artifactId = given()
                 .contentType("application/json")
@@ -580,7 +595,9 @@ class ProductApiResourceTest {
                 .then()
                 .statusCode(200)
                 .body("find { it.id == 'airspace-first-party' }.enabled", equalTo(true))
-                .body("find { it.id == 'external-mcp' }.setupRequired", equalTo(true));
+                .body("find { it.id == 'external-mcp' }.setupRequired", equalTo(true))
+                .body("find { it.id == 'flightradar24-fr24api-mcp' }.setupRequired", equalTo(true))
+                .body("find { it.id == 'flightradar24-fr24api-mcp' }.credentialsRequired", equalTo(true));
 
         given()
                 .when()
@@ -593,11 +610,23 @@ class ProductApiResourceTest {
 
         given()
                 .when()
+                .get("/api/agents/mcp/servers/flightradar24-fr24api-mcp/tools")
+                .then()
+                .statusCode(200)
+                .body("find { it.id == 'get_live_flights_positions_full' }.setupRequired", equalTo(true))
+                .body("find { it.id == 'get_live_flights_positions_full' }.riskProfile.dataEgress", org.hamcrest.Matchers.containsString("Flightradar24"))
+                .body("find { it.id == 'get_historic_flights_count' }.requiredArguments", hasItem("timestamp"))
+                .body("find { it.id == 'get_flight_summary_count' }.requiredArguments", hasItem("flight_datetime_to"))
+                .body("find { it.id == 'get_flight_tracks' }.requiredArguments", hasItem("flight_id"));
+
+        given()
+                .when()
                 .get("/api/agents/risk-assessments")
                 .then()
                 .statusCode(200)
                 .body("find { it.subjectId == 'airspace.coordination.draft' }.riskProfile.worstCaseBlastRadius", org.hamcrest.Matchers.containsString("draft"))
-                .body("find { it.subjectId == 'external-mcp.configured_tool' }.diagnostics.size()", greaterThanOrEqualTo(1));
+                .body("find { it.subjectId == 'external-mcp.configured_tool' }.diagnostics.size()", greaterThanOrEqualTo(1))
+                .body("find { it.subjectId == 'get_live_flights_positions_full' }.riskProfile.toolProvenance", org.hamcrest.Matchers.containsString("Flightradar24"));
 
         String mcpReceiptId = given()
                 .contentType("application/json")
@@ -611,6 +640,16 @@ class ProductApiResourceTest {
                 .body("toolCall.evidenceReceiptId", notNullValue())
                 .extract()
                 .path("evidenceReceipt.id");
+
+        given()
+                .contentType("application/json")
+                .body("{\"serverId\":\"flightradar24-fr24api-mcp\",\"toolId\":\"get_live_flights_positions_full\",\"arguments\":{\"bounds\":\"41.0,40.5,-74.5,-73.5\"}}")
+                .when()
+                .post("/api/agents/mcp/tools/call")
+                .then()
+                .statusCode(200)
+                .body("status", equalTo("SETUP_REQUIRED"))
+                .body("policyDecision", equalTo("SETUP_REQUIRED"));
 
         given()
                 .when()

@@ -30,6 +30,9 @@ public class AgenticRiskChecklistService {
         for (McpToolDescriptor tool : registry.tools(CuratedMcpCatalog.EXTERNAL_MCP)) {
             assessments.add(assessment(tool));
         }
+        for (McpToolDescriptor tool : registry.tools(CuratedMcpCatalog.FLIGHTRADAR24_MCP)) {
+            assessments.add(assessment(tool));
+        }
         return assessments;
     }
 

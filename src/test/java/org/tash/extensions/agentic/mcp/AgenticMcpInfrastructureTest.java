@@ -26,6 +26,8 @@ class AgenticMcpInfrastructureTest {
 
         assertTrue(catalog.server(CuratedMcpCatalog.AIRSPACE_FIRST_PARTY).orElseThrow().isEnabled());
         assertFalse(catalog.server(CuratedMcpCatalog.EXTERNAL_MCP).orElseThrow().isEnabled());
+        assertFalse(catalog.server(CuratedMcpCatalog.FLIGHTRADAR24_MCP).orElseThrow().isEnabled());
+        assertTrue(catalog.server(CuratedMcpCatalog.FLIGHTRADAR24_MCP).orElseThrow().isSetupRequired());
         assertTrue(catalog.tools(CuratedMcpCatalog.AIRSPACE_FIRST_PARTY).stream()
                 .anyMatch(tool -> "airspace.mission.weather_verdict".equals(tool.getId())
                         && tool.getSideEffectLevel() == McpSideEffectLevel.READ_ONLY));
@@ -33,6 +35,22 @@ class AgenticMcpInfrastructureTest {
                 .anyMatch(tool -> "airspace.coordination.draft".equals(tool.getId())
                         && tool.getSideEffectLevel() == McpSideEffectLevel.DRAFT_ONLY));
         assertTrue(catalog.tools(CuratedMcpCatalog.EXTERNAL_MCP).get(0).isSetupRequired());
+        assertTrue(catalog.tools(CuratedMcpCatalog.FLIGHTRADAR24_MCP).stream()
+                .anyMatch(tool -> "get_live_flights_positions_full".equals(tool.getId())
+                        && tool.isExternal()
+                        && tool.isCredentialsRequired()
+                        && tool.isSetupRequired()
+                        && tool.getSourceFamilies().contains("POSITION")));
+        assertTrue(catalog.tools(CuratedMcpCatalog.FLIGHTRADAR24_MCP).stream()
+                .anyMatch(tool -> "get_flight_tracks".equals(tool.getId())
+                        && tool.getRequiredArguments().contains("flight_id")));
+        assertTrue(catalog.tools(CuratedMcpCatalog.FLIGHTRADAR24_MCP).stream()
+                .anyMatch(tool -> "get_historic_flights_count".equals(tool.getId())
+                        && tool.getRequiredArguments().contains("timestamp")));
+        assertTrue(catalog.tools(CuratedMcpCatalog.FLIGHTRADAR24_MCP).stream()
+                .anyMatch(tool -> "get_flight_summary_count".equals(tool.getId())
+                        && tool.getRequiredArguments().contains("flight_datetime_from")
+                        && tool.getRequiredArguments().contains("flight_datetime_to")));
         assertTrue(catalog.tools(CuratedMcpCatalog.AIRSPACE_FIRST_PARTY).stream()
                 .allMatch(tool -> tool.getRiskProfile() != null
                         && tool.getRiskProfile().getWorstCaseBlastRadius() != null
@@ -54,6 +72,9 @@ class AgenticMcpInfrastructureTest {
                 && assessment.getRiskProfile().getRequiredHumanReviewMode() == HumanReviewMode.PUSH_APPROVAL
                 && assessment.getRiskProfile().getWorstCaseBlastRadius().contains("draft")));
         assertTrue(assessments.stream().anyMatch(assessment -> "external-mcp.configured_tool".equals(assessment.getSubjectId())
+                && !assessment.getDiagnostics().isEmpty()));
+        assertTrue(assessments.stream().anyMatch(assessment -> "get_live_flights_positions_full".equals(assessment.getSubjectId())
+                && assessment.getRiskProfile().getDataEgress().contains("Flightradar24")
                 && !assessment.getDiagnostics().isEmpty()));
     }
 
@@ -93,6 +114,14 @@ class AgenticMcpInfrastructureTest {
                 .arguments(args)
                 .build());
         assertEquals(McpInvocationStatus.SETUP_REQUIRED, external.getStatus());
+
+        McpToolInvocationResult fr24 = service.call(McpToolInvocationRequest.builder()
+                .serverId(CuratedMcpCatalog.FLIGHTRADAR24_MCP)
+                .toolId("get_live_flights_positions_full")
+                .arguments(args)
+                .build());
+        assertEquals(McpInvocationStatus.SETUP_REQUIRED, fr24.getStatus());
+        assertTrue(fr24.getDiagnostics().stream().anyMatch(message -> message.contains("setup-required")));
     }
 
     @Test

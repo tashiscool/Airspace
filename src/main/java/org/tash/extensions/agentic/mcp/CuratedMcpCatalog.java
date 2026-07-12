@@ -18,11 +18,14 @@ import java.util.Optional;
 public class CuratedMcpCatalog implements McpToolRegistry {
     public static final String AIRSPACE_FIRST_PARTY = "airspace-first-party";
     public static final String EXTERNAL_MCP = "external-mcp";
+    public static final String FLIGHTRADAR24_MCP = "flightradar24-fr24api-mcp";
 
     @ConfigProperty(name = "airspace.agentic.mcp.enabled", defaultValue = "true")
     boolean mcpEnabled = true;
     @ConfigProperty(name = "airspace.agentic.mcp.external.enabled", defaultValue = "false")
     boolean externalMcpEnabled = false;
+    @ConfigProperty(name = "airspace.agentic.mcp.fr24.enabled", defaultValue = "false")
+    boolean fr24McpEnabled = false;
 
     @Override
     public List<McpServerDefinition> servers() {
@@ -54,6 +57,21 @@ public class CuratedMcpCatalog implements McpToolRegistry {
                 .diagnostics(externalMcpEnabled
                         ? Collections.singletonList("External MCP enabled by config; server-specific credentials and consent are still required per call.")
                         : Collections.singletonList("External MCP calls are setup-required by default."))
+                .build());
+        servers.add(McpServerDefinition.builder()
+                .id(FLIGHTRADAR24_MCP)
+                .name("Flightradar24 API MCP")
+                .description("Official Flightradar24 API MCP server for live and historical flight positions, summaries, tracks, airline, and airport reference data. Disabled until FR24 credentials, consent, egress policy, and review approval are configured.")
+                .enabled(fr24McpEnabled)
+                .external(true)
+                .local(false)
+                .setupRequired(!fr24McpEnabled)
+                .credentialsRequired(true)
+                .transport("stdio-npx")
+                .version("@flightradar24/fr24api-mcp")
+                .diagnostics(fr24McpEnabled
+                        ? Collections.singletonList("FR24 MCP is enabled by config; FR24_API_KEY and external consent remain required per call.")
+                        : Collections.singletonList("FR24 MCP is setup-required by default. Configure FR24_API_KEY and explicit egress approval before use."))
                 .build());
         return servers;
     }
@@ -101,6 +119,9 @@ public class CuratedMcpCatalog implements McpToolRegistry {
                             .build())
                     .diagnostics(Collections.singletonList("External MCP execution is intentionally disabled by default."))
                     .build());
+        }
+        if (FLIGHTRADAR24_MCP.equals(normalized)) {
+            return flightradar24Tools();
         }
         return Collections.emptyList();
     }
@@ -181,6 +202,114 @@ public class CuratedMcpCatalog implements McpToolRegistry {
                 .costClass("LOCAL_CPU")
                 .slaClass("LOCAL_IN_PROCESS")
                 .requiredHumanReviewMode(draft ? HumanReviewMode.PUSH_APPROVAL : HumanReviewMode.REVIEW_ONLY)
+                .build();
+    }
+
+    private List<McpToolDescriptor> flightradar24Tools() {
+        return Arrays.asList(
+                fr24Tool("get_live_flights_positions_light", "FR24 live positions light",
+                        "Get live aircraft positions with basic latitude, longitude, altitude, speed, and heading fields. At least one filter such as bounds, flights, callsigns, airports, routes, aircraft, altitude_ranges, or categories is required.",
+                        args("bounds", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "altitude_ranges", "categories", "limit"),
+                        Collections.emptyList(), families("FLIGHT", "TRAFFIC", "POSITION")),
+                fr24Tool("get_live_flights_positions_full", "FR24 live positions full",
+                        "Get live aircraft positions with additional flight, route, aircraft, origin, and destination details. At least one filter is required.",
+                        args("bounds", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "altitude_ranges", "categories", "limit"),
+                        Collections.emptyList(), families("FLIGHT", "TRAFFIC", "POSITION", "AIRPORT")),
+                fr24Tool("get_live_flights_count", "FR24 live flight count",
+                        "Count live flights matching a bounded flight-position query before requesting detailed positions.",
+                        args("bounds", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "altitude_ranges", "categories"),
+                        Collections.emptyList(), families("FLIGHT", "TRAFFIC")),
+                fr24Tool("get_historic_flights_positions_full", "FR24 historic positions full",
+                        "Get historical aircraft position snapshots with full details for a Unix timestamp and at least one additional filter.",
+                        args("timestamp", "bounds", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "altitude_ranges", "limit"),
+                        Collections.singletonList("timestamp"), families("FLIGHT", "TRAFFIC", "POSITION", "REPLAY")),
+                fr24Tool("get_historic_flights_positions_light", "FR24 historic positions light",
+                        "Get historical aircraft position snapshots with light details for a Unix timestamp and at least one additional filter.",
+                        args("timestamp", "bounds", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "altitude_ranges", "limit"),
+                        Collections.singletonList("timestamp"), families("FLIGHT", "TRAFFIC", "POSITION", "REPLAY")),
+                fr24Tool("get_historic_flights_count", "FR24 historic flight count",
+                        "Count historical aircraft position snapshots for a Unix timestamp and bounded replay filter before requesting detailed positions.",
+                        args("timestamp", "bounds", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "altitude_ranges"),
+                        Collections.singletonList("timestamp"), families("FLIGHT", "TRAFFIC", "REPLAY")),
+                fr24Tool("get_flight_summary_full", "FR24 flight summary full",
+                        "Get detailed takeoff/landing and route summaries for a bounded flight datetime range and at least one flight, airport, route, aircraft, callsign, or registration filter.",
+                        args("flight_datetime_from", "flight_datetime_to", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "sort", "limit"),
+                        args("flight_datetime_from", "flight_datetime_to"), families("FLIGHT", "SCHEDULE", "AIRPORT")),
+                fr24Tool("get_flight_summary_light", "FR24 flight summary light",
+                        "Get essential takeoff/landing and route summaries for a bounded flight datetime range and at least one flight, airport, route, aircraft, callsign, or registration filter.",
+                        args("flight_datetime_from", "flight_datetime_to", "flights", "callsigns", "registrations", "airports", "routes", "aircraft", "sort", "limit"),
+                        args("flight_datetime_from", "flight_datetime_to"), families("FLIGHT", "SCHEDULE", "AIRPORT")),
+                fr24Tool("get_flight_summary_count", "FR24 flight summary count",
+                        "Count flight summaries for a bounded flight datetime range and at least one flight, airport, route, aircraft, callsign, or registration filter.",
+                        args("flight_datetime_from", "flight_datetime_to", "flights", "callsigns", "registrations", "airports", "routes", "aircraft"),
+                        args("flight_datetime_from", "flight_datetime_to"), families("FLIGHT", "SCHEDULE", "AIRPORT")),
+                fr24Tool("get_flight_tracks", "FR24 flight tracks",
+                        "Get positional track points for a specific Flightradar24 flight id.",
+                        args("flight_id"), Collections.singletonList("flight_id"), families("FLIGHT", "TRACK", "POSITION", "REPLAY")),
+                fr24Tool("get_airline_info", "FR24 airline info",
+                        "Get airline reference information by ICAO code.",
+                        args("icao"), Collections.singletonList("icao"), families("REFERENCE", "AIRLINE")),
+                fr24Tool("get_airport_info_light", "FR24 airport info light",
+                        "Get airport reference information by IATA or ICAO code.",
+                        args("code"), Collections.singletonList("code"), families("REFERENCE", "AIRPORT")),
+                fr24Tool("get_airport_info_full", "FR24 airport info full",
+                        "Get airport reference information, location, elevation, country, city/state, and timezone by IATA or ICAO code.",
+                        args("code"), Collections.singletonList("code"), families("REFERENCE", "AIRPORT")),
+                fr24Tool("get_historic_flight_events_full", "FR24 historic flight events full",
+                        "Get detailed selected historical flight events such as gate departure, takeoff, cruising, airspace transition, descent, landed, and gate arrival.",
+                        args("flight_ids", "event_types"), args("flight_ids", "event_types"), families("FLIGHT", "EVENT", "REPLAY")),
+                fr24Tool("get_historic_flight_events_light", "FR24 historic flight events light",
+                        "Get selected historical flight events grouped by flight id.",
+                        args("flight_ids", "event_types"), args("flight_ids", "event_types"), families("FLIGHT", "EVENT", "REPLAY"))
+        );
+    }
+
+    private McpToolDescriptor fr24Tool(String id,
+                                       String name,
+                                       String description,
+                                       List<String> arguments,
+                                       List<String> requiredArguments,
+                                       List<String> families) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        for (String argument : arguments) {
+            schema.put(argument, "string");
+        }
+        return McpToolDescriptor.builder()
+                .id(id)
+                .serverId(FLIGHTRADAR24_MCP)
+                .name(name)
+                .description(description)
+                .version("@flightradar24/fr24api-mcp")
+                .enabled(fr24McpEnabled)
+                .external(true)
+                .setupRequired(!fr24McpEnabled)
+                .credentialsRequired(true)
+                .sideEffectLevel(McpSideEffectLevel.READ_ONLY)
+                .riskProfile(fr24RiskProfile(id))
+                .requiredArguments(requiredArguments)
+                .argumentSchema(schema)
+                .sourceFamilies(families)
+                .diagnostics(fr24McpEnabled
+                        ? Collections.singletonList("FR24 tool requires per-call external consent and FR24 API terms compliance.")
+                        : Collections.singletonList("FR24 tool is setup-required by default; no live Flightradar24 call is made."))
+                .build();
+    }
+
+    private AgenticRiskProfile fr24RiskProfile(String toolId) {
+        return AgenticRiskProfile.builder()
+                .autonomyScope("External flight-awareness lookup only; results must be normalized into Airspace replay/decision artifacts before use.")
+                .toolSurface("Official Flightradar24 API MCP tool " + toolId)
+                .worstCaseBlastRadius("Incorrect, stale, rate-limited, or non-authoritative commercial tracking data could mislead situational awareness if treated as official NAS truth.")
+                .permissionScope("Requires FR24_API_KEY plus operator consent for each external call.")
+                .dataEgress("External HTTPS egress to Flightradar24 API through the MCP server; disabled by default.")
+                .poisonedDataExposure("ADS-B/commercial tracking data may be incomplete, delayed, filtered, or spoofed; source receipts and freshness must be retained.")
+                .auditAttribution("MCP evidence receipt plus FR24 provider mode, query bounds/filter, and output hash when configured.")
+                .toolProvenance("Official MIT-licensed Flightradar24 fr24api-mcp reference; Airspace does not vendor or execute it by default.")
+                .modelProvenance("No model execution is implied; the tool is an external data lookup.")
+                .rollbackPath("Disable airspace.agentic.mcp.fr24.enabled or remove FR24 MCP server configuration.")
+                .costClass("EXTERNAL_API_CREDENTIAL_RATE_LIMITED")
+                .slaClass("COMMERCIAL_TRACKING_PROVIDER_NON_AUTHORITATIVE")
+                .requiredHumanReviewMode(HumanReviewMode.REVIEW_ONLY)
                 .build();
     }
 
