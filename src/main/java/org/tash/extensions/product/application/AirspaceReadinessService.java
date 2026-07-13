@@ -116,6 +116,7 @@ public class AirspaceReadinessService {
 
     public List<ProductDtos.ProviderHealthSummary> providersStatus() {
         ProductDtos.WeatherLiveStatusSummary weather = productService.liveWeatherStatus();
+        ProductDtos.FlightAwarenessStatusSummary fr24 = productService.flightAwarenessStatus();
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
         return List.of(
                 provider("local-fixtures", "Local fixture replay", "FEED", "LOCAL_FIXTURE",
@@ -137,13 +138,13 @@ public class AirspaceReadinessService {
                         "adapter://nadin-wmscr-kvm",
                         freshness("SETUP_REQUIRED", null, null, null, true, "External traffic adapters are deliberately disabled by default."), List.of("Coordination drafts remain human-approved and local unless a delivery adapter is configured.")),
                 provider("flightradar24-api-mcp", "Flightradar24 API MCP / SDK", "FLIGHT_AWARENESS", "AUTHENTICATED_EXTERNAL",
-                        "FR24_API_KEY_REQUIRED", "COMMERCIAL_TRACKING_REVIEW", "BLOCKED_UNTIL_APPROVED", false, false, false,
-                        "https://github.com/Flightradar24/fr24api-mcp",
-                        freshness("SETUP_REQUIRED", null, null, null, true, "FR24 live/historic flight tracking requires API credentials, external egress approval, provider terms review, and explicit operator consent."),
+                        "FR24_API_KEY_REQUIRED", "COMMERCIAL_TRACKING_REVIEW", "BLOCKED_UNTIL_APPROVED", fr24.isEnabled(), false, false,
+                        fr24.getBaseUrl(),
+                        freshnessFromFlightAwareness(fr24),
                         List.of(
                                 "Optional commercial flight-awareness seam only; not authoritative FAA SWIM/TFMS/NAS truth.",
                                 "Intended mapping target is TrafficReplayBundle flight plans, positions, tracks, airport reference, and replay receipts.",
-                                "No FR24 API call is made by default.")),
+                                fr24.isEnabled() ? "FR24 live API calls are enabled by configuration but remain non-authoritative." : "No FR24 API call is made by default.")),
                 provider("reference-sync", "Reference data sync", "REFERENCE", "LOCAL_FIXTURE",
                         "OPTIONAL_FOR_LOCAL_IMPORT", "REFERENCE_DATA_REVIEW", "LOCAL_OR_AUTHENTICATED", true, false, true,
                         "/api/reference/import",
@@ -159,6 +160,14 @@ public class AirspaceReadinessService {
         return provider("awc-public-weather", "Aviation Weather Center public data API", "WEATHER", "PUBLIC_API",
                 "NONE", "PUBLIC_DATA_REVIEW", "CONFIG_GATED", status.isEnabled(), false, status.isEnabled(),
                 status.getBaseUrl(), freshnessFromWeather(status), diagnostics);
+    }
+
+    public ProductDtos.FlightAwarenessPollSummary pollProviderFlightAwareness(ProductDtos.FlightAwarenessPollRequest request) {
+        return productService.pollFlightAwareness(request);
+    }
+
+    public List<ProductDtos.FlightAwarenessProviderCapability> flightAwarenessCapabilities() {
+        return productService.flightAwarenessCapabilities();
     }
 
     public ProductDtos.CalibrationRunSummary runCalibration(ProductDtos.CalibrationRunRequest request) {
@@ -568,6 +577,17 @@ public class AirspaceReadinessService {
                 status.isEnabled()
                         ? "Freshness follows the configured AWC poll interval."
                         : "Public AWC polling is disabled by configuration.");
+    }
+
+    private ProductDtos.ProviderFreshnessStatusSummary freshnessFromFlightAwareness(ProductDtos.FlightAwarenessStatusSummary status) {
+        ZonedDateTime lastPollAt = status.getLastPollAt();
+        Long ageSeconds = lastPollAt == null ? null : Duration.between(lastPollAt, ZonedDateTime.now(ZoneOffset.UTC)).toSeconds();
+        boolean stale = ageSeconds == null || ageSeconds > Math.max(60, status.getPollIntervalSeconds() * 2L);
+        String freshnessStatus = !status.isEnabled() ? "SETUP_REQUIRED" : stale ? "STALE_OR_UNPOLLLED" : "CURRENT";
+        return freshness(freshnessStatus, lastPollAt, ageSeconds, status.getPollIntervalSeconds(), stale,
+                status.isEnabled()
+                        ? "Freshness follows the configured Flightradar24 poll interval."
+                        : "Flightradar24 live polling is disabled until FR24_API_KEY, egress approval, and operator consent are configured.");
     }
 
     private ProductDtos.ProviderFreshnessStatusSummary freshness(String status,

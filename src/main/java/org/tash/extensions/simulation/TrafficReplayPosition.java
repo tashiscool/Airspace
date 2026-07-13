@@ -22,6 +22,10 @@ public class TrafficReplayPosition {
     private double routeProgress;
     private double delaySeconds;
     private String phase;
+    private String trackingSourceType;
+    private String trackingSourceLabel;
+    private String providerTrackId;
+    private String surveillanceQuality;
     @Builder.Default
     private List<String> sourceRefs = new ArrayList<>();
 }

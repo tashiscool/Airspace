@@ -51,7 +51,9 @@ class AirspaceReadinessResourceTest {
                 .body("find { it.id == 'faa-swim' }.enabled", equalTo(false))
                 .body("find { it.id == 'faa-swim' }.credentialRequirement", containsString("REQUIRED"))
                 .body("find { it.id == 'faa-fns-nms' }.authoritative", equalTo(true))
-                .body("find { it.id == 'nadin-wmscr-kvm' }.liveOperationalUseAllowed", equalTo(false));
+                .body("find { it.id == 'nadin-wmscr-kvm' }.liveOperationalUseAllowed", equalTo(false))
+                .body("find { it.id == 'flightradar24-api-mcp' }.providerType", equalTo("FLIGHT_AWARENESS"))
+                .body("find { it.id == 'flightradar24-api-mcp' }.freshness.status", equalTo("SETUP_REQUIRED"));
 
         given()
                 .contentType("application/json")
@@ -64,7 +66,42 @@ class AirspaceReadinessResourceTest {
                 .body("enabled", equalTo(false))
                 .body("freshness.status", equalTo("DISABLED"))
                 .body("diagnostics.size()", greaterThanOrEqualTo(1));
-    }
+
+        given()
+                .contentType("application/json")
+                .body("""
+                        {
+                          "sourceId": "fr24-api-test",
+                          "rawResponseJson": "{\\"data\\":[{\\"fr24_id\\":\\"34ABC123\\",\\"flight\\":\\"BAW1\\",\\"callsign\\":\\"BAW1\\",\\"lat\\":40.6413,\\"lon\\":-73.7781,\\"track\\":70,\\"alt\\":0,\\"gspeed\\":0,\\"timestamp\\":\\"2026-07-12T12:00:00Z\\",\\"source\\":\\"ADSB\\",\\"type\\":\\"B77W\\",\\"operating_as\\":\\"BAW\\",\\"orig_icao\\":\\"KJFK\\",\\"dest_icao\\":\\"EGLL\\"}]}"
+                        }
+                        """)
+                .when()
+                .post("/api/providers/fr24/traffic-replay/poll")
+                .then()
+                .statusCode(200)
+	                .body("accepted", equalTo(true))
+	                .body("liveCallAttempted", equalTo(false))
+	                .body("sourceMode", equalTo("AUTHENTICATED_EXTERNAL_REPLAY_SAMPLE"))
+	                .body("trafficReplay.providerFamily", equalTo("FLIGHTRADAR24"))
+	                .body("trafficReplay.trackingSourceTypes", hasItem("ADS_B"))
+	                .body("providerTransports", hasItem("RECORDED_JSON"))
+	                .body("providerTransports", hasItem("MCP_COMPATIBLE_SHAPE"))
+	                .body("flightPlanCount", equalTo(1))
+	                .body("positionCount", equalTo(1))
+	                .body("airportDemandSnapshotCount", equalTo(1));
+
+	        given()
+	                .when()
+	                .get("/api/providers/flight-awareness/capabilities")
+	                .then()
+	                .statusCode(200)
+	                .body("id", hasItem("flightradar24"))
+	                .body("id", hasItem("opensky-research"))
+	                .body("id", hasItem("faa-swim-surveillance"))
+	                .body("find { it.id == 'flightradar24' }.transports", hasItem("MCP_COMPATIBLE_SHAPE"))
+	                .body("find { it.id == 'flightradar24' }.trackingSourceTypes", hasItem("SATELLITE_ADSB"))
+	                .body("find { it.id == 'faa-swim-surveillance' }.authoritativeOperational", equalTo(true));
+	    }
 
     @Test
     void calibrationSafetyAndCoordinationSurfacesStayHumanReviewed() {

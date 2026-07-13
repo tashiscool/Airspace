@@ -45,6 +45,18 @@ public class ReadinessResource {
     }
 
     @POST
+    @Path("/providers/fr24/traffic-replay/poll")
+    public ProductDtos.FlightAwarenessPollSummary pollFlightAwareness(ProductDtos.FlightAwarenessPollRequest request) {
+        return readinessService.pollProviderFlightAwareness(request);
+    }
+
+    @GET
+    @Path("/providers/flight-awareness/capabilities")
+    public List<ProductDtos.FlightAwarenessProviderCapability> flightAwarenessCapabilities() {
+        return readinessService.flightAwarenessCapabilities();
+    }
+
+    @POST
     @Path("/calibration/run")
     public ProductDtos.CalibrationRunSummary runCalibration(ProductDtos.CalibrationRunRequest request) {
         return readinessService.runCalibration(request);

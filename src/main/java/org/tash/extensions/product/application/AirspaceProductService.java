@@ -11,6 +11,9 @@ import org.tash.extensions.engine.OperationalDecisionReplayBundle;
 import org.tash.extensions.engine.OperationalDecisionResult;
 import org.tash.extensions.engine.OperationalConstraint;
 import org.tash.extensions.feed.InMemoryOperationalFeedSource;
+import org.tash.extensions.feed.FlightAwarenessFeedPollRequest;
+import org.tash.extensions.feed.FlightAwarenessFeedPollResult;
+import org.tash.extensions.feed.Flightradar24TrafficReplayAdapter;
 import org.tash.extensions.feed.LocalReferenceDataSyncAdapter;
 import org.tash.extensions.feed.LiveAviationWeatherAdapter;
 import org.tash.extensions.feed.OperationalFeedBatchResult;
@@ -76,6 +79,12 @@ public class AirspaceProductService {
     private final int weatherPollIntervalSeconds;
     private final String weatherUserAgent;
     private final int weatherMaxResults;
+    private final boolean fr24LiveEnabled;
+    private final String fr24ApiKey;
+    private final String fr24BaseUrl;
+    private final int fr24PollIntervalSeconds;
+    private final String fr24UserAgent;
+    private final int fr24MaxResults;
 
     @Inject
     public AirspaceProductService(ReservationWorkflowService workflowService,
@@ -91,7 +100,19 @@ public class AirspaceProductService {
                                   @ConfigProperty(name = "airspace.weather.user-agent", defaultValue = "Airspace-WeatherPatternPrototype/1.0")
                                   String weatherUserAgent,
                                   @ConfigProperty(name = "airspace.weather.max-results", defaultValue = "250")
-                                  int weatherMaxResults) {
+                                  int weatherMaxResults,
+                                  @ConfigProperty(name = "airspace.fr24.live.enabled", defaultValue = "false")
+                                  boolean fr24LiveEnabled,
+                                  @ConfigProperty(name = "airspace.fr24.api-key", defaultValue = "not-configured")
+                                  String fr24ApiKey,
+                                  @ConfigProperty(name = "airspace.fr24.base-url", defaultValue = "https://fr24api.flightradar24.com/api")
+                                  String fr24BaseUrl,
+                                  @ConfigProperty(name = "airspace.fr24.poll.interval-seconds", defaultValue = "300")
+                                  int fr24PollIntervalSeconds,
+                                  @ConfigProperty(name = "airspace.fr24.user-agent", defaultValue = "Airspace-Flightradar24ReplayPrototype/1.0")
+                                  String fr24UserAgent,
+                                  @ConfigProperty(name = "airspace.fr24.max-results", defaultValue = "250")
+                                  int fr24MaxResults) {
         this.workflowService = workflowService;
         this.persistenceService = persistenceService;
         this.persistenceEnabled = persistenceEnabled;
@@ -100,6 +121,12 @@ public class AirspaceProductService {
         this.weatherPollIntervalSeconds = weatherPollIntervalSeconds;
         this.weatherUserAgent = weatherUserAgent;
         this.weatherMaxResults = weatherMaxResults;
+        this.fr24LiveEnabled = fr24LiveEnabled;
+        this.fr24ApiKey = "not-configured".equals(fr24ApiKey) ? "" : fr24ApiKey;
+        this.fr24BaseUrl = fr24BaseUrl;
+        this.fr24PollIntervalSeconds = fr24PollIntervalSeconds;
+        this.fr24UserAgent = fr24UserAgent;
+        this.fr24MaxResults = fr24MaxResults;
     }
 
     public AirspaceProductService(ReservationWorkflowService workflowService) {
@@ -111,6 +138,12 @@ public class AirspaceProductService {
         this.weatherPollIntervalSeconds = 300;
         this.weatherUserAgent = "Airspace-WeatherPatternPrototype/1.0";
         this.weatherMaxResults = 250;
+        this.fr24LiveEnabled = false;
+        this.fr24ApiKey = "";
+        this.fr24BaseUrl = "https://fr24api.flightradar24.com/api";
+        this.fr24PollIntervalSeconds = 300;
+        this.fr24UserAgent = "Airspace-Flightradar24ReplayPrototype/1.0";
+        this.fr24MaxResults = 250;
     }
 
     public AirspaceProductService(ReservationWorkflowService workflowService,
@@ -124,6 +157,12 @@ public class AirspaceProductService {
         this.weatherPollIntervalSeconds = 300;
         this.weatherUserAgent = "Airspace-WeatherPatternPrototype/1.0";
         this.weatherMaxResults = 250;
+        this.fr24LiveEnabled = false;
+        this.fr24ApiKey = "";
+        this.fr24BaseUrl = "https://fr24api.flightradar24.com/api";
+        this.fr24PollIntervalSeconds = 300;
+        this.fr24UserAgent = "Airspace-Flightradar24ReplayPrototype/1.0";
+        this.fr24MaxResults = 250;
     }
 
     public List<ProductDtos.MissionSummary> missions() {
@@ -424,6 +463,129 @@ public class AirspaceProductService {
                 .patternCount(weatherPatternService.patternsFromFeedResults(feedBatch.getResults()).size())
                 .diagnostics(new ArrayList<>(weatherBatch.getDiagnostics()))
                 .feedBatch(feedBatch)
+                .build();
+    }
+
+    public ProductDtos.FlightAwarenessStatusSummary flightAwarenessStatus() {
+        return ProductDtos.FlightAwarenessStatusSummary.builder()
+                .enabled(fr24LiveEnabled)
+                .baseUrl(fr24BaseUrl)
+                .pollIntervalSeconds(fr24PollIntervalSeconds)
+                .maxResults(fr24MaxResults)
+                .userAgent(fr24UserAgent)
+                .lastPollAt(store.lastFlightAwarenessPollAt)
+                .providerTransports(List.of("REST_LIVE_HTTP", "RECORDED_JSON", "SDK_COMPATIBLE_SHAPE", "MCP_COMPATIBLE_SHAPE"))
+                .supportedTrackingSourceTypes(List.of("ADS_B", "SATELLITE_ADSB", "MLAT", "RADAR", "UAT", "FLARM", "ADS_C", "MULTISOURCE"))
+                .diagnostics(new ArrayList<>(store.flightAwarenessDiagnostics))
+                .build();
+    }
+
+    public List<ProductDtos.FlightAwarenessProviderCapability> flightAwarenessCapabilities() {
+        return List.of(
+                ProductDtos.FlightAwarenessProviderCapability.builder()
+                        .id("flightradar24")
+                        .label("Flightradar24 API / SDK / MCP")
+                        .providerFamily("FLIGHTRADAR24")
+                        .sourceMode(fr24LiveEnabled ? "AUTHENTICATED_EXTERNAL" : "AUTHENTICATED_EXTERNAL_SETUP_REQUIRED")
+                        .endpoint(fr24BaseUrl)
+                        .liveImplemented(true)
+                        .setupRequired(!fr24LiveEnabled || fr24ApiKey.isBlank())
+                        .authoritativeOperational(false)
+                        .transports(List.of("REST_LIVE_HTTP", "RECORDED_JSON", "SDK_COMPATIBLE_SHAPE", "MCP_COMPATIBLE_SHAPE"))
+                        .trackingSourceTypes(List.of("ADS_B", "SATELLITE_ADSB", "MLAT", "RADAR", "UAT", "FLARM", "MULTISOURCE"))
+                        .requiredApprovals(List.of("FR24_API_KEY", "EGRESS_POLICY", "COMMERCIAL_TRACKING_REVIEW", "OPERATOR_CONSENT"))
+                        .diagnostics(List.of("Commercial flight-awareness enrichment; not FAA SWIM/TFMS/NAS truth."))
+                        .build(),
+                ProductDtos.FlightAwarenessProviderCapability.builder()
+                        .id("opensky-research")
+                        .label("OpenSky research API")
+                        .providerFamily("OPENSKY")
+                        .sourceMode("PUBLIC_RESEARCH_API_SETUP_REQUIRED")
+                        .endpoint("https://opensky-network.org/data/api")
+                        .liveImplemented(false)
+                        .setupRequired(true)
+                        .authoritativeOperational(false)
+                        .transports(List.of("REST_LIVE_HTTP", "RECORDED_JSON"))
+                        .trackingSourceTypes(List.of("ADS_B", "MODE_S", "ADS_C", "FLARM", "VHF", "UNKNOWN"))
+                        .requiredApprovals(List.of("RESEARCH_USE_REVIEW", "RATE_LIMIT_POLICY", "ATTRIBUTION_REVIEW"))
+                        .diagnostics(List.of("Research/non-commercial style traffic awareness seam; no live adapter is enabled."))
+                        .build(),
+                ProductDtos.FlightAwarenessProviderCapability.builder()
+                        .id("local-adsb-receiver")
+                        .label("Local ADS-B receiver replay")
+                        .providerFamily("LOCAL_ADSB")
+                        .sourceMode("LOCAL_FIXTURE_OR_LOCAL_RECEIVER")
+                        .endpoint("adapter://local-adsb-receiver")
+                        .liveImplemented(false)
+                        .setupRequired(true)
+                        .authoritativeOperational(false)
+                        .transports(List.of("RECORDED_JSON", "LOCAL_SOCKET_FUTURE", "FILE_REPLAY"))
+                        .trackingSourceTypes(List.of("ADS_B", "UAT", "MLAT"))
+                        .requiredApprovals(List.of("LOCAL_NETWORK_REVIEW", "PRIVACY_FILTER_REVIEW"))
+                        .diagnostics(List.of("Future local receiver path should normalize Beast/Mode-S/JSON feeds into TrafficReplayBundle."))
+                        .build(),
+                ProductDtos.FlightAwarenessProviderCapability.builder()
+                        .id("faa-swim-surveillance")
+                        .label("FAA SWIM / TFMS / surveillance feeds")
+                        .providerFamily("FAA_SWIM")
+                        .sourceMode("AUTHORIZED_OPERATIONAL_SETUP_REQUIRED")
+                        .endpoint("https://www.faa.gov/air_traffic/technology/swim")
+                        .liveImplemented(false)
+                        .setupRequired(true)
+                        .authoritativeOperational(true)
+                        .transports(List.of("SWIM_MESSAGING_FUTURE", "RECORDED_FIXTURE"))
+                        .trackingSourceTypes(List.of("FAA_SWIM", "RADAR", "ADS_B", "MULTISOURCE"))
+                        .requiredApprovals(List.of("FAA_AGREEMENT", "SWIM_CREDENTIALS", "OPERATIONAL_REVIEW", "SECURITY_REVIEW"))
+                        .diagnostics(List.of("Operational authority belongs here when authorized; disabled by default."))
+                        .build());
+    }
+
+    public ProductDtos.FlightAwarenessPollSummary pollFlightAwareness(ProductDtos.FlightAwarenessPollRequest request) {
+        ProductDtos.FlightAwarenessPollRequest safe = request == null ? new ProductDtos.FlightAwarenessPollRequest() : request;
+        FlightAwarenessFeedPollRequest pollRequest = new FlightAwarenessFeedPollRequest();
+        pollRequest.setProviderId(safe.getProviderId());
+        pollRequest.setTransportMode(safe.getTransportMode());
+        pollRequest.setMode(safe.getMode());
+        pollRequest.setRawResponseJson(safe.getRawResponseJson());
+        pollRequest.setBounds(safe.getBounds());
+        pollRequest.setFlights(safe.getFlights());
+        pollRequest.setCallsigns(safe.getCallsigns());
+        pollRequest.setRegistrations(safe.getRegistrations());
+        pollRequest.setAirports(safe.getAirports());
+        pollRequest.setRoutes(safe.getRoutes());
+        pollRequest.setAircraft(safe.getAircraft());
+        pollRequest.setAltitudeRanges(safe.getAltitudeRanges());
+        pollRequest.setCategories(safe.getCategories());
+        pollRequest.setTrackingSourceTypes(safe.getTrackingSourceTypes());
+        pollRequest.setTimestamp(safe.getTimestamp());
+        pollRequest.setMaxResults(safe.getMaxResults());
+        pollRequest.setFull(safe.isFull());
+        pollRequest.setSourceId(safe.getSourceId());
+        Flightradar24TrafficReplayAdapter adapter = new Flightradar24TrafficReplayAdapter(
+                fr24LiveEnabled, fr24ApiKey, fr24BaseUrl, fr24UserAgent, fr24MaxResults);
+        FlightAwarenessFeedPollResult result = adapter.poll(pollRequest);
+        store.lastFlightAwarenessPollAt = result.getReceivedAt();
+        store.flightAwarenessDiagnostics.clear();
+        store.flightAwarenessDiagnostics.addAll(result.getDiagnostics());
+        history("provider", result.getSourceId(), "FR24_TRAFFIC_REPLAY_POLL", "system",
+                result.isAccepted() ? "accepted" : result.isSetupRequired() ? "setup-required" : "rejected");
+        return ProductDtos.FlightAwarenessPollSummary.builder()
+                .accepted(result.isAccepted())
+                .setupRequired(result.isSetupRequired())
+                .liveCallAttempted(result.isLiveCallAttempted())
+                .sourceId(result.getSourceId())
+                .sourceMode(result.getSourceMode())
+                .providerReceiptId(result.getProviderReceiptId())
+                .receivedAt(result.getReceivedAt())
+                .flightPlanCount(result.getTrafficReplay() == null || result.getTrafficReplay().getFlightPlans() == null ? 0 : result.getTrafficReplay().getFlightPlans().size())
+                .positionCount(result.getTrafficReplay() == null || result.getTrafficReplay().getPositions() == null ? 0 : result.getTrafficReplay().getPositions().size())
+                .airportDemandSnapshotCount(result.getTrafficReplay() == null || result.getTrafficReplay().getAirportDemand() == null ? 0 : result.getTrafficReplay().getAirportDemand().size())
+                .sectorDemandSnapshotCount(result.getTrafficReplay() == null || result.getTrafficReplay().getSectorDemand() == null ? 0 : result.getTrafficReplay().getSectorDemand().size())
+                .trafficReplay(result.getTrafficReplay())
+                .providerTransports(new ArrayList<>(result.getProviderTransports()))
+                .trackingSourceTypes(new ArrayList<>(result.getTrackingSourceTypes()))
+                .coverageWarnings(new ArrayList<>(result.getCoverageWarnings()))
+                .diagnostics(new ArrayList<>(result.getDiagnostics()))
                 .build();
     }
 

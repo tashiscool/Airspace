@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Data;
 import org.tash.extensions.engine.OperationalDecisionResult;
 import org.tash.extensions.feed.OperationalFeedBatchResult;
+import org.tash.extensions.simulation.TrafficReplayBundle;
 import org.tash.extensions.workflow.ReservationWorkflowState;
 
 import java.time.ZonedDateTime;
@@ -136,6 +137,91 @@ public final class ProductDtos {
         @Builder.Default
         private List<String> diagnostics = new ArrayList<>();
         private OperationalFeedBatchResult feedBatch;
+    }
+
+    @Data
+    @Builder
+    public static class FlightAwarenessStatusSummary {
+        private boolean enabled;
+        private String baseUrl;
+        private int pollIntervalSeconds;
+        private int maxResults;
+        private String userAgent;
+        private ZonedDateTime lastPollAt;
+        @Builder.Default
+        private List<String> providerTransports = new ArrayList<>();
+        @Builder.Default
+        private List<String> supportedTrackingSourceTypes = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    public static class FlightAwarenessPollRequest {
+        private String providerId;
+        private String transportMode;
+        private String mode;
+        private String rawResponseJson;
+        private String bounds;
+        private List<String> flights = new ArrayList<>();
+        private List<String> callsigns = new ArrayList<>();
+        private List<String> registrations = new ArrayList<>();
+        private List<String> airports = new ArrayList<>();
+        private List<String> routes = new ArrayList<>();
+        private List<String> aircraft = new ArrayList<>();
+        private List<String> altitudeRanges = new ArrayList<>();
+        private List<String> categories = new ArrayList<>();
+        private List<String> trackingSourceTypes = new ArrayList<>();
+        private Long timestamp;
+        private Integer maxResults;
+        private boolean full = true;
+        private String sourceId;
+    }
+
+    @Data
+    @Builder
+    public static class FlightAwarenessProviderCapability {
+        private String id;
+        private String label;
+        private String providerFamily;
+        private String sourceMode;
+        private String endpoint;
+        private boolean liveImplemented;
+        private boolean setupRequired;
+        private boolean authoritativeOperational;
+        @Builder.Default
+        private List<String> transports = new ArrayList<>();
+        @Builder.Default
+        private List<String> trackingSourceTypes = new ArrayList<>();
+        @Builder.Default
+        private List<String> requiredApprovals = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    public static class FlightAwarenessPollSummary {
+        private boolean accepted;
+        private boolean setupRequired;
+        private boolean liveCallAttempted;
+        private String sourceId;
+        private String sourceMode;
+        private String providerReceiptId;
+        private ZonedDateTime receivedAt;
+        private int flightPlanCount;
+        private int positionCount;
+        private int airportDemandSnapshotCount;
+        private int sectorDemandSnapshotCount;
+        private TrafficReplayBundle trafficReplay;
+        @Builder.Default
+        private List<String> providerTransports = new ArrayList<>();
+        @Builder.Default
+        private List<String> trackingSourceTypes = new ArrayList<>();
+        @Builder.Default
+        private List<String> coverageWarnings = new ArrayList<>();
+        @Builder.Default
+        private List<String> diagnostics = new ArrayList<>();
     }
 
     @Data

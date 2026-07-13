@@ -24,6 +24,8 @@ import type {
   FeedArtifactSummary,
   FeedTransactionSummary,
   FeatureCollection,
+  FlightAwarenessProviderCapability,
+  FlightAwarenessPollSummary,
   HistoryEventSummary,
   HistoricalReplayCalibrationReport,
   HistoricalReplayDay,
@@ -239,8 +241,30 @@ export const api = {
   gaps: () => request<AirspaceGapStatus[]>('/api/gaps'),
   releaseGates: () => request<ReleaseGateSummary[]>('/api/gaps/release-gates'),
   providersStatus: () => request<ProviderHealthSummary[]>('/api/providers/status'),
+  flightAwarenessCapabilities: () => request<FlightAwarenessProviderCapability[]>('/api/providers/flight-awareness/capabilities'),
   pollProviderWeather: (body: { products?: string[]; hoursBeforeNow?: number; maxResults?: number } = {}) =>
     request<ProviderHealthSummary>('/api/providers/weather/poll', { method: 'POST', body: JSON.stringify(body) }),
+  pollProviderFlightAwareness: (body: {
+    providerId?: string;
+    transportMode?: string;
+    mode?: string;
+    rawResponseJson?: string;
+    bounds?: string;
+    flights?: string[];
+    callsigns?: string[];
+    registrations?: string[];
+    airports?: string[];
+    routes?: string[];
+    aircraft?: string[];
+    altitudeRanges?: string[];
+    categories?: string[];
+    trackingSourceTypes?: string[];
+    timestamp?: number;
+    maxResults?: number;
+    full?: boolean;
+    sourceId?: string;
+  } = {}) =>
+    request<FlightAwarenessPollSummary>('/api/providers/fr24/traffic-replay/poll', { method: 'POST', body: JSON.stringify(body) }),
   runCalibration: (body: { datasetId?: string; includeSyntheticScale?: boolean; actor?: string } = {}) =>
     request<CalibrationRunSummary>('/api/calibration/run', { method: 'POST', body: JSON.stringify(body) }),
   calibrationReports: () => request<CalibrationRunSummary[]>('/api/calibration/reports'),

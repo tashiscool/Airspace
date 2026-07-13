@@ -40,6 +40,10 @@ Airspace does not vendor or execute Flightradar24 tools by default. The catalog 
 
 The intended Airspace mapping target is `TrafficReplayBundle`: flight plans, position snapshots, flight tracks, airport context, provider receipts, and source refs. Any live FR24 use must preserve query bounds, freshness, source mode, and non-authoritative status in the replay/audit envelope.
 
+For non-agent product use, Airspace also exposes `POST /api/providers/fr24/traffic-replay/poll`. That endpoint accepts recorded FR24 response JSON immediately and can call the official FR24 API only when `airspace.fr24.live.enabled=true`, `airspace.fr24.api-key` is configured, and egress/consent review has approved the use.
+
+`GET /api/providers/flight-awareness/capabilities` is the product-facing capability catalog for ADS-B/satellite/multisource tracking. It keeps REST, SDK-shaped, MCP-shaped, local replay, OpenSky-style research, local ADS-B receiver, and future FAA SWIM/TFMS surveillance seams visible while preserving setup-required status, required approvals, and non-authoritative warnings.
+
 ## Evidence Receipts
 
 Every MCP invocation returns a redacted `McpEvidenceReceipt` with:

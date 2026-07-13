@@ -22,6 +22,12 @@ public class TrafficReplayBundle {
     @Builder.Default
     private List<String> sourceRefs = new ArrayList<>();
     @Builder.Default
+    private List<String> providerTransports = new ArrayList<>();
+    @Builder.Default
+    private List<String> trackingSourceTypes = new ArrayList<>();
+    @Builder.Default
+    private List<String> coverageWarnings = new ArrayList<>();
+    @Builder.Default
     private List<TrafficReplayFlightPlan> flightPlans = new ArrayList<>();
     @Builder.Default
     private List<TrafficReplayPosition> positions = new ArrayList<>();

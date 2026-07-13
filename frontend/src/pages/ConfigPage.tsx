@@ -7,7 +7,7 @@ import { AgentRouteContextPanel } from '../components/AgentRouteContextPanel';
 import { DataTable } from '../components/DataTable';
 import { ErrorNotice, MutationNotice, QueryNotice } from '../components/Notices';
 import { writeWorkbenchJson, type WorkbenchSelection } from '../lib/workbenchState';
-import type { AirspaceGapStatus, CalibrationRunSummary, CollaborativeProposalSummary, CommonOperatingPictureSummary, ProviderHealthSummary, ReferencePointSummary, ReleaseGateSummary, SafetyCaseDossierSummary } from '../types';
+import type { AirspaceGapStatus, CalibrationRunSummary, CollaborativeProposalSummary, CommonOperatingPictureSummary, FlightAwarenessPollSummary, FlightAwarenessProviderCapability, ProviderHealthSummary, ReferencePointSummary, ReleaseGateSummary, SafetyCaseDossierSummary } from '../types';
 
 type ConfigNode = 'navaids' | 'fixes' | 'airspace' | 'recipients' | 'users' | 'separation' | 'imports' | 'providers' | 'collaboration' | 'calibration' | 'safety' | 'system';
 
@@ -47,6 +47,43 @@ const PERMISSIONS = [
   'system.configure'
 ];
 
+const FR24_REPLAY_SAMPLE = JSON.stringify({
+  data: [
+    {
+      fr24_id: '34ABC123',
+      flight: 'BAW1',
+      callsign: 'BAW1',
+      lat: 40.6413,
+      lon: -73.7781,
+      track: 70,
+      alt: 0,
+      gspeed: 0,
+      timestamp: '2026-07-12T12:00:00Z',
+      source: 'SAT_ADSB',
+      type: 'B77W',
+      operating_as: 'BAW',
+      orig_icao: 'KJFK',
+      dest_icao: 'EGLL'
+    },
+    {
+      fr24_id: '34ABC123',
+      flight: 'BAW1',
+      callsign: 'BAW1',
+      lat: 40.95,
+      lon: -72.6,
+      track: 75,
+      alt: 16000,
+      gspeed: 390,
+      timestamp: '2026-07-12T12:15:00Z',
+      source: 'ADSB',
+      type: 'B77W',
+      operating_as: 'BAW',
+      orig_icao: 'KJFK',
+      dest_icao: 'EGLL'
+    }
+  ]
+});
+
 export function ConfigPage() {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<ConfigNode>('navaids');
@@ -57,6 +94,7 @@ export function ConfigPage() {
   const gaps = useQuery({ queryKey: ['readiness', 'gaps'], queryFn: api.gaps });
   const releaseGates = useQuery({ queryKey: ['readiness', 'release-gates'], queryFn: api.releaseGates });
   const providers = useQuery({ queryKey: ['readiness', 'providers'], queryFn: api.providersStatus });
+  const flightAwarenessCapabilities = useQuery({ queryKey: ['readiness', 'flight-awareness-capabilities'], queryFn: api.flightAwarenessCapabilities });
   const commonOperatingPicture = useQuery({ queryKey: ['collaboration', 'common-operating-picture'], queryFn: api.commonOperatingPicture });
   const calibrationReports = useQuery({ queryKey: ['readiness', 'calibration'], queryFn: api.calibrationReports });
   const safetyDossier = useQuery({ queryKey: ['readiness', 'safety-dossier'], queryFn: api.safetyDossier });
@@ -80,6 +118,14 @@ export function ConfigPage() {
   });
   const pollProviderWeather = useMutation({
     mutationFn: () => api.pollProviderWeather({ products: ['metar', 'taf', 'airsigmet'], hoursBeforeNow: 2, maxResults: 25 }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['readiness', 'providers'] })
+  });
+  const pollFlightAwareness = useMutation({
+    mutationFn: () => api.pollProviderFlightAwareness({
+      sourceId: 'fr24-workbench-sample',
+      rawResponseJson: FR24_REPLAY_SAMPLE,
+      maxResults: 25
+    }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['readiness', 'providers'] })
   });
   const runCalibration = useMutation({
@@ -143,6 +189,7 @@ export function ConfigPage() {
           <MutationNotice mutation={applyImport} label="Apply import" />
           <MutationNotice mutation={addPoint} label="Add reference point" />
           <MutationNotice mutation={pollProviderWeather} label="Provider weather poll" />
+          <MutationNotice mutation={pollFlightAwareness} label="FR24 flight-awareness replay import" />
           <MutationNotice mutation={runCalibration} label="Calibration run" />
           <MutationNotice mutation={createCollaborationProposal} label="Create collaboration proposal" />
         </div>
@@ -174,8 +221,12 @@ export function ConfigPage() {
           <ProvidersPanel
             providers={providers.data}
             gates={releaseGates.data}
+            flightAwarenessCapabilities={flightAwarenessCapabilities.data}
             onPollWeather={() => pollProviderWeather.mutate()}
             pollPending={pollProviderWeather.isPending}
+            onImportFlightAwareness={() => pollFlightAwareness.mutate()}
+            flightAwarenessPending={pollFlightAwareness.isPending}
+            flightAwarenessSummary={pollFlightAwareness.data}
           />
         )}
         {selected === 'collaboration' && (
@@ -355,22 +406,61 @@ function CollaborationProposalCard({ proposal }: { proposal: CollaborativePropos
 function ProvidersPanel({
   providers,
   gates,
+  flightAwarenessCapabilities,
   onPollWeather,
-  pollPending
+  pollPending,
+  onImportFlightAwareness,
+  flightAwarenessPending,
+  flightAwarenessSummary
 }: {
   providers?: ProviderHealthSummary[];
   gates?: ReleaseGateSummary[];
+  flightAwarenessCapabilities?: FlightAwarenessProviderCapability[];
   onPollWeather: () => void;
   pollPending: boolean;
+  onImportFlightAwareness: () => void;
+  flightAwarenessPending: boolean;
+  flightAwarenessSummary?: FlightAwarenessPollSummary;
 }) {
   const operationalGate = gates?.find((gate) => gate.id === 'operational-evaluation-ready');
   return (
     <section>
       <div className="panel-heading">
         <h3>Provider Status / Freshness</h3>
-        <button onClick={onPollWeather} disabled={pollPending}>Poll AWC seam</button>
+        <div className="button-row">
+          <button onClick={onPollWeather} disabled={pollPending}>Poll AWC seam</button>
+          <button onClick={onImportFlightAwareness} disabled={flightAwarenessPending}>Import FR24 replay sample</button>
+        </div>
       </div>
       <p className="muted">Live operational providers stay disabled until credentials, consent scopes, egress policy, and reviewer approval exist. AWC public weather is configuration-gated and non-certified.</p>
+      {flightAwarenessSummary && (
+        <div className="metric-card">
+          <span>FR24 Replay Mapping</span>
+          <strong>{flightAwarenessSummary.accepted ? 'ACCEPTED' : flightAwarenessSummary.setupRequired ? 'SETUP REQUIRED' : 'REVIEW'}</strong>
+          <small>{flightAwarenessSummary.flightPlanCount} flight plan(s) · {flightAwarenessSummary.positionCount} position(s) · {flightAwarenessSummary.sourceMode}</small>
+          {!!flightAwarenessSummary.trackingSourceTypes?.length && <small>Tracking: {flightAwarenessSummary.trackingSourceTypes.join(', ')}</small>}
+          {!!flightAwarenessSummary.providerTransports?.length && <small>Transports: {flightAwarenessSummary.providerTransports.join(', ')}</small>}
+          {flightAwarenessSummary.coverageWarnings?.slice(0, 2).map((warning) => <small className="warning-text" key={warning}>{warning}</small>)}
+          {flightAwarenessSummary.diagnostics?.slice(0, 2).map((diagnostic) => <small className="warning-text" key={diagnostic}>{diagnostic}</small>)}
+        </div>
+      )}
+      <div className="provider-grid">
+        {(flightAwarenessCapabilities ?? []).map((capability) => (
+          <article className="event supplement" key={capability.id}>
+            <div className="panel-heading compact">
+              <h4>{capability.label ?? capability.id}</h4>
+              <span className={`status-badge ${capability.authoritativeOperational ? 'blocked' : capability.liveImplemented && !capability.setupRequired ? 'clear' : 'monitor'}`}>
+                {capability.authoritativeOperational ? 'AUTHORITATIVE SEAM' : capability.liveImplemented ? 'ADAPTER READY' : 'CATALOGED'}
+              </span>
+            </div>
+            <p>{capability.providerFamily} · {capability.sourceMode}</p>
+            <small>Transports: {capability.transports?.join(', ') || 'none'}</small>
+            <small>Tracking sources: {capability.trackingSourceTypes?.join(', ') || 'none'}</small>
+            <small>Approvals: {capability.requiredApprovals?.join(', ') || 'none'}</small>
+            {capability.diagnostics?.map((diagnostic) => <small className="warning-text" key={diagnostic}>{diagnostic}</small>)}
+          </article>
+        ))}
+      </div>
       {operationalGate && (
         <div className="metric-card">
           <span>Operational Evaluation Gate</span>

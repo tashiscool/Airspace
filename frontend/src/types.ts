@@ -834,6 +834,40 @@ export type WeatherLivePollSummary = {
   diagnostics: string[];
 };
 
+export type FlightAwarenessPollSummary = {
+  accepted: boolean;
+  setupRequired: boolean;
+  liveCallAttempted: boolean;
+  sourceId?: string;
+  sourceMode?: string;
+  providerReceiptId?: string;
+  receivedAt?: string;
+  flightPlanCount: number;
+  positionCount: number;
+  airportDemandSnapshotCount: number;
+  sectorDemandSnapshotCount: number;
+  trafficReplay?: TrafficReplayBundle;
+  providerTransports?: string[];
+  trackingSourceTypes?: string[];
+  coverageWarnings?: string[];
+  diagnostics: string[];
+};
+
+export type FlightAwarenessProviderCapability = {
+  id: string;
+  label?: string;
+  providerFamily?: string;
+  sourceMode?: string;
+  endpoint?: string;
+  liveImplemented: boolean;
+  setupRequired: boolean;
+  authoritativeOperational: boolean;
+  transports: string[];
+  trackingSourceTypes: string[];
+  requiredApprovals: string[];
+  diagnostics: string[];
+};
+
 export type WeatherPatternSummary = {
   id: string;
   patternType?: string;
@@ -1520,6 +1554,10 @@ export type TrafficReplayPosition = {
   routeProgress: number;
   delaySeconds: number;
   phase?: string;
+  trackingSourceType?: string;
+  trackingSourceLabel?: string;
+  providerTrackId?: string;
+  surveillanceQuality?: string;
   sourceRefs: string[];
 };
 
@@ -1586,6 +1624,9 @@ export type TrafficReplayBundle = {
   providerReceiptId?: string;
   authorizationMode?: string;
   sourceRefs: string[];
+  providerTransports?: string[];
+  trackingSourceTypes?: string[];
+  coverageWarnings?: string[];
   flightPlans: TrafficReplayFlightPlan[];
   positions: TrafficReplayPosition[];
   airportDemand: TrafficReplayAirportDemand[];

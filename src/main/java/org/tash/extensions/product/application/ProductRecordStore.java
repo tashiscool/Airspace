@@ -25,6 +25,8 @@ class ProductRecordStore {
     final Map<String, ProductDtos.ReservationSupplementSummary> supplements = Collections.synchronizedMap(new LinkedHashMap<>());
     ZonedDateTime lastLiveWeatherPollAt;
     final List<String> liveWeatherDiagnostics = Collections.synchronizedList(new ArrayList<>());
+    ZonedDateTime lastFlightAwarenessPollAt;
+    final List<String> flightAwarenessDiagnostics = Collections.synchronizedList(new ArrayList<>());
 
     ProductDtos.HistoryEventSummary history(String aggregateType, String aggregateId,
                                             String eventType, String actor, String note) {

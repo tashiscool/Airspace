@@ -146,7 +146,9 @@ describe('product API client', () => {
     await api.gaps();
     await api.releaseGates();
     await api.providersStatus();
+    await api.flightAwarenessCapabilities();
     await api.pollProviderWeather({ products: ['metar'], maxResults: 5 });
+    await api.pollProviderFlightAwareness({ bounds: '41.0,40.5,-74.5,-73.5', maxResults: 5 });
     await api.runCalibration({ datasetId: 'fixture-low-vis-weather', includeSyntheticScale: true, actor: 'planner' });
     await api.calibrationReports();
     await api.safetyDossier();
@@ -239,7 +241,9 @@ describe('product API client', () => {
       '/api/gaps',
       '/api/gaps/release-gates',
       '/api/providers/status',
+      '/api/providers/flight-awareness/capabilities',
       '/api/providers/weather/poll',
+      '/api/providers/fr24/traffic-replay/poll',
       '/api/calibration/run',
       '/api/calibration/reports',
       '/api/safety/dossier',

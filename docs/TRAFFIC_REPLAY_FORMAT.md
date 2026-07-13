@@ -84,6 +84,38 @@ The sample is derived from the public shape of the official Flightradar24 API MC
 
 FR24 data remains `AUTHENTICATED_EXTERNAL` or `AUTHENTICATED_EXTERNAL_REPLAY_SAMPLE`, not `AUTHORIZED_OPERATIONAL`. It is useful for demo replay, human-factors review, and simulation enrichment, but it is not FAA SWIM, TFMS, FMDS, FNS, NMS, NADIN, WMSCR, or operational NAS truth. Any real FR24 adapter must retain provider receipt id, query filters, freshness, egress/consent policy, source refs, and non-authoritative warnings.
 
+Airspace exposes this mapping through:
+
+```http
+POST /api/providers/fr24/traffic-replay/poll
+```
+
+The request accepts `rawResponseJson` for recorded FR24 API/MCP responses, or live query filters such as `bounds`, `flights`, `callsigns`, `registrations`, `airports`, `routes`, `aircraft`, `altitudeRanges`, `categories`, `timestamp`, and `maxResults`. Live calls remain disabled until these configuration keys are set deliberately:
+
+```properties
+airspace.fr24.live.enabled=true
+airspace.fr24.api-key=...
+airspace.fr24.base-url=https://fr24api.flightradar24.com/api
+```
+
+When live mode is enabled, Airspace uses the same endpoint family as the official FR24 SDK/MCP:
+
+- `/live/flight-positions/light`
+- `/live/flight-positions/full`
+- `/historic/flight-positions/light`
+- `/historic/flight-positions/full`
+
+The adapter sends `Authorization: Bearer <key>` and `Accept-Version: v1`, and it requires at least one bounded query filter before making a live call. Count, summary, track, event, airline, and airport endpoints are cataloged in the MCP tool plane and can be normalized into the same replay contract as deeper provider work continues.
+
+The normalized replay payload now preserves multisource tracking provenance:
+
+- `providerTransports`: `RECORDED_JSON`, `REST_LIVE_HTTP`, `SDK_COMPATIBLE_SHAPE`, `MCP_COMPATIBLE_SHAPE`, or future authorized transports.
+- `trackingSourceTypes`: `ADS_B`, `SATELLITE_ADSB`, `MLAT`, `RADAR`, `UAT`, `FLARM`, `ADS_C`, `FAA_SWIM`, `MULTISOURCE`, or `UNKNOWN`.
+- `TrafficReplayPosition.trackingSourceType`, `trackingSourceLabel`, `providerTrackId`, and `surveillanceQuality` for per-position audit.
+- `coverageWarnings` for source gaps such as unknown provenance, satellite coverage/latency caveats, MLAT-derived positions, or timestamp gaps.
+
+`GET /api/providers/flight-awareness/capabilities` exposes the provider strategy. FR24 is the currently implemented commercial REST/replay adapter. OpenSky, local ADS-B receiver, and FAA SWIM/TFMS surveillance paths are cataloged as setup-required seams so the workbench can show what is available, what is blocked, and which approvals are required before live use.
+
 ## Non-Goals
 
 - No live SWIM/NEMS transport.
