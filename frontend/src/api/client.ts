@@ -219,7 +219,8 @@ export const api = {
     request<ScenarioFixtureBundle>('/api/agents/scenario/generate', { method: 'POST', body: JSON.stringify(body) }),
   evaluateAgentStability: (body: AgentStabilityRequest) =>
     request<AgentStabilityResult>('/api/agents/evaluate/stability', { method: 'POST', body: JSON.stringify(body) }),
-  agentRiskAssessments: () => request<AgenticRiskAssessment[]>('/api/agents/risk-assessments'),
+  agentRiskAssessments: (subjectType?: 'AGENT' | 'MCP_TOOL' | 'ALL') =>
+    request<AgenticRiskAssessment[]>(`/api/agents/risk-assessments${subjectType ? `?subjectType=${encodeURIComponent(subjectType)}` : ''}`),
   mcpServers: () => request<McpServerDefinition[]>('/api/agents/mcp/servers'),
   mcpTools: (serverId: string) => request<McpToolDescriptor[]>(`/api/agents/mcp/servers/${encodeURIComponent(serverId)}/tools`),
   callMcpTool: (body: McpToolInvocationRequest) =>

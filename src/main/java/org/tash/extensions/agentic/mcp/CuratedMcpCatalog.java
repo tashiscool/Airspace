@@ -17,10 +17,13 @@ import java.util.Optional;
 @ApplicationScoped
 public class CuratedMcpCatalog implements McpToolRegistry {
     public static final String AIRSPACE_FIRST_PARTY = "airspace-first-party";
+    public static final String LOCAL_MOCK_MCP = "local-mock-mcp";
     public static final String EXTERNAL_MCP = "external-mcp";
 
     @ConfigProperty(name = "airspace.agentic.mcp.enabled", defaultValue = "true")
     boolean mcpEnabled = true;
+    @ConfigProperty(name = "airspace.agentic.mcp.local-mock.enabled", defaultValue = "true")
+    boolean localMockMcpEnabled = true;
     @ConfigProperty(name = "airspace.agentic.mcp.external.enabled", defaultValue = "false")
     boolean externalMcpEnabled = false;
 
@@ -39,6 +42,21 @@ public class CuratedMcpCatalog implements McpToolRegistry {
                 .transport("direct-java")
                 .version("airspace-mcp-v1")
                 .diagnostics(mcpEnabled ? Collections.emptyList() : Collections.singletonList("MCP is disabled by airspace.agentic.mcp.enabled=false"))
+                .build());
+        servers.add(McpServerDefinition.builder()
+                .id(LOCAL_MOCK_MCP)
+                .name("Local mock MCP tools")
+                .description("Deterministic local mock-live MCP server for dev/test validation of external-style receipts without network or credentials.")
+                .enabled(mcpEnabled && localMockMcpEnabled)
+                .external(false)
+                .local(true)
+                .setupRequired(false)
+                .credentialsRequired(false)
+                .transport("local-mock")
+                .version("airspace-local-mock-mcp-v1")
+                .diagnostics(localMockMcpEnabled
+                        ? Collections.singletonList("Local mock MCP is live for dev/test evidence-receipt validation; no external call is made.")
+                        : Collections.singletonList("Local mock MCP disabled by airspace.agentic.mcp.local-mock.enabled=false"))
                 .build());
         servers.add(McpServerDefinition.builder()
                 .id(EXTERNAL_MCP)
@@ -71,6 +89,9 @@ public class CuratedMcpCatalog implements McpToolRegistry {
         String normalized = normalize(serverId);
         if (AIRSPACE_FIRST_PARTY.equals(normalized)) {
             return firstPartyTools();
+        }
+        if (LOCAL_MOCK_MCP.equals(normalized)) {
+            return localMockTools();
         }
         if (EXTERNAL_MCP.equals(normalized)) {
             return Collections.singletonList(McpToolDescriptor.builder()
@@ -136,6 +157,17 @@ public class CuratedMcpCatalog implements McpToolRegistry {
         );
     }
 
+    private List<McpToolDescriptor> localMockTools() {
+        return Arrays.asList(
+                mockTool("local-mock.weather.snapshot", "Mock external weather snapshot",
+                        "Return deterministic external-style weather evidence for dev/test receipt validation.",
+                        McpSideEffectLevel.READ_ONLY, args("missionId", "sourceId"), families("WEATHER", "PIREP")),
+                mockTool("local-mock.coordination.preview", "Mock coordination preview",
+                        "Return deterministic draft coordination preview without sending any message.",
+                        McpSideEffectLevel.DRAFT_ONLY, args("missionId", "hazardOrDecisionId"), families("MISSION", "USNS"))
+        );
+    }
+
     private McpToolDescriptor tool(String id, String name, String description, McpSideEffectLevel level,
                                    List<String> arguments, List<String> families) {
         Map<String, Object> schema = new LinkedHashMap<>();
@@ -181,6 +213,51 @@ public class CuratedMcpCatalog implements McpToolRegistry {
                 .costClass("LOCAL_CPU")
                 .slaClass("LOCAL_IN_PROCESS")
                 .requiredHumanReviewMode(draft ? HumanReviewMode.PUSH_APPROVAL : HumanReviewMode.REVIEW_ONLY)
+                .build();
+    }
+
+    private McpToolDescriptor mockTool(String id,
+                                       String name,
+                                       String description,
+                                       McpSideEffectLevel level,
+                                       List<String> arguments,
+                                       List<String> families) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        for (String argument : arguments) {
+            schema.put(argument, "string");
+        }
+        return McpToolDescriptor.builder()
+                .id(id)
+                .serverId(LOCAL_MOCK_MCP)
+                .name(name)
+                .description(description)
+                .version("airspace-local-mock-mcp-v1")
+                .enabled(mcpEnabled && localMockMcpEnabled)
+                .external(false)
+                .setupRequired(false)
+                .credentialsRequired(false)
+                .sideEffectLevel(level)
+                .riskProfile(AgenticRiskProfile.builder()
+                        .autonomyScope(level == McpSideEffectLevel.DRAFT_ONLY
+                                ? "Local mock draft-only external-style tool; cannot send."
+                                : "Local mock read-only external-style evidence tool.")
+                        .toolSurface(id)
+                        .worstCaseBlastRadius("Mock output could validate UI/policy paths incorrectly if mistaken for live external evidence.")
+                        .permissionScope("Local dev/test process only; no credential or network access.")
+                        .dataEgress("None. Mock result remains inside the Airspace process and receipt store.")
+                        .poisonedDataExposure("Fixture-backed deterministic content only; use adversarial corpus for poisoned-data checks.")
+                        .auditAttribution("MCP evidence receipt with local-mock server id, hashes, policy decision, and source refs.")
+                        .toolProvenance("Airspace local mock MCP catalog version airspace-local-mock-mcp-v1.")
+                        .modelProvenance("No model execution.")
+                        .rollbackPath("Set airspace.agentic.mcp.local-mock.enabled=false.")
+                        .costClass("LOCAL_CPU")
+                        .slaClass("LOCAL_IN_PROCESS")
+                        .requiredHumanReviewMode(level == McpSideEffectLevel.DRAFT_ONLY ? HumanReviewMode.PUSH_APPROVAL : HumanReviewMode.REVIEW_ONLY)
+                        .build())
+                .requiredArguments(id.contains("coordination") ? Collections.singletonList("missionId") : Collections.emptyList())
+                .argumentSchema(schema)
+                .sourceFamilies(families)
+                .diagnostics(Collections.singletonList("Local mock-live MCP tool; not a live FAA/NWS/SWIM integration."))
                 .build();
     }
 

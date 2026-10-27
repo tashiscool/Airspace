@@ -1,0 +1,68 @@
+[
+  {
+    "id": "conflicting-pirep-weather",
+    "description": "Severe SIGMET/AIRMET-style route weather coexists with smooth or negative PIREP text.",
+    "expectedCategories": ["CONTRADICTORY_PIREP_WEATHER"],
+    "expectedReviewMode": "PULL_CLARIFICATION",
+    "messages": [
+      {
+        "family": "PIREP",
+        "subject": "Smooth PIREP conflicts with severe hazard",
+        "rawText": "UA /OV 3000N15000W/TM 2005/FL250/TP B738/TB SMOOTH/IC NEG/RM SAME CORRIDOR"
+      }
+    ]
+  },
+  {
+    "id": "notam-not-altrv",
+    "description": "ICAO NOTAM without route-usable geometry remains a NOTAM constraint, not an ALTRV reservation.",
+    "expectedCategories": ["MISSING_NOTAM_GEOMETRY"],
+    "expectedReviewMode": "PULL_CLARIFICATION",
+    "forbiddenCategories": ["MALFORMED_ALTRV_GRAMMAR"],
+    "messages": [
+      {
+        "family": "ICAO_NOTAMC",
+        "subject": "Cancellation without geometry",
+        "rawText": "(A0002/26 NOTAMC A) KZNY E) CANCEL TEST)"
+      }
+    ]
+  },
+  {
+    "id": "malformed-usns-service-command",
+    "description": "Legacy service/table commands are classified and retained without mutating local tables.",
+    "expectedCategories": ["MALFORMED_USNS_SERVICE_COMMAND", "USNS_TABLE_COMMAND_RETAINED_ONLY"],
+    "expectedReviewMode": "PULL_CLARIFICATION",
+    "feeds": [
+      {
+        "sourceId": "adversarial-usns-rq-tbl",
+        "type": "USNS",
+        "body": "(SVC TBL DOM)\n(SVC RQ DOM RQN KJFK HIST)"
+      }
+    ]
+  },
+  {
+    "id": "malformed-altrv-grammar",
+    "description": "Broken ALTRV-like message is retained with grammar diagnostics and clarification mode.",
+    "expectedCategories": ["MALFORMED_ALTRV_GRAMMAR"],
+    "expectedReviewMode": "PULL_CLARIFICATION",
+    "messages": [
+      {
+        "family": "CARF_ALTRV",
+        "subject": "Malformed ALTRV",
+        "rawText": "A. BROKEN\nD. FIXA 0000\nG. MISSING TIMING"
+      }
+    ]
+  },
+  {
+    "id": "off-route-pirep-relevance",
+    "description": "Off-route PIREP-like traffic without route-usable geometry is retained as a clarification item instead of becoming a direct blockage driver.",
+    "expectedCategories": ["MISSING_GEOMETRY"],
+    "expectedReviewMode": "PULL_CLARIFICATION",
+    "messages": [
+      {
+        "family": "PIREP",
+        "subject": "Off-route severe PIREP",
+        "rawText": "UUA /OV 7000N10000W/TM 2005/FL430/TP B738/TB SEV/RM OFF ROUTE AND OFF ALTITUDE"
+      }
+    ]
+  }
+]

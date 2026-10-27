@@ -49,9 +49,11 @@ export function AgenticOpsPanel({ selection }: { selection: WorkbenchSelection }
   });
   const storeStatus = useQuery({ queryKey: ['agentic', 'status'], queryFn: api.agentStatus, staleTime: 30_000 });
   const agentMetrics = useQuery({ queryKey: ['agentic', 'metrics'], queryFn: api.agentMetrics, staleTime: 30_000 });
-  const riskAssessments = useQuery({ queryKey: ['agentic', 'risk-assessments'], queryFn: api.agentRiskAssessments, staleTime: 60_000 });
+  const riskAssessments = useQuery({ queryKey: ['agentic', 'risk-assessments'], queryFn: () => api.agentRiskAssessments(), staleTime: 60_000 });
   const mcpServers = useQuery({ queryKey: ['agentic', 'mcp', 'servers'], queryFn: api.mcpServers, staleTime: 60_000 });
   const mcpTools = useQuery({ queryKey: ['agentic', 'mcp', 'tools', 'airspace-first-party'], queryFn: () => api.mcpTools('airspace-first-party'), staleTime: 60_000 });
+  const localMockTools = useQuery({ queryKey: ['agentic', 'mcp', 'tools', 'local-mock-mcp'], queryFn: () => api.mcpTools('local-mock-mcp'), staleTime: 60_000 });
+  const externalMcpTools = useQuery({ queryKey: ['agentic', 'mcp', 'tools', 'external-mcp'], queryFn: () => api.mcpTools('external-mcp'), staleTime: 60_000 });
   const mcpReceipts = useQuery({ queryKey: ['agentic', 'mcp', 'receipts'], queryFn: () => api.mcpReceipts(6), staleTime: 15_000 });
   const agentJobs = useQuery({ queryKey: ['agentic', 'jobs'], queryFn: () => api.agentJobs(5), staleTime: 15_000 });
   const runAll = useMutation({ mutationFn: () => api.runAgent({ ...request, agentType: 'ALL' }) });
@@ -121,14 +123,14 @@ export function AgenticOpsPanel({ selection }: { selection: WorkbenchSelection }
             storeStatus={storeStatus.data}
             agentMetrics={agentMetrics.data}
             riskAssessments={riskAssessments.data}
-            stabilityResult={stability.data}
+            stabilityResult={result?.evaluation?.stabilityResult ?? stability.data}
             mcpServers={mcpServers.data}
-            mcpTools={mcpTools.data}
+            mcpTools={[...(mcpTools.data ?? []), ...(localMockTools.data ?? []), ...(externalMcpTools.data ?? [])]}
             mcpReceipts={mcpReceipts.data}
             agentJobs={agentJobs.data}
             latestJob={queueJob.data}
             onAcknowledgeTask={(id) => transitionTask.mutate(id)}
-            error={weatherImpact.error ?? runAll.error ?? queueJob.error ?? stability.error ?? missionRisk.error ?? reroute.error ?? coordination.error ?? integrity.error ?? replayAudit.error ?? taskHistory.error ?? runHistory.error ?? storeStatus.error ?? agentMetrics.error ?? riskAssessments.error ?? mcpServers.error ?? mcpTools.error ?? mcpReceipts.error ?? agentJobs.error}
+            error={weatherImpact.error ?? runAll.error ?? queueJob.error ?? stability.error ?? missionRisk.error ?? reroute.error ?? coordination.error ?? integrity.error ?? replayAudit.error ?? taskHistory.error ?? runHistory.error ?? storeStatus.error ?? agentMetrics.error ?? riskAssessments.error ?? mcpServers.error ?? mcpTools.error ?? localMockTools.error ?? externalMcpTools.error ?? mcpReceipts.error ?? agentJobs.error}
           />
         </div>
       )}
@@ -173,6 +175,8 @@ function AgentResult({
   if (!result) {
     return <p className="empty-state">No agent output yet. Run an agent to create cited analysis and review tasks.</p>;
   }
+  const agentRisks = (riskAssessments ?? []).filter((risk) => risk.subjectType === 'AGENT');
+  const toolRisks = (riskAssessments ?? []).filter((risk) => risk.subjectType === 'MCP_TOOL');
   return (
     <div className="agentic-grid">
       <AgentColumn title="Findings" items={result.findings} render={(item: AgentFinding) => (
@@ -246,18 +250,21 @@ function AgentResult({
         <p>MCP tools provide cited evidence and drafts; they do not authorize operational action.</p>
         {(mcpServers ?? []).map((server) => (
           <div className="agent-item" key={server.id}>
-            <span className={`status-badge ${server.enabled ? 'clear' : 'warning'}`}>{server.enabled ? 'ENABLED' : 'SETUP'}</span>
+            <span className={`status-badge ${server.enabled ? 'clear' : 'warning'}`}>{server.transport === 'local-mock' ? 'MOCK LIVE' : server.enabled ? 'ENABLED' : 'SETUP'}</span>
             <strong>{server.name ?? server.id}</strong>
             <p>{server.description}</p>
+            {server.transport && <small>Transport {server.transport}</small>}
             {server.setupRequired && <small className="warning-text">Setup required before invocation.</small>}
+            {server.transport === 'local-mock' && <small>Local mock-live server for dev/test validation only.</small>}
           </div>
         ))}
-        {(mcpTools ?? []).slice(0, 6).map((tool) => (
+        {(mcpTools ?? []).slice(0, 9).map((tool) => (
           <div className="agent-item" key={tool.id}>
-            <span className={`status-badge ${String(tool.sideEffectLevel ?? '').toLowerCase()}`}>{tool.sideEffectLevel}</span>
+            <span className={`status-badge ${String(tool.sideEffectLevel ?? '').toLowerCase()}`}>{tool.serverId === 'local-mock-mcp' ? 'MOCK ' : ''}{tool.sideEffectLevel}</span>
             <strong>{tool.id}</strong>
             <p>{tool.description}</p>
             {!!tool.requiredArguments?.length && <small>Required {tool.requiredArguments.join(', ')}</small>}
+            {tool.setupRequired && <small className="warning-text">Setup required; not callable by default.</small>}
             {tool.riskProfile?.worstCaseBlastRadius && <small>Blast radius: {tool.riskProfile.worstCaseBlastRadius}</small>}
             {tool.riskProfile?.dataEgress && <small>Egress: {tool.riskProfile.dataEgress}</small>}
             {tool.riskProfile?.rollbackPath && <small>Rollback: {tool.riskProfile.rollbackPath}</small>}
@@ -265,8 +272,8 @@ function AgentResult({
         ))}
       </div>
       <div className="agent-card">
-        <h4>Risk Checklist</h4>
-        {(riskAssessments ?? []).slice(0, 6).map((risk) => (
+        <h4>Agent Risk Catalog</h4>
+        {agentRisks.slice(0, 7).map((risk) => (
           <div className="agent-item" key={risk.id}>
             <span className={`status-badge ${String(risk.riskProfile?.requiredHumanReviewMode ?? '').toLowerCase()}`}>{risk.riskProfile?.requiredHumanReviewMode ?? 'REVIEW'}</span>
             <strong>{risk.subjectId}</strong>
@@ -276,14 +283,28 @@ function AgentResult({
             {!!risk.diagnostics?.length && <small className="warning-text">{risk.diagnostics.join(' · ')}</small>}
           </div>
         ))}
-        {(!riskAssessments || riskAssessments.length === 0) && <p className="empty-state compact">No risk assessments returned.</p>}
+        {agentRisks.length === 0 && <p className="empty-state compact">No agent risk assessments returned.</p>}
       </div>
       <div className="agent-card">
-        <h4>Stability Harness</h4>
+        <h4>Tool Risk Checklist</h4>
+        {toolRisks.slice(0, 7).map((risk) => (
+          <div className="agent-item" key={risk.id}>
+            <span className={`status-badge ${String(risk.riskProfile?.requiredHumanReviewMode ?? '').toLowerCase()}`}>{risk.riskProfile?.requiredHumanReviewMode ?? 'REVIEW'}</span>
+            <strong>{risk.subjectId}</strong>
+            <p>{risk.riskProfile?.worstCaseBlastRadius ?? risk.summary}</p>
+            <small>{risk.riskProfile?.dataEgress ?? 'Data egress unavailable'}</small>
+            {!!risk.diagnostics?.length && <small className="warning-text">{risk.diagnostics.join(' · ')}</small>}
+          </div>
+        ))}
+        {toolRisks.length === 0 && <p className="empty-state compact">No tool risk assessments returned.</p>}
+      </div>
+      <div className="agent-card">
+        <h4>Stability Gate</h4>
         {stabilityResult ? (
           <>
-            <span className={`status-badge ${stabilityResult.accepted ? 'clear' : 'warning'}`}>{stabilityResult.accepted ? 'STABLE' : 'UNSTABLE'}</span>
+            <span className={`status-badge ${stabilityResult.accepted ? 'clear' : 'warning'}`}>{stabilityResult.gateMode ?? (stabilityResult.accepted ? 'STABLE' : 'UNSTABLE')}</span>
             <p>{stabilityResult.iterations ?? 0} run(s), {(stabilityResult.metrics ?? []).filter((metric) => metric.accepted).length}/{stabilityResult.metrics?.length ?? 0} metric(s) accepted.</p>
+            <small>{stabilityResult.appliedAutomatically ? 'Applied automatically to this run.' : 'Manual stability harness result.'}</small>
             {(stabilityResult.metrics ?? []).slice(0, 6).map((metric) => (
               <small key={metric.id} className={metric.accepted ? undefined : 'warning-text'}>
                 {metric.name}: {formatMetric(metric.value)} / {formatMetric(metric.threshold)}
@@ -375,6 +396,12 @@ function AgentResult({
         <small>
           Agent metrics accepted {agentMetrics?.['agentic.runs.accepted'] ?? 0} · rejected {agentMetrics?.['agentic.runs.rejected'] ?? 0} · policy {agentMetrics?.['agentic.policyViolations'] ?? 0}
         </small>
+        <small>
+          Stability {result.evaluation?.stabilityMode ?? 'n/a'} · {result.evaluation?.stabilityAppliedAutomatically ? 'automatic' : 'manual/none'} ·
+          {` ${result.evaluation?.stabilityAccepted ? 'accepted' : 'needs review'}`}
+        </small>
+        {result.evaluation?.modelReadinessDiagnostics?.map((diagnostic) => <small key={diagnostic}>{diagnostic}</small>)}
+        {result.reasoningEnvelope?.modelReadinessDiagnostics?.map((diagnostic) => <small key={diagnostic}>{diagnostic}</small>)}
         {storeStatus?.path && <small>{storeStatus.path}</small>}
         {!storeStatus?.durable && <small className="warning-text">Agent history is memory-only unless `airspace.agentic.store.path` is configured.</small>}
         {!!result.toolCalls?.length && <small>{result.toolCalls.length} MCP/tool receipt-backed call(s) attached.</small>}

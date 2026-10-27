@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.tash.extensions.agentic.AgentStabilityMode;
 import org.tash.extensions.agentic.AgentRunRequest;
 
 @Data
@@ -16,4 +17,6 @@ public class AgentStabilityRequest {
     private Double minAgreement;
     private Double minCitationJaccard;
     private Double maxCountCoefficientOfVariation;
+    private Boolean appliedAutomatically;
+    private AgentStabilityMode gateMode;
 }

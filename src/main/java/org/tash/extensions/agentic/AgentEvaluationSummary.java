@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import org.tash.extensions.agentic.stability.AgentStabilityResult;
 
 @Data
 @NoArgsConstructor
@@ -25,10 +26,15 @@ public class AgentEvaluationSummary {
     private int policyViolationCount;
     private double citationCoverage;
     private boolean stabilityAccepted;
+    private boolean stabilityAppliedAutomatically;
+    private String stabilityMode;
+    private AgentStabilityResult stabilityResult;
     @Builder.Default
     private Map<String, Integer> sourceFamilyCounts = new LinkedHashMap<>();
     @Builder.Default
     private List<String> stabilityWarnings = new ArrayList<>();
+    @Builder.Default
+    private List<String> modelReadinessDiagnostics = new ArrayList<>();
     @Builder.Default
     private List<String> warnings = new ArrayList<>();
     @Builder.Default

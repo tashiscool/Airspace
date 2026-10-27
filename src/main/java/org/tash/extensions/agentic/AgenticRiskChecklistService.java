@@ -13,6 +13,8 @@ import java.util.List;
 public class AgenticRiskChecklistService {
     @Inject
     McpToolRegistry mcpToolRegistry;
+    @Inject
+    AgentRiskCatalog agentRiskCatalog;
 
     public AgenticRiskChecklistService() {
     }
@@ -22,15 +24,47 @@ public class AgenticRiskChecklistService {
     }
 
     public List<AgenticRiskAssessment> assessments() {
+        return assessments("ALL");
+    }
+
+    public List<AgenticRiskAssessment> assessments(String subjectType) {
+        String normalized = subjectType == null || subjectType.trim().isEmpty()
+                ? "ALL"
+                : subjectType.trim().toUpperCase(java.util.Locale.US);
         McpToolRegistry registry = mcpToolRegistry == null ? new CuratedMcpCatalog() : mcpToolRegistry;
         List<AgenticRiskAssessment> assessments = new ArrayList<>();
-        for (McpToolDescriptor tool : registry.tools(CuratedMcpCatalog.AIRSPACE_FIRST_PARTY)) {
-            assessments.add(assessment(tool));
+        if ("ALL".equals(normalized) || "AGENT".equals(normalized)) {
+            for (AgentDefinition agent : agents().agents()) {
+                assessments.add(assessment(agent));
+            }
         }
-        for (McpToolDescriptor tool : registry.tools(CuratedMcpCatalog.EXTERNAL_MCP)) {
-            assessments.add(assessment(tool));
+        if ("ALL".equals(normalized) || "MCP_TOOL".equals(normalized)) {
+            for (McpToolDescriptor tool : registry.tools(CuratedMcpCatalog.AIRSPACE_FIRST_PARTY)) {
+                assessments.add(assessment(tool));
+            }
+            for (McpToolDescriptor tool : registry.tools(CuratedMcpCatalog.LOCAL_MOCK_MCP)) {
+                assessments.add(assessment(tool));
+            }
+            for (McpToolDescriptor tool : registry.tools(CuratedMcpCatalog.EXTERNAL_MCP)) {
+                assessments.add(assessment(tool));
+            }
         }
         return assessments;
+    }
+
+    private AgenticRiskAssessment assessment(AgentDefinition agent) {
+        List<String> diagnostics = new ArrayList<>();
+        if (agent.getRiskProfile() == null) {
+            diagnostics.add("Agent lacks explicit agentic risk profile.");
+        }
+        return AgenticRiskAssessment.builder()
+                .id("risk-agent-" + agent.getAgentType())
+                .subjectType("AGENT")
+                .subjectId(agent.getAgentType())
+                .summary(agent.getName() + " risk checklist")
+                .riskProfile(agent.getRiskProfile())
+                .diagnostics(diagnostics)
+                .build();
     }
 
     private AgenticRiskAssessment assessment(McpToolDescriptor tool) {
@@ -59,5 +93,12 @@ public class AgenticRiskChecklistService {
                 .riskProfile(profile)
                 .diagnostics(diagnostics)
                 .build();
+    }
+
+    private AgentRiskCatalog agents() {
+        if (agentRiskCatalog == null) {
+            agentRiskCatalog = new AgentRiskCatalog();
+        }
+        return agentRiskCatalog;
     }
 }

@@ -37,7 +37,7 @@ public class AgentStabilityHarness {
         List<String> runIds = new ArrayList<>();
         AgentRunRequest runRequest = safe.getAgentRunRequest() == null ? new AgentRunRequest() : safe.getAgentRunRequest();
         for (int i = 0; i < iterations; i++) {
-            AgentRunResult run = service().run(copy(runRequest));
+            AgentRunResult run = service().runForStability(copy(runRequest));
             runs.add(run);
             runIds.add(run.getId());
         }
@@ -56,6 +56,8 @@ public class AgentStabilityHarness {
                 .id("agent-stability-" + java.util.UUID.nameUUIDFromBytes(String.join(":", runIds).getBytes(java.nio.charset.StandardCharsets.UTF_8)))
                 .accepted(accepted)
                 .iterations(iterations)
+                .appliedAutomatically(Boolean.TRUE.equals(safe.getAppliedAutomatically()))
+                .gateMode(safe.getGateMode())
                 .startedAt(started)
                 .completedAt(completed)
                 .runIds(runIds)

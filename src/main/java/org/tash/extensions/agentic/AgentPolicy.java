@@ -25,4 +25,6 @@ public class AgentPolicy {
     private boolean requireCitationsForOperationalClaims = true;
     @Builder.Default
     private List<String> allowedActions = Arrays.asList("ANALYZE", "DRAFT", "TRIAGE", "BRIEF", "EXPLAIN");
+    @Builder.Default
+    private AgentStabilityPolicy stabilityPolicy = AgentStabilityPolicy.builder().build();
 }

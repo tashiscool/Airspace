@@ -3,6 +3,10 @@ package org.tash.extensions.agentic;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
+import org.tash.extensions.agentic.stability.AgentRunComparator;
+import org.tash.extensions.agentic.stability.AgentStabilityHarness;
+import org.tash.extensions.agentic.stability.AgentStabilityRequest;
+import org.tash.extensions.agentic.stability.AgentStabilityResult;
 
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -47,6 +51,14 @@ public class AgenticOperationsService {
     Instance<LlmReasoningProvider> llmReasoningProviders;
 
     public AgentRunResult run(AgentRunRequest request) {
+        return runInternal(request, true, true);
+    }
+
+    public AgentRunResult runForStability(AgentRunRequest request) {
+        return runInternal(request, false, false);
+    }
+
+    private AgentRunResult runInternal(AgentRunRequest request, boolean applyStabilityGate, boolean persistRun) {
         AgentRunRequest safe = request == null ? new AgentRunRequest() : request;
         AgentPolicy policy = safe.getPolicy() == null ? AgentPolicy.builder().build() : safe.getPolicy();
         String type = normalize(safe.getAgentType());
@@ -90,7 +102,7 @@ public class AgenticOperationsService {
                     ? reasoned.toBuilder().reasoningEnvelope(result.getReasoningEnvelope()).build()
                     : reasoned;
         }
-        return finalizeResult(safe, result, policy);
+        return finalizeResult(safe, result, policy, applyStabilityGate, persistRun);
     }
 
     public AgentRunResult weatherImpact(AgentRunRequest request) {
@@ -225,15 +237,24 @@ public class AgenticOperationsService {
                 .build();
     }
 
-    private AgentRunResult finalizeResult(AgentRunRequest request, AgentRunResult result, AgentPolicy policy) {
+    private AgentRunResult finalizeResult(AgentRunRequest request,
+                                          AgentRunResult result,
+                                          AgentPolicy policy,
+                                          boolean applyStabilityGate,
+                                          boolean persistRun) {
         AgentAssessmentBuilder safeAssessmentBuilder = assessmentBuilder == null ? new AgentAssessmentBuilder() : assessmentBuilder;
         result = safeAssessmentBuilder.normalize(result);
         AgentEvaluationSummary evaluation = evaluationService == null
                 ? fallbackEvaluation(result, policy)
                 : evaluationService.evaluate(result, policy);
+        if (applyStabilityGate) {
+            evaluation = withAutomaticStabilityGate(request, policy, result, evaluation);
+        }
         List<String> diagnostics = new ArrayList<>(result.getDiagnostics());
         diagnostics.addAll(evaluation.getWarnings());
         diagnostics.addAll(evaluation.getErrors());
+        diagnostics.addAll(evaluation.getStabilityWarnings());
+        diagnostics.addAll(evaluation.getModelReadinessDiagnostics());
         boolean accepted = result.isAccepted() && evaluation.isAccepted();
         AgentRunResult withDiagnostics = result.toBuilder()
                 .accepted(accepted)
@@ -241,6 +262,14 @@ public class AgenticOperationsService {
                 .evaluation(evaluation)
                 .operatingLoop(result.getOperatingLoop().isEmpty() ? operatingLoop(result, diagnostics) : result.getOperatingLoop())
                 .build();
+        if (!persistRun) {
+            return withDiagnostics.toBuilder()
+                    .missionId(request == null ? null : request.getMissionId())
+                    .reservationId(request == null ? null : request.getReservationId())
+                    .decisionId(request == null ? null : request.getDecisionId())
+                    .generatedAt(withDiagnostics.getGeneratedAt() == null ? ZonedDateTime.now(ZoneOffset.UTC) : withDiagnostics.getGeneratedAt())
+                    .build();
+        }
         AgentAuditEnvelope audit = auditService.record(request, withDiagnostics, policy);
         AgentRunResult finalized = withDiagnostics.toBuilder()
                 .auditEnvelope(audit)
@@ -254,6 +283,82 @@ public class AgenticOperationsService {
             store().saveTask(task);
         }
         return finalized;
+    }
+
+    private AgentEvaluationSummary withAutomaticStabilityGate(AgentRunRequest request,
+                                                              AgentPolicy policy,
+                                                              AgentRunResult result,
+                                                              AgentEvaluationSummary evaluation) {
+        AgentPolicy safePolicy = policy == null ? AgentPolicy.builder().build() : policy;
+        AgentStabilityPolicy stabilityPolicy = safePolicy.getStabilityPolicy() == null
+                ? AgentStabilityPolicy.builder().build()
+                : safePolicy.getStabilityPolicy();
+        List<String> modelDiagnostics = new ArrayList<>(evaluation.getModelReadinessDiagnostics());
+        if (result != null && result.getReasoningEnvelope() != null
+                && result.getReasoningEnvelope().getModelReadinessDiagnostics() != null) {
+            modelDiagnostics.addAll(result.getReasoningEnvelope().getModelReadinessDiagnostics());
+        }
+        if (!stabilityPolicy.isAutomatic()) {
+            return evaluation.toBuilder()
+                    .stabilityAccepted(true)
+                    .stabilityAppliedAutomatically(false)
+                    .stabilityMode(AgentStabilityMode.DISABLED.name())
+                    .modelReadinessDiagnostics(modelDiagnostics)
+                    .build();
+        }
+        AgentStabilityMode mode = modelBacked(result)
+                ? stabilityPolicy.getModelBackedMode()
+                : stabilityPolicy.getDeterministicMode();
+        if (mode == null) {
+            mode = AgentStabilityMode.WARN_ONLY;
+        }
+        if (mode == AgentStabilityMode.DISABLED) {
+            return evaluation.toBuilder()
+                    .stabilityAccepted(true)
+                    .stabilityAppliedAutomatically(false)
+                    .stabilityMode(mode.name())
+                    .modelReadinessDiagnostics(modelDiagnostics)
+                    .build();
+        }
+        AgentStabilityRequest stabilityRequest = AgentStabilityRequest.builder()
+                .agentRunRequest(request)
+                .iterations(stabilityPolicy.getIterations())
+                .minAgreement(stabilityPolicy.getMinAgreement())
+                .minCitationJaccard(stabilityPolicy.getMinCitationJaccard())
+                .maxCountCoefficientOfVariation(stabilityPolicy.getMaxCountCoefficientOfVariation())
+                .appliedAutomatically(true)
+                .gateMode(mode)
+                .build();
+        AgentStabilityResult stability = new AgentStabilityHarness(this, new AgentRunComparator()).evaluate(stabilityRequest);
+        List<String> stabilityWarnings = new ArrayList<>(evaluation.getStabilityWarnings());
+        if (!stability.isAccepted()) {
+            stabilityWarnings.add("Automatic stability gate failed in " + mode + " mode: "
+                    + String.join("; ", stability.getDiagnostics()));
+        } else {
+            stabilityWarnings.add("Automatic stability gate accepted in " + mode + " mode.");
+        }
+        List<String> errors = new ArrayList<>(evaluation.getErrors());
+        if (mode == AgentStabilityMode.ENFORCE && !stability.isAccepted()) {
+            errors.add("Model-backed agent output failed enforced stability gate.");
+        }
+        return evaluation.toBuilder()
+                .accepted(evaluation.isAccepted() && (mode != AgentStabilityMode.ENFORCE || stability.isAccepted()))
+                .stabilityAccepted(stability.isAccepted())
+                .stabilityAppliedAutomatically(true)
+                .stabilityMode(mode.name())
+                .stabilityResult(stability)
+                .stabilityWarnings(stabilityWarnings)
+                .modelReadinessDiagnostics(modelDiagnostics)
+                .errors(errors)
+                .build();
+    }
+
+    private boolean modelBacked(AgentRunResult result) {
+        if (result == null || result.getReasoningEnvelope() == null || result.getReasoningEnvelope().getReasoningMode() == null) {
+            return false;
+        }
+        String mode = result.getReasoningEnvelope().getReasoningMode().trim().toUpperCase(Locale.US);
+        return !mode.isEmpty() && !"DETERMINISTIC_DRAFT_ONLY".equals(mode);
     }
 
     private AgentRunResult mergeRequestToolCalls(AgentRunRequest request, AgentRunResult result) {

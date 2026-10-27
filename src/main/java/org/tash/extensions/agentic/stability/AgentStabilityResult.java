@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.tash.extensions.agentic.AgentStabilityMode;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -17,6 +18,8 @@ public class AgentStabilityResult {
     private String id;
     private boolean accepted;
     private int iterations;
+    private boolean appliedAutomatically;
+    private AgentStabilityMode gateMode;
     private ZonedDateTime startedAt;
     private ZonedDateTime completedAt;
     @Builder.Default

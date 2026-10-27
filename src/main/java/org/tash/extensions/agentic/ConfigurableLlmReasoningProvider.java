@@ -28,8 +28,14 @@ public class ConfigurableLlmReasoningProvider implements LlmReasoningProvider {
     String model;
     @ConfigProperty(name = "airspace.agentic.llm.timeout-ms", defaultValue = "2500")
     int timeoutMillis;
+    @ConfigProperty(name = "airspace.agentic.llm.local-mock.enabled", defaultValue = "true")
+    boolean localMockEnabled = true;
+    @ConfigProperty(name = "airspace.agentic.llm.http.enabled", defaultValue = "false")
+    boolean httpEnabled;
     @Inject
     ObjectMapper mapper;
+    @Inject
+    LlmReasoningReadinessService readinessService;
 
     @Override
     public AgentRunResult reason(AgentRunRequest request, AgentRunResult deterministicDraft) {
@@ -37,18 +43,25 @@ public class ConfigurableLlmReasoningProvider implements LlmReasoningProvider {
         if (!config.enabled()) {
             return deterministicDraft;
         }
-        if ("local-test".equalsIgnoreCase(config.getMode())) {
-            return localTestReasoning(deterministicDraft, config);
+        LlmReasoningReadinessResult readiness = readiness().assess(config, request == null ? null : request.getPolicy());
+        if (!readiness.isReady()) {
+            return deterministicDraft.toBuilder()
+                    .reasoningEnvelope(withReadinessDiagnostics(deterministicDraft.getReasoningEnvelope(), readiness))
+                    .diagnostics(withDiagnostic(deterministicDraft, String.join(" ", readiness.getDiagnostics())))
+                    .build();
+        }
+        if ("local-test".equalsIgnoreCase(config.getMode()) || "local-mock".equalsIgnoreCase(config.getMode())) {
+            return localTestReasoning(deterministicDraft, config, readiness);
         }
         if ("http".equalsIgnoreCase(config.getMode())) {
-            return httpReasoning(request, deterministicDraft, config);
+            return httpReasoning(request, deterministicDraft, config, readiness);
         }
         return deterministicDraft.toBuilder()
                 .diagnostics(withDiagnostic(deterministicDraft, "Unsupported LLM mode '" + config.getMode() + "'; deterministic draft retained."))
                 .build();
     }
 
-    private AgentRunResult localTestReasoning(AgentRunResult draft, LlmProviderConfig config) {
+    private AgentRunResult localTestReasoning(AgentRunResult draft, LlmProviderConfig config, LlmReasoningReadinessResult readiness) {
         List<AgentFinding> findings = new ArrayList<>(draft.getFindings());
         List<AgentSourceCitation> citations = draft.getCitations().isEmpty()
                 ? java.util.Collections.singletonList(AgentSupport.citation("ENGINE", "agentic", "Deterministic agent draft", "/decisions/latest"))
@@ -67,12 +80,16 @@ public class ConfigurableLlmReasoningProvider implements LlmReasoningProvider {
                 .reasoningEnvelope(draft.getReasoningEnvelope() == null ? null : draft.getReasoningEnvelope().toBuilder()
                         .modelId(config.getModel())
                         .reasoningMode("LOCAL_TEST_PROVIDER")
+                        .modelReadinessDiagnostics(readiness.getDiagnostics())
                         .build())
-                .diagnostics(withDiagnostic(draft, "Local test LLM provider enabled; no external model call was made."))
+                .diagnostics(withDiagnostic(draft, "Local mock LLM provider enabled; no external model call was made."))
                 .build();
     }
 
-    private AgentRunResult httpReasoning(AgentRunRequest request, AgentRunResult draft, LlmProviderConfig config) {
+    private AgentRunResult httpReasoning(AgentRunRequest request,
+                                         AgentRunResult draft,
+                                         LlmProviderConfig config,
+                                         LlmReasoningReadinessResult readiness) {
         if (config.getEndpoint() == null || config.getEndpoint().trim().isEmpty()) {
             return draft.toBuilder()
                     .diagnostics(withDiagnostic(draft, "HTTP LLM mode requested without endpoint; deterministic draft retained."))
@@ -95,7 +112,9 @@ public class ConfigurableLlmReasoningProvider implements LlmReasoningProvider {
             }
             AgentRunResult reasoned = mapper.readValue(response.body(), AgentRunResult.class);
             return reasoned.toBuilder()
-                    .reasoningEnvelope(reasoned.getReasoningEnvelope() == null ? draft.getReasoningEnvelope() : reasoned.getReasoningEnvelope())
+                    .reasoningEnvelope(withReadinessDiagnostics(
+                            reasoned.getReasoningEnvelope() == null ? draft.getReasoningEnvelope() : reasoned.getReasoningEnvelope(),
+                            readiness))
                     .diagnostics(withDiagnostic(reasoned, "HTTP LLM provider response merged; safety validation still required."))
                     .build();
         } catch (IOException | InterruptedException | IllegalArgumentException ex) {
@@ -115,7 +134,27 @@ public class ConfigurableLlmReasoningProvider implements LlmReasoningProvider {
                 .apiKey(apiKey.orElse(null))
                 .model(model)
                 .timeoutMillis(timeoutMillis)
+                .localMockEnabled(localMockEnabled)
+                .httpEnabled(httpEnabled)
                 .build();
+    }
+
+    private AgentReasoningEnvelope withReadinessDiagnostics(AgentReasoningEnvelope envelope, LlmReasoningReadinessResult readiness) {
+        if (envelope == null) {
+            return null;
+        }
+        List<String> diagnostics = new ArrayList<>(envelope.getModelReadinessDiagnostics());
+        diagnostics.addAll(readiness == null ? java.util.Collections.emptyList() : readiness.getDiagnostics());
+        return envelope.toBuilder()
+                .modelReadinessDiagnostics(diagnostics)
+                .build();
+    }
+
+    private LlmReasoningReadinessService readiness() {
+        if (readinessService == null) {
+            readinessService = new LlmReasoningReadinessService();
+        }
+        return readinessService;
     }
 
     private List<String> withDiagnostic(AgentRunResult result, String diagnostic) {

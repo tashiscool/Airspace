@@ -36,4 +36,6 @@ public class AgentReasoningEnvelope {
     private String toolPolicySummary;
     @Builder.Default
     private List<String> toolReceiptIds = new ArrayList<>();
+    @Builder.Default
+    private List<String> modelReadinessDiagnostics = new ArrayList<>();
 }

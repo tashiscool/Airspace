@@ -31,6 +31,12 @@ public class ReferenceConfigHistoryResource {
     boolean agenticMcpEnabled;
     @ConfigProperty(name = "airspace.agentic.mcp.external.enabled", defaultValue = "false")
     boolean externalMcpEnabled;
+    @ConfigProperty(name = "airspace.agentic.mcp.local-mock.enabled", defaultValue = "true")
+    boolean localMockMcpEnabled;
+    @ConfigProperty(name = "airspace.agentic.llm.local-mock.enabled", defaultValue = "true")
+    boolean localMockLlmEnabled;
+    @ConfigProperty(name = "airspace.agentic.llm.http.enabled", defaultValue = "false")
+    boolean httpLlmEnabled;
     @ConfigProperty(name = "airspace.agentic.queue.auto-consume", defaultValue = "true")
     boolean agenticQueueAutoConsume;
 
@@ -80,7 +86,10 @@ public class ReferenceConfigHistoryResource {
         values.put("agenticStore", agenticOperationsService.status().getMode());
         values.put("agenticStoreDurable", agenticOperationsService.status().isDurable());
         values.put("agenticMcpEnabled", agenticMcpEnabled);
+        values.put("agenticLocalMockMcpEnabled", localMockMcpEnabled);
         values.put("agenticExternalMcpEnabled", externalMcpEnabled);
+        values.put("agenticLocalMockLlmEnabled", localMockLlmEnabled);
+        values.put("agenticHttpLlmEnabled", httpLlmEnabled);
         values.put("agenticQueueAutoConsume", agenticQueueAutoConsume);
         values.put("agenticAutonomyBoundary", "draft-only");
         values.put("enabledPillars", Arrays.asList("operations", "decision-engine", "weather-safety"));

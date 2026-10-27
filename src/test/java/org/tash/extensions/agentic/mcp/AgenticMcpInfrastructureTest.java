@@ -32,6 +32,10 @@ class AgenticMcpInfrastructureTest {
         assertTrue(catalog.tools(CuratedMcpCatalog.AIRSPACE_FIRST_PARTY).stream()
                 .anyMatch(tool -> "airspace.coordination.draft".equals(tool.getId())
                         && tool.getSideEffectLevel() == McpSideEffectLevel.DRAFT_ONLY));
+        assertTrue(catalog.server(CuratedMcpCatalog.LOCAL_MOCK_MCP).orElseThrow().isEnabled());
+        assertTrue(catalog.tools(CuratedMcpCatalog.LOCAL_MOCK_MCP).stream()
+                .anyMatch(tool -> "local-mock.weather.snapshot".equals(tool.getId())
+                        && tool.getSideEffectLevel() == McpSideEffectLevel.READ_ONLY));
         assertTrue(catalog.tools(CuratedMcpCatalog.EXTERNAL_MCP).get(0).isSetupRequired());
         assertTrue(catalog.tools(CuratedMcpCatalog.AIRSPACE_FIRST_PARTY).stream()
                 .allMatch(tool -> tool.getRiskProfile() != null
@@ -48,11 +52,20 @@ class AgenticMcpInfrastructureTest {
         AgenticRiskChecklistService service = new AgenticRiskChecklistService(new CuratedMcpCatalog());
 
         java.util.List<AgenticRiskAssessment> assessments = service.assessments();
+        java.util.List<AgenticRiskAssessment> agentAssessments = service.assessments("AGENT");
+        java.util.List<AgenticRiskAssessment> toolAssessments = service.assessments("MCP_TOOL");
 
         assertFalse(assessments.isEmpty());
+        assertTrue(agentAssessments.stream().anyMatch(assessment -> "REROUTE_ANALYSIS".equals(assessment.getSubjectId())
+                && assessment.getRiskProfile().getRequiredHumanReviewMode() == HumanReviewMode.PUSH_APPROVAL));
+        assertTrue(agentAssessments.stream().anyMatch(assessment -> "DATA_INTEGRITY".equals(assessment.getSubjectId())
+                && assessment.getRiskProfile().getRequiredHumanReviewMode() == HumanReviewMode.PULL_CLARIFICATION));
+        assertTrue(toolAssessments.stream().allMatch(assessment -> "MCP_TOOL".equals(assessment.getSubjectType())));
         assertTrue(assessments.stream().anyMatch(assessment -> "airspace.coordination.draft".equals(assessment.getSubjectId())
                 && assessment.getRiskProfile().getRequiredHumanReviewMode() == HumanReviewMode.PUSH_APPROVAL
                 && assessment.getRiskProfile().getWorstCaseBlastRadius().contains("draft")));
+        assertTrue(assessments.stream().anyMatch(assessment -> "local-mock.weather.snapshot".equals(assessment.getSubjectId())
+                && assessment.getRiskProfile().getDataEgress().contains("None")));
         assertTrue(assessments.stream().anyMatch(assessment -> "external-mcp.configured_tool".equals(assessment.getSubjectId())
                 && !assessment.getDiagnostics().isEmpty()));
     }
@@ -90,9 +103,20 @@ class AgenticMcpInfrastructureTest {
         McpToolInvocationResult external = service.call(McpToolInvocationRequest.builder()
                 .serverId(CuratedMcpCatalog.EXTERNAL_MCP)
                 .toolId("external-mcp.configured_tool")
+                .externalConsent(true)
+                .policy(AgentPolicy.builder().allowExternalSend(true).allowOfficialStateMutation(true).build())
                 .arguments(args)
                 .build());
         assertEquals(McpInvocationStatus.SETUP_REQUIRED, external.getStatus());
+
+        McpToolInvocationResult mock = service.call(McpToolInvocationRequest.builder()
+                .serverId(CuratedMcpCatalog.LOCAL_MOCK_MCP)
+                .toolId("local-mock.weather.snapshot")
+                .arguments(args)
+                .build());
+        assertEquals(McpInvocationStatus.ACCEPTED, mock.getStatus(), mock.getDiagnostics().toString());
+        assertEquals(CuratedMcpCatalog.LOCAL_MOCK_MCP, mock.getEvidenceReceipt().getServerId());
+        assertTrue(mock.getResultSummary().contains("mock"));
     }
 
     @Test

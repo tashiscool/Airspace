@@ -15,6 +15,10 @@ public class LlmProviderConfig {
     private String apiKey;
     private String model;
     private int timeoutMillis;
+    @Builder.Default
+    private boolean localMockEnabled = true;
+    @Builder.Default
+    private boolean httpEnabled = false;
 
     public boolean enabled() {
         return mode != null && !"disabled".equalsIgnoreCase(mode.trim());

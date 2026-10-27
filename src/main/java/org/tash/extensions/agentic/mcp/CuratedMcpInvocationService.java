@@ -68,8 +68,15 @@ public class CuratedMcpInvocationService {
             return completed(safe, server.get(), descriptor, McpInvocationStatus.DENIED,
                     "DENIED_MISSING_ARGUMENTS", started, null, diagnostics, safeRedactor);
         }
+        if (server.get().isExternal() || descriptor.isExternal()) {
+            diagnostics.add("Real external MCP execution remains setup-required until a configured client, credentials, allowlist, and operator consent are present.");
+            return completed(safe, server.get(), descriptor, McpInvocationStatus.SETUP_REQUIRED,
+                    "SETUP_REQUIRED_REAL_EXTERNAL_MCP", started, null, diagnostics, safeRedactor);
+        }
         try {
-            Object result = executeFirstParty(descriptor.getId(), safe.getArguments());
+            Object result = CuratedMcpCatalog.LOCAL_MOCK_MCP.equals(descriptor.getServerId())
+                    ? executeLocalMock(descriptor.getId(), safe.getArguments())
+                    : executeFirstParty(descriptor.getId(), safe.getArguments());
             return completed(safe, server.get(), descriptor, McpInvocationStatus.ACCEPTED,
                     safeGate.decision(McpInvocationStatus.ACCEPTED, descriptor), started, result, diagnostics, safeRedactor);
         } catch (Exception ex) {
@@ -77,6 +84,34 @@ public class CuratedMcpInvocationService {
             return completed(safe, server.get(), descriptor, McpInvocationStatus.FAILED,
                     "FAILED_RUNTIME_EXCEPTION", started, null, diagnostics, safeRedactor);
         }
+    }
+
+    private Object executeLocalMock(String toolId, Map<String, Object> arguments) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        String missionId = string(arguments, "missionId");
+        result.put("id", toolId + ":" + value(missionId));
+        result.put("family", toolId.contains("coordination") ? "USNS" : "WEATHER");
+        result.put("toolId", toolId);
+        result.put("mockLive", true);
+        result.put("sourceRefs", java.util.Arrays.asList(
+                "MCP:" + toolId,
+                (toolId.contains("coordination") ? "MISSION:" : "WEATHER:") + value(missionId)));
+        if ("local-mock.weather.snapshot".equals(toolId)) {
+            result.put("summary", "Local mock external weather snapshot: severe convection intersects the selected mission corridor for validation only.");
+            result.put("severity", "SEVERE");
+            result.put("confidence", 0.72);
+            result.put("stale", false);
+            result.put("diagnostics", Collections.singletonList("Mock-live MCP weather result; not live operational weather."));
+            return result;
+        }
+        if ("local-mock.coordination.preview".equals(toolId)) {
+            result.put("summary", "Draft-only mock coordination preview for selected hazard; no message was sent.");
+            result.put("sideEffect", "DRAFT_ONLY");
+            result.put("requiresHumanApproval", true);
+            result.put("diagnostics", Collections.singletonList("Mock-live MCP coordination preview; no official send occurred."));
+            return result;
+        }
+        throw new IllegalArgumentException("Unsupported local mock MCP tool: " + toolId);
     }
 
     public List<McpEvidenceReceipt> receipts(Integer limit) {

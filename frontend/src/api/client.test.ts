@@ -81,8 +81,10 @@ describe('product API client', () => {
     await api.generateAgentScenario({ scenarioType: 'VIABLE_REROUTE', missionNumber: 'NXGEN-1' });
     await api.evaluateAgentStability({ iterations: 3, agentRunRequest: { agentType: 'MISSION_RISK', missionId: 'mission-1' } });
     await api.agentRiskAssessments();
+    await api.agentRiskAssessments('AGENT');
     await api.mcpServers();
     await api.mcpTools('airspace-first-party');
+    await api.mcpTools('local-mock-mcp');
     await api.callMcpTool({
       serverId: 'airspace-first-party',
       toolId: 'airspace.mission.weather_verdict',
@@ -133,8 +135,10 @@ describe('product API client', () => {
       '/api/agents/scenario/generate',
       '/api/agents/evaluate/stability',
       '/api/agents/risk-assessments',
+      '/api/agents/risk-assessments?subjectType=AGENT',
       '/api/agents/mcp/servers',
       '/api/agents/mcp/servers/airspace-first-party/tools',
+      '/api/agents/mcp/servers/local-mock-mcp/tools',
       '/api/agents/mcp/tools/call',
       '/api/agents/mcp/receipts?limit=5',
       '/api/agents/jobs',

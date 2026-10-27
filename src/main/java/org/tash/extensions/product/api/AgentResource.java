@@ -157,8 +157,8 @@ public class AgentResource {
 
     @GET
     @Path("/risk-assessments")
-    public List<AgenticRiskAssessment> riskAssessments() {
-        return agenticRiskChecklistService.assessments();
+    public List<AgenticRiskAssessment> riskAssessments(@QueryParam("subjectType") String subjectType) {
+        return agenticRiskChecklistService.assessments(subjectType);
     }
 
     @POST

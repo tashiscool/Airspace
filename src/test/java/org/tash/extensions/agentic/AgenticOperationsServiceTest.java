@@ -54,6 +54,10 @@ class AgenticOperationsServiceTest {
                 .anyMatch(tool -> tool.contains("external-mcp")));
         assertTrue(result.getReasoningEnvelope().getToolPolicySummary().contains("drafts only"));
         assertTrue(result.getEvaluation().isAccepted(), result.getEvaluation().getErrors().toString());
+        assertTrue(result.getEvaluation().isStabilityAppliedAutomatically());
+        assertEquals(AgentStabilityMode.WARN_ONLY.name(), result.getEvaluation().getStabilityMode());
+        assertNotNull(result.getEvaluation().getStabilityResult());
+        assertTrue(result.getEvaluation().getStabilityResult().isAppliedAutomatically());
         assertEquals(0, result.getEvaluation().getUncitedClaimCount());
         assertTrue(result.getEvaluation().getCitationCoverage() >= 0.99);
         assertFalse(result.getOperatingLoop().isEmpty());
@@ -287,6 +291,7 @@ class AgenticOperationsServiceTest {
         request.setMissionId(missionId);
 
         AgentStabilityHarness harness = new AgentStabilityHarness(service, new AgentRunComparator());
+        int retainedRunsBeforeHarness = service.runs(100).size();
         AgentStabilityRequest stabilityRequest = AgentStabilityRequest.builder()
                 .agentRunRequest(request)
                 .iterations(3)
@@ -295,6 +300,7 @@ class AgenticOperationsServiceTest {
 
         assertTrue(result.isAccepted(), result.getDiagnostics().toString());
         assertEquals(3, result.getRunIds().size());
+        assertEquals(retainedRunsBeforeHarness, service.runs(100).size(), "stability probe runs should not pollute retained run history");
         assertTrue(result.getMetrics().stream().anyMatch(metric -> "cited_source_jaccard".equals(metric.getId())
                 && metric.getValue() >= 0.95));
 
@@ -384,8 +390,16 @@ class AgenticOperationsServiceTest {
         AgentRunResult reasoned = provider.reason(new AgentRunRequest(), draft);
         assertNotSame(draft, reasoned);
         assertEquals("LOCAL_TEST_PROVIDER", reasoned.getReasoningEnvelope().getReasoningMode());
+        assertFalse(reasoned.getReasoningEnvelope().getModelReadinessDiagnostics().isEmpty());
         assertTrue(reasoned.getFindings().stream().anyMatch(finding -> "LLM_REASONING".equals(finding.getCategory())));
         assertTrue(reasoned.getFindings().stream().allMatch(finding -> !finding.getCitations().isEmpty()));
+
+        provider.mode = "http";
+        provider.endpoint = Optional.of("http://127.0.0.1:9/not-called");
+        provider.httpEnabled = false;
+        AgentRunResult blockedHttp = provider.reason(new AgentRunRequest(), draft);
+        assertEquals(draft.getId(), blockedHttp.getId());
+        assertTrue(blockedHttp.getDiagnostics().stream().anyMatch(value -> value.contains("http.enabled=false")));
     }
 
     @Test

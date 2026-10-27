@@ -354,13 +354,38 @@ export type AgentEvaluationSummary = {
   policyViolationCount?: number;
   citationCoverage?: number;
   stabilityAccepted?: boolean;
+  stabilityAppliedAutomatically?: boolean;
+  stabilityMode?: AgentStabilityMode;
+  stabilityResult?: AgentStabilityResult;
   sourceFamilyCounts?: Record<string, number>;
   stabilityWarnings?: string[];
+  modelReadinessDiagnostics?: string[];
   warnings?: string[];
   errors?: string[];
 };
 
 export type HumanReviewMode = 'NONE' | 'REVIEW_ONLY' | 'PULL_CLARIFICATION' | 'PUSH_APPROVAL' | string;
+export type AgentStabilityMode = 'DISABLED' | 'WARN_ONLY' | 'ENFORCE' | string;
+
+export type AgentStabilityPolicy = {
+  automatic?: boolean;
+  deterministicMode?: AgentStabilityMode;
+  modelBackedMode?: AgentStabilityMode;
+  iterations?: number;
+  minAgreement?: number;
+  minCitationJaccard?: number;
+  maxCountCoefficientOfVariation?: number;
+};
+
+export type AgentPolicy = {
+  version?: string;
+  allowOfficialStateMutation?: boolean;
+  allowExternalSend?: boolean;
+  requireHumanApprovalForDrafts?: boolean;
+  requireCitationsForOperationalClaims?: boolean;
+  allowedActions?: string[];
+  stabilityPolicy?: AgentStabilityPolicy;
+};
 
 export type AgentAssessment = {
   id: string;
@@ -393,6 +418,7 @@ export type AgentReasoningEnvelope = {
   blockedTools?: string[];
   toolPolicySummary?: string;
   toolReceiptIds?: string[];
+  modelReadinessDiagnostics?: string[];
 };
 
 export type AgentToolCall = {
@@ -456,6 +482,7 @@ export type AgentRunRequest = {
   feedArtifactId?: string;
   referenceType?: string;
   referenceIdentifier?: string;
+  policy?: AgentPolicy;
   toolCalls?: AgentToolCall[];
 };
 
@@ -499,12 +526,16 @@ export type AgentStabilityRequest = {
   minAgreement?: number;
   minCitationJaccard?: number;
   maxCountCoefficientOfVariation?: number;
+  appliedAutomatically?: boolean;
+  gateMode?: AgentStabilityMode;
 };
 
 export type AgentStabilityResult = {
   id: string;
   accepted?: boolean;
   iterations?: number;
+  appliedAutomatically?: boolean;
+  gateMode?: AgentStabilityMode;
   startedAt?: string;
   completedAt?: string;
   runIds?: string[];

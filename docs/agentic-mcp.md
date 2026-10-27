@@ -5,6 +5,7 @@ Airspace includes a governed MCP-style tool plane for the agentic operations lay
 ## Default Servers
 
 - `airspace-first-party`: enabled by default, local, direct Java execution, no credentials, no live external dependency.
+- `local-mock-mcp`: enabled in local/dev/test by default, deterministic mock-live MCP execution for receipt, policy, UI, and adversarial validation. It never performs a network call and is disabled in the production profile.
 - `external-mcp`: disabled/setup-required by default. It is a placeholder for future stdio/SSE/HTTP MCP servers after credentials, command allowlists, and operator consent are configured.
 
 ## First-Party Tools
@@ -20,6 +21,15 @@ Airspace includes a governed MCP-style tool plane for the agentic operations lay
 | `airspace.feed.artifact_transactions` | `READ_ONLY` | List parsed transactions for a retained feed artifact. |
 | `airspace.reference.lookup` | `READ_ONLY` | Lookup navaids, fixes, and reference points. |
 | `airspace.coordination.draft` | `DRAFT_ONLY` | Draft weather/ATC coordination text. No message is sent. |
+
+## Local Mock-Live Tools
+
+| Tool | Side effect | Purpose |
+|---|---:|---|
+| `local-mock.weather.snapshot` | `READ_ONLY` | Deterministic external-style weather evidence for dev/test validation. |
+| `local-mock.coordination.preview` | `DRAFT_ONLY` | Deterministic draft coordination preview; no message is sent. |
+
+These tools intentionally use the same receipt and policy path as other MCP calls. They are not live FAA/NWS/SWIM/KVM integrations.
 
 ## Evidence Receipts
 
@@ -52,7 +62,7 @@ Agent runs also include fixed-shape `AgentAssessment` envelopes with claim, verd
 
 `POST /api/agents/evaluate/stability` runs the same agent request repeatedly and compares non-volatile behavior. Metrics include verdict agreement, source-ref Jaccard, finding/recommendation/task count wobble, action/category agreement, task route/priority agreement, and MCP receipt hash agreement.
 
-The default deterministic thresholds are strict. Stability results are evaluation evidence only; they do not authorize operational action.
+The default deterministic thresholds are strict. Normal deterministic runs attach an automatic `WARN_ONLY` stability result. Model-backed runs use `ENFORCE` mode by default and are rejected if unstable. Stability results are evaluation evidence only; they do not authorize operational action.
 
 ## Queue Consumer
 
@@ -80,8 +90,11 @@ The default queue is in-memory and bounded. It is designed for local/demo and te
 ## Safety Defaults
 
 - `airspace.agentic.mcp.enabled=true`
+- `airspace.agentic.mcp.local-mock.enabled=true` in local/dev/test, `false` in prod profile
 - `airspace.agentic.mcp.external.enabled=false`
+- `airspace.agentic.llm.local-mock.enabled=true` in local/dev/test, `false` in prod profile
+- `airspace.agentic.llm.http.enabled=false`
 - `airspace.agentic.queue.max-size=100`
 - `airspace.agentic.queue.auto-consume=true`
 
-External MCP remains setup-required until explicitly configured. The default `AgentPolicy` rejects mutating and external-send behavior. This follows the project’s agent rule: collect, normalize, correlate, draft, explain, and escalate, but do not autonomously clear, approve, transmit, or mutate official operational state.
+External MCP remains setup-required until explicitly configured. HTTP/network-backed LLM mode remains blocked unless explicitly enabled. The default `AgentPolicy` rejects mutating and external-send behavior. This follows the project’s agent rule: collect, normalize, correlate, draft, explain, and escalate, but do not autonomously clear, approve, transmit, or mutate official operational state.
